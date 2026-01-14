@@ -14,6 +14,13 @@ Write-Host "Project root: $ProjectRoot"
 
 Set-Location $ProjectRoot
 
+# Use system 7-Zip if available (fixes 7zip-bin issues)
+$sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
+if (Test-Path $sevenZipPath) {
+    $env:ELECTRON_BUILDER_7Z_PATH = $sevenZipPath
+    Write-Host "Using system 7-Zip" -ForegroundColor Gray
+}
+
 # Common Node.js installation paths
 $NodePaths = @(
     "$env:ProgramFiles\nodejs",
