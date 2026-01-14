@@ -180,8 +180,37 @@ if ($needsRestart) {
     exit 0
 }
 
-# Display versions
+# Check Node.js version - Node 24+ has compatibility issues with native modules
 $nodeVersion = node --version
+$nodeVersionMatch = [regex]::Match($nodeVersion, 'v(\d+)\.')
+if ($nodeVersionMatch.Success) {
+    $nodeMajor = [int]$nodeVersionMatch.Groups[1].Value
+    if ($nodeMajor -ge 24) {
+        Write-Host ""
+        Write-Host "============================================================" -ForegroundColor Red
+        Write-Host "UNSUPPORTED NODE.JS VERSION DETECTED" -ForegroundColor Red
+        Write-Host "============================================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "You are running Node.js $nodeVersion" -ForegroundColor Yellow
+        Write-Host "Node.js 24+ is not yet supported by some native modules (better-sqlite3)." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Please install Node.js LTS (v20 or v22) instead:" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  Option 1 - Using winget:" -ForegroundColor Cyan
+        Write-Host "    winget uninstall OpenJS.NodeJS" -ForegroundColor White
+        Write-Host "    winget install OpenJS.NodeJS.LTS" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  Option 2 - Using nvm-windows:" -ForegroundColor Cyan
+        Write-Host "    nvm install 22" -ForegroundColor White
+        Write-Host "    nvm use 22" -ForegroundColor White
+        Write-Host ""
+        Write-Host "After switching Node.js versions, restart your terminal and run this script again." -ForegroundColor Yellow
+        Write-Host "============================================================" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Display versions
 $npmVersion = npm --version
 Write-Host "  Node.js: $nodeVersion" -ForegroundColor Green
 Write-Host "  npm: $npmVersion" -ForegroundColor Green
