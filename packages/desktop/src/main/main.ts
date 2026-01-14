@@ -8,6 +8,7 @@ import { DatabaseService } from './database';
 import { SSHService } from './ssh';
 import { RDPService } from './rdp';
 import { SyncService } from './sync';
+import { CommandService } from './command';
 import { getProviderService } from './providers';
 import type {
   ServerConnection,
@@ -18,6 +19,9 @@ import type {
   ImportOptions,
   ExportOptions,
   OSType,
+  SavedCommand,
+  CommandExecution,
+  HostFilter,
 } from '@connectty/shared';
 
 let mainWindow: BrowserWindow | null = null;
@@ -25,6 +29,7 @@ let db: DatabaseService;
 let sshService: SSHService;
 let rdpService: RDPService;
 let syncService: SyncService;
+let commandService: CommandService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -373,6 +378,160 @@ function setupIpcHandlers(): void {
   ipcMain.handle('app:platform', () => {
     return process.platform;
   });
+
+  // Saved command handlers
+  ipcMain.handle('commands:list', async (_event, category?: string) => {
+    return db.getSavedCommands(category);
+  });
+
+  ipcMain.handle('commands:get', async (_event, id: string) => {
+    return db.getSavedCommand(id);
+  });
+
+  ipcMain.handle('commands:create', async (_event, command: Omit<SavedCommand, 'id' | 'createdAt' | 'updatedAt'>) => {
+    return db.createSavedCommand(command);
+  });
+
+  ipcMain.handle('commands:update', async (_event, id: string, updates: Partial<SavedCommand>) => {
+    return db.updateSavedCommand(id, updates);
+  });
+
+  ipcMain.handle('commands:delete', async (_event, id: string) => {
+    return db.deleteSavedCommand(id);
+  });
+
+  // Command execution handlers
+  ipcMain.handle('commands:execute', async (_event, executionData: {
+    commandId?: string;
+    commandName: string;
+    command: string;
+    targetOS: 'linux' | 'windows' | 'all';
+    filter: HostFilter;
+    variables?: Record<string, string>;
+  }) => {
+    // Get connections based on filter
+    const allConnections = db.getConnections();
+    let targetConnections: ServerConnection[] = [];
+
+    switch (executionData.filter.type) {
+      case 'all':
+        targetConnections = allConnections;
+        break;
+      case 'group':
+        targetConnections = allConnections.filter(c => c.group === executionData.filter.groupId);
+        break;
+      case 'pattern':
+        if (executionData.filter.pattern) {
+          const regex = new RegExp(executionData.filter.pattern.replace(/\*/g, '.*'), 'i');
+          targetConnections = allConnections.filter(c => regex.test(c.hostname) || regex.test(c.name));
+        }
+        break;
+      case 'selection':
+        if (executionData.filter.connectionIds) {
+          targetConnections = allConnections.filter(c => executionData.filter.connectionIds!.includes(c.id));
+        }
+        break;
+      case 'os':
+        if (executionData.filter.osType) {
+          targetConnections = allConnections.filter(c => c.osType === executionData.filter.osType);
+        }
+        break;
+    }
+
+    // Further filter by target OS if not 'all'
+    if (executionData.targetOS !== 'all') {
+      const isWindowsTarget = executionData.targetOS === 'windows';
+      targetConnections = targetConnections.filter(c =>
+        (c.osType === 'windows') === isWindowsTarget
+      );
+    }
+
+    if (targetConnections.length === 0) {
+      return { error: 'No matching connections found' };
+    }
+
+    // Substitute variables in command
+    let finalCommand = executionData.command;
+    if (executionData.variables) {
+      finalCommand = commandService.substituteVariables(executionData.command, executionData.variables);
+    }
+
+    // Create execution record
+    const execution = db.createCommandExecution({
+      commandId: executionData.commandId,
+      commandName: executionData.commandName,
+      command: finalCommand,
+      targetOS: executionData.targetOS,
+      connectionIds: targetConnections.map(c => c.id),
+      results: targetConnections.map(c => ({
+        connectionId: c.id,
+        connectionName: c.name,
+        hostname: c.hostname,
+        status: 'pending' as const,
+      })),
+      startedAt: new Date(),
+      status: 'running',
+    });
+
+    // Execute commands asynchronously
+    commandService.executeCommand(
+      execution,
+      targetConnections,
+      (credId: string) => db.getCredential(credId),
+      {
+        onProgress: (connectionId, result) => {
+          // Send progress update to renderer
+          mainWindow?.webContents.send('command:progress', execution.id, connectionId, result);
+
+          // Update stored results
+          const current = db.getCommandExecution(execution.id);
+          if (current) {
+            const updatedResults = current.results.map(r =>
+              r.connectionId === connectionId ? { ...r, ...result } : r
+            );
+            db.updateCommandExecution(execution.id, { results: updatedResults });
+          }
+        },
+        onComplete: (executionId) => {
+          const completed = db.getCommandExecution(executionId);
+          if (completed) {
+            const allDone = completed.results.every(r =>
+              r.status === 'success' || r.status === 'error' || r.status === 'skipped'
+            );
+            const hasErrors = completed.results.some(r => r.status === 'error');
+
+            db.updateCommandExecution(executionId, {
+              completedAt: new Date(),
+              status: allDone ? (hasErrors ? 'failed' : 'completed') : 'completed',
+            });
+          }
+          mainWindow?.webContents.send('command:complete', executionId);
+        },
+      }
+    );
+
+    return { executionId: execution.id, targetCount: targetConnections.length };
+  });
+
+  ipcMain.handle('commands:cancel', async (_event, executionId: string) => {
+    commandService.cancelExecution(executionId);
+    db.updateCommandExecution(executionId, { status: 'cancelled' });
+    return true;
+  });
+
+  // Command history handlers
+  ipcMain.handle('commands:history', async (_event, limit?: number) => {
+    return db.getCommandHistory(limit);
+  });
+
+  ipcMain.handle('commands:getExecution', async (_event, id: string) => {
+    return db.getCommandExecution(id);
+  });
+
+  ipcMain.handle('commands:clearHistory', async () => {
+    db.clearCommandHistory();
+    return true;
+  });
 }
 
 /**
@@ -414,6 +573,7 @@ app.whenReady().then(async () => {
     });
     rdpService = new RDPService();
     syncService = new SyncService(db);
+    commandService = new CommandService();
 
     setupIpcHandlers();
   } catch (err) {

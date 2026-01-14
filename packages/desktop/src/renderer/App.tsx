@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { ServerConnection, Credential, ConnectionGroup, SSHSessionEvent, ConnectionType, OSType, CredentialType, Provider, ProviderType, DiscoveredHost } from '@connectty/shared';
+import type {
+  ServerConnection,
+  Credential,
+  ConnectionGroup,
+  SSHSessionEvent,
+  ConnectionType,
+  OSType,
+  CredentialType,
+  Provider,
+  ProviderType,
+  DiscoveredHost,
+  SavedCommand,
+  CommandExecution,
+  CommandResult,
+  HostFilter,
+  CommandTargetOS,
+} from '@connectty/shared';
 import type { ConnecttyAPI } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -39,6 +55,7 @@ export default function App() {
   const [providerContextMenu, setProviderContextMenu] = useState<{ x: number; y: number; provider: Provider } | null>(null);
   const [isDiscovering, setIsDiscovering] = useState<string | null>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
+  const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -389,6 +406,9 @@ export default function App() {
         </div>
 
         <div className="sidebar-actions">
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkActionsModal(true)}>
+            Bulk Actions
+          </button>
           <button className="btn btn-secondary btn-sm" onClick={handleImport}>Import</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export</button>
         </div>
@@ -559,6 +579,16 @@ export default function App() {
             Delete Provider
           </button>
         </div>
+      )}
+
+      {/* Bulk Actions Modal */}
+      {showBulkActionsModal && (
+        <BulkActionsModal
+          connections={connections}
+          groups={groups}
+          onClose={() => setShowBulkActionsModal(false)}
+          onNotification={showNotification}
+        />
       )}
 
       {/* Notification */}
@@ -1574,6 +1604,708 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Bulk Actions Modal Component
+interface BulkActionsModalProps {
+  connections: ServerConnection[];
+  groups: ConnectionGroup[];
+  onClose: () => void;
+  onNotification: (type: 'success' | 'error', message: string) => void;
+}
+
+function BulkActionsModal({ connections, groups, onClose, onNotification }: BulkActionsModalProps) {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'execute' | 'saved' | 'history'>('execute');
+
+  // Host selection state
+  const [filterType, setFilterType] = useState<HostFilter['type']>('all');
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [hostnamePattern, setHostnamePattern] = useState('');
+  const [selectedConnectionIds, setSelectedConnectionIds] = useState<string[]>([]);
+  const [selectedOsType, setSelectedOsType] = useState<OSType | ''>('');
+
+  // Command state
+  const [commandMode, setCommandMode] = useState<'inline' | 'saved' | 'script'>('inline');
+  const [inlineCommand, setInlineCommand] = useState('');
+  const [targetOS, setTargetOS] = useState<CommandTargetOS>('all');
+  const [savedCommands, setSavedCommands] = useState<SavedCommand[]>([]);
+  const [selectedCommandId, setSelectedCommandId] = useState('');
+  const [scriptContent, setScriptContent] = useState('');
+  const [scriptLanguage, setScriptLanguage] = useState<'bash' | 'powershell' | 'python'>('bash');
+
+  // Execution state
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [currentExecution, setCurrentExecution] = useState<CommandExecution | null>(null);
+  const [executionResults, setExecutionResults] = useState<Map<string, Partial<CommandResult>>>(new Map());
+
+  // History state
+  const [commandHistory, setCommandHistory] = useState<CommandExecution[]>([]);
+
+  // Saved command form state
+  const [showCommandForm, setShowCommandForm] = useState(false);
+  const [editingCommand, setEditingCommand] = useState<SavedCommand | null>(null);
+  const [commandName, setCommandName] = useState('');
+  const [commandDescription, setCommandDescription] = useState('');
+  const [commandCategory, setCommandCategory] = useState('');
+
+  // Load saved commands and history
+  useEffect(() => {
+    loadSavedCommands();
+    loadHistory();
+
+    // Subscribe to execution progress
+    const unsubProgress = window.connectty.commands.onProgress((execId, connId, result) => {
+      if (currentExecution?.id === execId) {
+        setExecutionResults(prev => new Map(prev).set(connId, result));
+      }
+    });
+
+    const unsubComplete = window.connectty.commands.onComplete((execId) => {
+      if (currentExecution?.id === execId) {
+        setIsExecuting(false);
+        loadHistory();
+        onNotification('success', 'Command execution completed');
+      }
+    });
+
+    return () => {
+      unsubProgress();
+      unsubComplete();
+    };
+  }, [currentExecution?.id]);
+
+  const loadSavedCommands = async () => {
+    const commands = await window.connectty.commands.list();
+    setSavedCommands(commands);
+  };
+
+  const loadHistory = async () => {
+    const history = await window.connectty.commands.history(20);
+    setCommandHistory(history);
+  };
+
+  // Build filter from selections
+  const buildFilter = (): HostFilter => {
+    switch (filterType) {
+      case 'all':
+        return { type: 'all' };
+      case 'group':
+        return { type: 'group', groupId: selectedGroupId };
+      case 'pattern':
+        return { type: 'pattern', pattern: hostnamePattern };
+      case 'selection':
+        return { type: 'selection', connectionIds: selectedConnectionIds };
+      case 'os':
+        return { type: 'os', osType: selectedOsType as OSType };
+      default:
+        return { type: 'all' };
+    }
+  };
+
+  // Get filtered connections for preview
+  const getFilteredConnections = (): ServerConnection[] => {
+    let filtered = [...connections];
+
+    switch (filterType) {
+      case 'group':
+        filtered = filtered.filter(c => c.group === selectedGroupId);
+        break;
+      case 'pattern':
+        if (hostnamePattern) {
+          const regex = new RegExp(hostnamePattern.replace(/\*/g, '.*'), 'i');
+          filtered = filtered.filter(c => regex.test(c.hostname) || regex.test(c.name));
+        }
+        break;
+      case 'selection':
+        filtered = filtered.filter(c => selectedConnectionIds.includes(c.id));
+        break;
+      case 'os':
+        if (selectedOsType) {
+          filtered = filtered.filter(c => c.osType === selectedOsType);
+        }
+        break;
+    }
+
+    // Further filter by target OS
+    if (targetOS !== 'all') {
+      const isWindowsTarget = targetOS === 'windows';
+      filtered = filtered.filter(c => (c.osType === 'windows') === isWindowsTarget);
+    }
+
+    return filtered;
+  };
+
+  const toggleConnectionSelection = (id: string) => {
+    setSelectedConnectionIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleExecute = async () => {
+    let command = '';
+    let commandName = 'Ad-hoc Command';
+
+    if (commandMode === 'inline') {
+      command = inlineCommand;
+    } else if (commandMode === 'saved' && selectedCommandId) {
+      const savedCommand = savedCommands.find(c => c.id === selectedCommandId);
+      if (savedCommand) {
+        command = savedCommand.command || savedCommand.scriptContent || '';
+        commandName = savedCommand.name;
+      }
+    } else if (commandMode === 'script') {
+      command = scriptContent;
+      commandName = 'Script Execution';
+    }
+
+    if (!command.trim()) {
+      onNotification('error', 'Please enter a command');
+      return;
+    }
+
+    setIsExecuting(true);
+    setExecutionResults(new Map());
+
+    try {
+      const result = await window.connectty.commands.execute({
+        commandId: commandMode === 'saved' ? selectedCommandId : undefined,
+        commandName,
+        command,
+        targetOS,
+        filter: buildFilter(),
+      });
+
+      if ('error' in result) {
+        onNotification('error', result.error);
+        setIsExecuting(false);
+      } else {
+        // Fetch the execution to track progress
+        const execution = await window.connectty.commands.getExecution(result.executionId);
+        setCurrentExecution(execution);
+        onNotification('success', `Executing command on ${result.targetCount} hosts...`);
+      }
+    } catch (err) {
+      onNotification('error', `Execution failed: ${(err as Error).message}`);
+      setIsExecuting(false);
+    }
+  };
+
+  const handleCancelExecution = async () => {
+    if (currentExecution) {
+      await window.connectty.commands.cancel(currentExecution.id);
+      setIsExecuting(false);
+      onNotification('success', 'Execution cancelled');
+    }
+  };
+
+  const handleSaveCommand = async () => {
+    const data = {
+      name: commandName,
+      description: commandDescription || undefined,
+      type: commandMode === 'script' ? 'script' : 'inline' as const,
+      targetOS,
+      command: commandMode === 'inline' ? inlineCommand : undefined,
+      scriptContent: commandMode === 'script' ? scriptContent : undefined,
+      scriptLanguage: commandMode === 'script' ? scriptLanguage : undefined,
+      category: commandCategory || undefined,
+    };
+
+    try {
+      if (editingCommand) {
+        await window.connectty.commands.update(editingCommand.id, data);
+        onNotification('success', 'Command updated');
+      } else {
+        await window.connectty.commands.create(data);
+        onNotification('success', 'Command saved');
+      }
+      await loadSavedCommands();
+      setShowCommandForm(false);
+      setEditingCommand(null);
+      setCommandName('');
+      setCommandDescription('');
+      setCommandCategory('');
+    } catch (err) {
+      onNotification('error', `Failed to save: ${(err as Error).message}`);
+    }
+  };
+
+  const handleDeleteCommand = async (id: string) => {
+    if (confirm('Delete this saved command?')) {
+      await window.connectty.commands.delete(id);
+      await loadSavedCommands();
+      onNotification('success', 'Command deleted');
+    }
+  };
+
+  const filteredConnections = getFilteredConnections();
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Bulk Actions</h3>
+          <button className="btn btn-icon" onClick={onClose}>×</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="modal-tabs">
+          <button
+            className={`tab-btn ${activeTab === 'execute' ? 'active' : ''}`}
+            onClick={() => setActiveTab('execute')}
+          >
+            Execute Command
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'saved' ? 'active' : ''}`}
+            onClick={() => setActiveTab('saved')}
+          >
+            Saved Commands ({savedCommands.length})
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            History
+          </button>
+        </div>
+
+        <div className="modal-body" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+          {/* Execute Tab */}
+          {activeTab === 'execute' && (
+            <div className="bulk-execute-content">
+              {/* Host Selection */}
+              <div className="bulk-section">
+                <h4>Select Hosts</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Filter By</label>
+                    <select
+                      className="form-select"
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value as HostFilter['type'])}
+                    >
+                      <option value="all">All Connections</option>
+                      <option value="group">By Group</option>
+                      <option value="pattern">By Hostname Pattern</option>
+                      <option value="selection">Individual Selection</option>
+                      <option value="os">By OS Type</option>
+                    </select>
+                  </div>
+
+                  {filterType === 'group' && (
+                    <div className="form-group">
+                      <label className="form-label">Group</label>
+                      <select
+                        className="form-select"
+                        value={selectedGroupId}
+                        onChange={(e) => setSelectedGroupId(e.target.value)}
+                      >
+                        <option value="">Select a group...</option>
+                        {groups.map(g => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {filterType === 'pattern' && (
+                    <div className="form-group">
+                      <label className="form-label">Hostname Pattern</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={hostnamePattern}
+                        onChange={(e) => setHostnamePattern(e.target.value)}
+                        placeholder="web-*, *-prod-*, 192.168.1.*"
+                      />
+                    </div>
+                  )}
+
+                  {filterType === 'os' && (
+                    <div className="form-group">
+                      <label className="form-label">OS Type</label>
+                      <select
+                        className="form-select"
+                        value={selectedOsType}
+                        onChange={(e) => setSelectedOsType(e.target.value as OSType)}
+                      >
+                        <option value="">All</option>
+                        <option value="linux">Linux</option>
+                        <option value="windows">Windows</option>
+                        <option value="unix">Unix</option>
+                        <option value="esxi">ESXi</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {filterType === 'selection' && (
+                  <div className="connection-picker">
+                    {connections.map(conn => (
+                      <label key={conn.id} className="connection-pick-item">
+                        <input
+                          type="checkbox"
+                          checked={selectedConnectionIds.includes(conn.id)}
+                          onChange={() => toggleConnectionSelection(conn.id)}
+                        />
+                        <span className="connection-pick-name">{conn.name}</span>
+                        <span className="connection-pick-host">{conn.hostname}</span>
+                        <span className={`os-badge ${conn.osType || 'unknown'}`}>
+                          {conn.osType || 'unknown'}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <div className="host-preview">
+                  <strong>{filteredConnections.length}</strong> hosts selected
+                  {filteredConnections.length > 0 && filteredConnections.length <= 10 && (
+                    <span className="preview-list">
+                      : {filteredConnections.map(c => c.name).join(', ')}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Command Input */}
+              <div className="bulk-section">
+                <h4>Command</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Command Mode</label>
+                    <select
+                      className="form-select"
+                      value={commandMode}
+                      onChange={(e) => setCommandMode(e.target.value as 'inline' | 'saved' | 'script')}
+                    >
+                      <option value="inline">Inline Command</option>
+                      <option value="saved">Saved Command</option>
+                      <option value="script">Script</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Target OS</label>
+                    <select
+                      className="form-select"
+                      value={targetOS}
+                      onChange={(e) => setTargetOS(e.target.value as CommandTargetOS)}
+                    >
+                      <option value="all">All (Linux + Windows)</option>
+                      <option value="linux">Linux/Unix Only</option>
+                      <option value="windows">Windows Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                {commandMode === 'inline' && (
+                  <div className="form-group">
+                    <label className="form-label">Command</label>
+                    <textarea
+                      className="form-input command-input"
+                      value={inlineCommand}
+                      onChange={(e) => setInlineCommand(e.target.value)}
+                      placeholder="Enter command to execute (e.g., uptime, df -h, whoami)"
+                      rows={3}
+                    />
+                  </div>
+                )}
+
+                {commandMode === 'saved' && (
+                  <div className="form-group">
+                    <label className="form-label">Select Command</label>
+                    <select
+                      className="form-select"
+                      value={selectedCommandId}
+                      onChange={(e) => setSelectedCommandId(e.target.value)}
+                    >
+                      <option value="">Choose a saved command...</option>
+                      {savedCommands.map(cmd => (
+                        <option key={cmd.id} value={cmd.id}>
+                          {cmd.name} ({cmd.targetOS})
+                        </option>
+                      ))}
+                    </select>
+                    {selectedCommandId && (
+                      <div className="command-preview">
+                        <pre>{savedCommands.find(c => c.id === selectedCommandId)?.command}</pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {commandMode === 'script' && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Script Language</label>
+                      <select
+                        className="form-select"
+                        value={scriptLanguage}
+                        onChange={(e) => setScriptLanguage(e.target.value as 'bash' | 'powershell' | 'python')}
+                      >
+                        <option value="bash">Bash</option>
+                        <option value="powershell">PowerShell</option>
+                        <option value="python">Python</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Script Content</label>
+                      <textarea
+                        className="form-input script-input"
+                        value={scriptContent}
+                        onChange={(e) => setScriptContent(e.target.value)}
+                        placeholder="#!/bin/bash&#10;# Enter your script here"
+                        rows={10}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="form-row" style={{ justifyContent: 'flex-end', gap: '8px' }}>
+                  {(commandMode === 'inline' || commandMode === 'script') && inlineCommand && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setShowCommandForm(true);
+                        setCommandName('');
+                      }}
+                    >
+                      Save as...
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Execution Results */}
+              {(isExecuting || executionResults.size > 0) && (
+                <div className="bulk-section">
+                  <h4>Execution Progress</h4>
+                  <div className="execution-results">
+                    {filteredConnections.map(conn => {
+                      const result = executionResults.get(conn.id);
+                      return (
+                        <div key={conn.id} className={`result-item ${result?.status || 'pending'}`}>
+                          <div className="result-header">
+                            <span className="result-host">{conn.name}</span>
+                            <span className={`result-status ${result?.status || 'pending'}`}>
+                              {result?.status || 'pending'}
+                            </span>
+                          </div>
+                          {result?.stdout && (
+                            <pre className="result-output">{result.stdout}</pre>
+                          )}
+                          {result?.stderr && (
+                            <pre className="result-error">{result.stderr}</pre>
+                          )}
+                          {result?.error && (
+                            <div className="result-error">{result.error}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Saved Commands Tab */}
+          {activeTab === 'saved' && (
+            <div className="saved-commands-content">
+              {!showCommandForm ? (
+                <>
+                  {savedCommands.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#a0aec0' }}>
+                      No saved commands. Create one to reuse it later.
+                    </p>
+                  ) : (
+                    <div className="saved-commands-list">
+                      {savedCommands.map(cmd => (
+                        <div key={cmd.id} className="saved-command-item">
+                          <div className="saved-command-info">
+                            <div className="saved-command-name">{cmd.name}</div>
+                            <div className="saved-command-meta">
+                              <span className={`os-badge ${cmd.targetOS}`}>{cmd.targetOS}</span>
+                              {cmd.category && <span className="category-badge">{cmd.category}</span>}
+                            </div>
+                            {cmd.description && (
+                              <div className="saved-command-desc">{cmd.description}</div>
+                            )}
+                            <pre className="saved-command-preview">
+                              {cmd.command || cmd.scriptContent}
+                            </pre>
+                          </div>
+                          <div className="saved-command-actions">
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={() => {
+                                setCommandMode('saved');
+                                setSelectedCommandId(cmd.id);
+                                setActiveTab('execute');
+                              }}
+                            >
+                              Use
+                            </button>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => {
+                                setEditingCommand(cmd);
+                                setCommandName(cmd.name);
+                                setCommandDescription(cmd.description || '');
+                                setCommandCategory(cmd.category || '');
+                                setInlineCommand(cmd.command || '');
+                                setScriptContent(cmd.scriptContent || '');
+                                setTargetOS(cmd.targetOS);
+                                setCommandMode(cmd.type === 'script' ? 'script' : 'inline');
+                                setShowCommandForm(true);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => handleDeleteCommand(cmd.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="command-form">
+                  <h4>{editingCommand ? 'Edit Command' : 'Save Command'}</h4>
+                  <div className="form-group">
+                    <label className="form-label">Name *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={commandName}
+                      onChange={(e) => setCommandName(e.target.value)}
+                      placeholder="e.g., Check Disk Space"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={commandDescription}
+                      onChange={(e) => setCommandDescription(e.target.value)}
+                      placeholder="Optional description"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Category</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={commandCategory}
+                      onChange={(e) => setCommandCategory(e.target.value)}
+                      placeholder="e.g., monitoring, user-management"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setShowCommandForm(false);
+                        setEditingCommand(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleSaveCommand}
+                      disabled={!commandName}
+                    >
+                      {editingCommand ? 'Update' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* History Tab */}
+          {activeTab === 'history' && (
+            <div className="history-content">
+              {commandHistory.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#a0aec0' }}>
+                  No command history yet.
+                </p>
+              ) : (
+                <div className="history-list">
+                  {commandHistory.map(exec => (
+                    <div key={exec.id} className={`history-item ${exec.status}`}>
+                      <div className="history-header">
+                        <span className="history-name">{exec.commandName}</span>
+                        <span className={`history-status ${exec.status}`}>{exec.status}</span>
+                        <span className="history-time">
+                          {new Date(exec.startedAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="history-details">
+                        <span>{exec.connectionIds.length} hosts</span>
+                        <span className={`os-badge ${exec.targetOS}`}>{exec.targetOS}</span>
+                      </div>
+                      <pre className="history-command">{exec.command}</pre>
+                      {exec.results && exec.results.length > 0 && (
+                        <div className="history-results-summary">
+                          <span className="success">
+                            {exec.results.filter(r => r.status === 'success').length} success
+                          </span>
+                          <span className="error">
+                            {exec.results.filter(r => r.status === 'error').length} failed
+                          </span>
+                          <span className="skipped">
+                            {exec.results.filter(r => r.status === 'skipped').length} skipped
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>
+            Close
+          </button>
+          {activeTab === 'execute' && (
+            <>
+              {isExecuting ? (
+                <button className="btn btn-danger" onClick={handleCancelExecution}>
+                  Cancel Execution
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleExecute}
+                  disabled={filteredConnections.length === 0}
+                >
+                  Execute on {filteredConnections.length} Hosts
+                </button>
+              )}
+            </>
+          )}
+          {activeTab === 'saved' && !showCommandForm && (
+            <button className="btn btn-primary" onClick={() => setShowCommandForm(true)}>
+              + New Command
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

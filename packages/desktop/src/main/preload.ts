@@ -13,6 +13,11 @@ import type {
   ImportOptions,
   ExportOptions,
   SSHSessionEvent,
+  SavedCommand,
+  CommandExecution,
+  CommandResult,
+  HostFilter,
+  CommandTargetOS,
 } from '@connectty/shared';
 
 const api = {
@@ -107,6 +112,51 @@ const api = {
     push: (serverUrl: string, token: string): Promise<boolean> => ipcRenderer.invoke('sync:push', serverUrl, token),
     pull: (serverUrl: string, token: string): Promise<{ connections: number; credentials: number; groups: number }> =>
       ipcRenderer.invoke('sync:pull', serverUrl, token),
+  },
+
+  // Command operations (bulk actions)
+  commands: {
+    // Saved commands CRUD
+    list: (category?: string): Promise<SavedCommand[]> => ipcRenderer.invoke('commands:list', category),
+    get: (id: string): Promise<SavedCommand | null> => ipcRenderer.invoke('commands:get', id),
+    create: (command: Omit<SavedCommand, 'id' | 'createdAt' | 'updatedAt'>): Promise<SavedCommand> =>
+      ipcRenderer.invoke('commands:create', command),
+    update: (id: string, updates: Partial<SavedCommand>): Promise<SavedCommand | null> =>
+      ipcRenderer.invoke('commands:update', id, updates),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('commands:delete', id),
+
+    // Command execution
+    execute: (data: {
+      commandId?: string;
+      commandName: string;
+      command: string;
+      targetOS: CommandTargetOS;
+      filter: HostFilter;
+      variables?: Record<string, string>;
+    }): Promise<{ executionId: string; targetCount: number } | { error: string }> =>
+      ipcRenderer.invoke('commands:execute', data),
+    cancel: (executionId: string): Promise<boolean> => ipcRenderer.invoke('commands:cancel', executionId),
+
+    // Execution history
+    history: (limit?: number): Promise<CommandExecution[]> => ipcRenderer.invoke('commands:history', limit),
+    getExecution: (id: string): Promise<CommandExecution | null> => ipcRenderer.invoke('commands:getExecution', id),
+    clearHistory: (): Promise<boolean> => ipcRenderer.invoke('commands:clearHistory'),
+
+    // Event listeners for progress updates
+    onProgress: (callback: (executionId: string, connectionId: string, result: Partial<CommandResult>) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, executionId: string, connectionId: string, result: Partial<CommandResult>) => {
+        callback(executionId, connectionId, result);
+      };
+      ipcRenderer.on('command:progress', handler);
+      return () => ipcRenderer.removeListener('command:progress', handler);
+    },
+    onComplete: (callback: (executionId: string) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, executionId: string) => {
+        callback(executionId);
+      };
+      ipcRenderer.on('command:complete', handler);
+      return () => ipcRenderer.removeListener('command:complete', handler);
+    },
   },
 
   // App info
