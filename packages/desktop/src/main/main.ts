@@ -2,8 +2,9 @@
  * Electron main process entry point
  */
 
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
+import Store from 'electron-store';
 import { DatabaseService } from './database';
 import { SSHService } from './ssh';
 import { RDPService } from './rdp';
@@ -11,6 +12,22 @@ import { SyncService } from './sync';
 import { CommandService } from './command';
 import { SFTPService } from './sftp';
 import { getProviderService } from './providers';
+
+// App settings interface
+interface AppSettings {
+  minimizeToTray: boolean;
+  closeToTray: boolean;
+  startMinimized: boolean;
+}
+
+// Initialize settings store
+const settingsStore = new Store<AppSettings>({
+  defaults: {
+    minimizeToTray: false,
+    closeToTray: false,
+    startMinimized: false,
+  },
+});
 import type {
   ServerConnection,
   Credential,
@@ -26,6 +43,8 @@ import type {
 } from '@connectty/shared';
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 let db: DatabaseService;
 let sshService: SSHService;
 let rdpService: RDPService;
@@ -34,6 +53,45 @@ let commandService: CommandService;
 let sftpService: SFTPService;
 
 const isDev = process.env.NODE_ENV === 'development';
+
+/**
+ * Create system tray icon and context menu
+ */
+function createTray(): void {
+  const iconPath = process.platform === 'win32'
+    ? path.join(__dirname, '../../assets/icon.ico')
+    : path.join(__dirname, '../../assets/icon.png');
+
+  const icon = nativeImage.createFromPath(iconPath);
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show Connectty',
+      click: () => {
+        mainWindow?.show();
+        mainWindow?.focus();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setToolTip('Connectty');
+  tray.setContextMenu(contextMenu);
+
+  // Double-click to show window
+  tray.on('double-click', () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+}
 
 async function createWindow(): Promise<void> {
   // Determine icon path based on platform
@@ -55,13 +113,33 @@ async function createWindow(): Promise<void> {
     },
   });
 
-  // Force show immediately
-  mainWindow.show();
-  mainWindow.focus();
+  // Handle minimize to tray
+  mainWindow.on('minimize', (event: Electron.Event) => {
+    if (settingsStore.get('minimizeToTray')) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
+  // Handle close to tray
+  mainWindow.on('close', (event: Electron.Event) => {
+    if (!isQuitting && settingsStore.get('closeToTray')) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Show window unless starting minimized
+  if (settingsStore.get('startMinimized')) {
+    mainWindow.hide();
+  } else {
+    mainWindow.show();
+    mainWindow.focus();
+  }
 
   try {
     if (isDev) {
@@ -646,6 +724,32 @@ function setupIpcHandlers(): void {
     }
     return result.filePath;
   });
+
+  // Settings handlers
+  ipcMain.handle('settings:get', async () => {
+    return {
+      minimizeToTray: settingsStore.get('minimizeToTray'),
+      closeToTray: settingsStore.get('closeToTray'),
+      startMinimized: settingsStore.get('startMinimized'),
+    };
+  });
+
+  ipcMain.handle('settings:set', async (_event, settings: Partial<AppSettings>) => {
+    if (settings.minimizeToTray !== undefined) {
+      settingsStore.set('minimizeToTray', settings.minimizeToTray);
+    }
+    if (settings.closeToTray !== undefined) {
+      settingsStore.set('closeToTray', settings.closeToTray);
+    }
+    if (settings.startMinimized !== undefined) {
+      settingsStore.set('startMinimized', settings.startMinimized);
+    }
+    return {
+      minimizeToTray: settingsStore.get('minimizeToTray'),
+      closeToTray: settingsStore.get('closeToTray'),
+      startMinimized: settingsStore.get('startMinimized'),
+    };
+  });
 }
 
 /**
@@ -698,6 +802,9 @@ app.whenReady().then(async () => {
     dialog.showErrorBox('Initialization Error', String(err));
   }
 
+  // Create system tray
+  createTray();
+
   // Always create window even if services fail
   await createWindow();
 
@@ -717,6 +824,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   sshService?.disconnectAll();
   sftpService?.disconnectAll();
 });
