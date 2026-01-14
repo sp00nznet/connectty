@@ -34,12 +34,17 @@ async function createWindow(): Promise<void> {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    show: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  // Force show immediately
+  mainWindow.show();
+  mainWindow.focus();
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -50,10 +55,13 @@ async function createWindow(): Promise<void> {
       await mainWindow.loadURL('http://localhost:5173');
       mainWindow.webContents.openDevTools();
     } else {
-      await mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+      const indexPath = path.join(__dirname, '../renderer/index.html');
+      console.log('Loading:', indexPath);
+      await mainWindow.loadFile(indexPath);
     }
   } catch (err) {
     console.error('Failed to load window content:', err);
+    dialog.showErrorBox('Load Error', String(err));
   }
 }
 
@@ -389,16 +397,23 @@ function findMatchingCredential(database: DatabaseService, host: DiscoveredHost)
 }
 
 app.whenReady().then(async () => {
-  // Initialize services
-  const userDataPath = app.getPath('userData');
-  db = new DatabaseService(path.join(userDataPath, 'connectty.db'));
-  sshService = new SSHService((sessionId, event) => {
-    mainWindow?.webContents.send('ssh:event', sessionId, event);
-  });
-  rdpService = new RDPService();
-  syncService = new SyncService(db);
+  try {
+    // Initialize services
+    const userDataPath = app.getPath('userData');
+    db = new DatabaseService(path.join(userDataPath, 'connectty.db'));
+    sshService = new SSHService((sessionId, event) => {
+      mainWindow?.webContents.send('ssh:event', sessionId, event);
+    });
+    rdpService = new RDPService();
+    syncService = new SyncService(db);
 
-  setupIpcHandlers();
+    setupIpcHandlers();
+  } catch (err) {
+    console.error('Failed to initialize services:', err);
+    dialog.showErrorBox('Initialization Error', String(err));
+  }
+
+  // Always create window even if services fail
   await createWindow();
 
   app.on('activate', async () => {
