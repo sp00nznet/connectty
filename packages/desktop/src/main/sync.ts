@@ -5,6 +5,27 @@
 import { createSyncData, parseSSHConfig, parseCSV, exportToCSV } from '@connectty/shared';
 import type { ImportOptions, ExportOptions, SyncData, ServerConnection, Credential, ConnectionGroup } from '@connectty/shared';
 import type { DatabaseService } from './database';
+import dns from 'dns/promises';
+import net from 'net';
+
+/**
+ * Resolve a hostname to an IP address.
+ * Returns the original value if it's already an IP or if resolution fails.
+ */
+async function resolveHostnameToIP(hostname: string): Promise<string> {
+  // If it's already an IP address, return it as-is
+  if (net.isIP(hostname)) {
+    return hostname;
+  }
+
+  try {
+    const result = await dns.lookup(hostname);
+    return result.address;
+  } catch {
+    // If DNS resolution fails, return the original hostname
+    return hostname;
+  }
+}
 
 export class SyncService {
   private db: DatabaseService;
@@ -13,22 +34,23 @@ export class SyncService {
     this.db = db;
   }
 
-  importData(content: string, options: ImportOptions): { connections: number; credentials: number; groups: number } {
+  async importData(content: string, options: ImportOptions): Promise<{ connections: number; credentials: number; groups: number }> {
     let imported = { connections: 0, credentials: 0, groups: 0 };
 
     switch (options.format) {
       case 'json': {
         const data = JSON.parse(content) as SyncData;
-        imported = this.importSyncData(data, options);
+        imported = await this.importSyncData(data, options);
         break;
       }
       case 'csv': {
         const connections = parseCSV(content);
         for (const conn of connections) {
           if (conn.name && conn.hostname) {
+            const resolvedIP = await resolveHostnameToIP(conn.hostname);
             this.db.createConnection({
               name: conn.name,
-              hostname: conn.hostname,
+              hostname: resolvedIP,
               port: conn.port || 22,
               connectionType: 'ssh',
               username: conn.username,
@@ -45,9 +67,10 @@ export class SyncService {
         const connections = parseSSHConfig(content);
         for (const conn of connections) {
           if (conn.name && conn.hostname) {
+            const resolvedIP = await resolveHostnameToIP(conn.hostname);
             this.db.createConnection({
               name: conn.name,
-              hostname: conn.hostname,
+              hostname: resolvedIP,
               port: conn.port || 22,
               connectionType: 'ssh',
               username: conn.username,
@@ -69,9 +92,10 @@ export class SyncService {
             username?: string;
           }>;
           for (const session of sessions) {
+            const resolvedIP = await resolveHostnameToIP(session.hostname);
             this.db.createConnection({
               name: session.name,
-              hostname: session.hostname,
+              hostname: resolvedIP,
               port: session.port || 22,
               connectionType: 'ssh',
               username: session.username,
@@ -89,10 +113,10 @@ export class SyncService {
     return imported;
   }
 
-  private importSyncData(
+  private async importSyncData(
     data: SyncData,
     options: ImportOptions
-  ): { connections: number; credentials: number; groups: number } {
+  ): Promise<{ connections: number; credentials: number; groups: number }> {
     const imported = { connections: 0, credentials: 0, groups: 0 };
 
     // Import groups first
@@ -127,9 +151,10 @@ export class SyncService {
 
     // Import connections
     for (const conn of data.connections || []) {
+      const resolvedIP = await resolveHostnameToIP(conn.hostname);
       this.db.createConnection({
         name: conn.name,
-        hostname: conn.hostname,
+        hostname: resolvedIP,
         port: conn.port,
         connectionType: conn.connectionType || 'ssh',
         osType: conn.osType,

@@ -426,7 +426,7 @@ function setupIpcHandlers(): void {
     const fs = await import('fs/promises');
     const content = await fs.readFile(result.filePaths[0], 'utf-8');
 
-    return syncService.importData(content, options);
+    return await syncService.importData(content, options);
   });
 
   ipcMain.handle('export:file', async (_event, options: ExportOptions) => {
