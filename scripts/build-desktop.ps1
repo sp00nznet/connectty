@@ -14,11 +14,40 @@ Write-Host "Project root: $ProjectRoot"
 
 Set-Location $ProjectRoot
 
+# Common Node.js installation paths
+$NodePaths = @(
+    "$env:ProgramFiles\nodejs",
+    "${env:ProgramFiles(x86)}\nodejs",
+    "$env:LOCALAPPDATA\Programs\nodejs",
+    "$env:APPDATA\npm",
+    "C:\Program Files\nodejs"
+)
+
+# Function to find Node.js and add to PATH
+function Find-NodeJS {
+    foreach ($p in $NodePaths) {
+        $nodePath = Join-Path $p "node.exe"
+        if (Test-Path $nodePath) {
+            if ($env:Path -notlike "*$p*") {
+                $env:Path = "$p;$env:Path"
+                Write-Host "  Added $p to PATH" -ForegroundColor Gray
+            }
+            return $true
+        }
+    }
+    return $false
+}
+
 # Function to check if a command exists
 function Test-Command {
     param([string]$Command)
     $null = Get-Command $Command -ErrorAction SilentlyContinue
     return $?
+}
+
+# Function to refresh PATH from registry
+function Refresh-Path {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 }
 
 # Function to download and install Node.js LTS directly
@@ -32,18 +61,29 @@ function Install-NodeJSDirect {
     try {
         # Download installer
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Write-Host "  Downloading from nodejs.org..." -ForegroundColor Gray
         $webClient = New-Object System.Net.WebClient
         $webClient.DownloadFile($installerUrl, $installerPath)
 
-        Write-Host "Installing Node.js v$nodeVersion (this may take a minute)..." -ForegroundColor Cyan
+        Write-Host "  Running installer (this may take a minute)..." -ForegroundColor Gray
 
         # Run MSI installer silently
         $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /qn /norestart" -Wait -PassThru
 
         if ($process.ExitCode -eq 0) {
-            # Refresh PATH
-            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-            Write-Host "Node.js v$nodeVersion installed successfully!" -ForegroundColor Green
+            Write-Host "Node.js v$nodeVersion installed!" -ForegroundColor Green
+
+            # Refresh PATH and explicitly add Node.js path
+            Refresh-Path
+
+            # Add default Node.js path explicitly
+            $defaultNodePath = "$env:ProgramFiles\nodejs"
+            if (Test-Path $defaultNodePath) {
+                if ($env:Path -notlike "*$defaultNodePath*") {
+                    $env:Path = "$defaultNodePath;$env:Path"
+                }
+            }
+
             return $true
         } else {
             Write-Host "MSI installer failed with exit code: $($process.ExitCode)" -ForegroundColor Red
@@ -59,49 +99,64 @@ function Install-NodeJSDirect {
     }
 }
 
-# Function to install Node.js - tries multiple methods
-function Install-NodeJS {
-    param([switch]$Force)
-
-    $message = if ($Force) { "Installing Node.js LTS to replace incompatible version..." } else { "Node.js/npm not found. Installing..." }
-    Write-Host "`n$message" -ForegroundColor Yellow
-
-    # Try winget first (Windows 10/11)
-    if (Test-Command "winget") {
-        Write-Host "Trying winget..." -ForegroundColor Gray
-        $result = winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-            Write-Host "Node.js installed via winget!" -ForegroundColor Green
-            return $true
-        }
+# Function to check if Visual Studio C++ Build Tools are installed
+function Test-VCBuildTools {
+    $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vsWhere) {
+        $vcTools = & $vsWhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+        if ($vcTools) { return $true }
     }
 
-    # Try chocolatey
-    if (Test-Command "choco") {
-        Write-Host "Trying Chocolatey..." -ForegroundColor Gray
-        choco install nodejs-lts -y 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-            Write-Host "Node.js installed via Chocolatey!" -ForegroundColor Green
+    # Check common paths
+    $paths = @(
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC",
+        "$env:ProgramFiles\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC",
+        "$env:ProgramFiles\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC",
+        "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
+    )
+
+    foreach ($p in $paths) {
+        if (Test-Path $p) { return $true }
+    }
+    return $false
+}
+
+# Function to install Visual Studio Build Tools
+function Install-VCBuildTools {
+    Write-Host "`nVisual Studio C++ Build Tools required. Installing..." -ForegroundColor Yellow
+
+    # Direct download - most reliable
+    Write-Host "Downloading Visual Studio Build Tools installer..." -ForegroundColor Cyan
+    $vsInstallerUrl = "https://aka.ms/vs/17/release/vs_BuildTools.exe"
+    $vsInstallerPath = "$env:TEMP\vs_BuildTools.exe"
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        (New-Object System.Net.WebClient).DownloadFile($vsInstallerUrl, $vsInstallerPath)
+
+        Write-Host "Installing (this may take 5-10 minutes)..." -ForegroundColor Cyan
+        $process = Start-Process -FilePath $vsInstallerPath -ArgumentList "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" -Wait -PassThru
+
+        if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {
+            Write-Host "Visual Studio Build Tools installed!" -ForegroundColor Green
             return $true
+        } else {
+            Write-Host "Installer exited with code: $($process.ExitCode)" -ForegroundColor Red
         }
+    } catch {
+        Write-Host "Failed: $_" -ForegroundColor Red
+    } finally {
+        Remove-Item $vsInstallerPath -Force -ErrorAction SilentlyContinue
     }
 
-    # Direct download as fallback
-    Write-Host "Package managers unavailable, downloading directly..." -ForegroundColor Gray
-    return Install-NodeJSDirect
+    Write-Host "`nPlease install manually from: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor Red
+    Write-Host "Select 'Desktop development with C++' workload" -ForegroundColor Red
+    return $false
 }
 
 # Function to uninstall Node.js
 function Uninstall-NodeJS {
     Write-Host "Removing existing Node.js installation..." -ForegroundColor Yellow
-
-    # Try winget
-    if (Test-Command "winget") {
-        winget uninstall OpenJS.NodeJS 2>&1 | Out-Null
-        winget uninstall "Node.js" 2>&1 | Out-Null
-    }
 
     # Try to find and run uninstaller from registry
     $uninstallKeys = @(
@@ -120,81 +175,7 @@ function Uninstall-NodeJS {
             }
     }
 
-    # Clean up PATH references to nodejs
     Start-Sleep -Seconds 2
-}
-
-# Function to check if Visual Studio C++ Build Tools are installed
-function Test-VCBuildTools {
-    $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (Test-Path $vsWhere) {
-        $vcTools = & $vsWhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
-        if ($vcTools) { return $true }
-    }
-
-    # Check common paths
-    $paths = @(
-        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC",
-        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC",
-        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC",
-        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
-    )
-
-    foreach ($p in $paths) {
-        if (Test-Path $p) { return $true }
-    }
-    return $false
-}
-
-# Function to install Visual Studio Build Tools
-function Install-VCBuildTools {
-    Write-Host "`nVisual Studio C++ Build Tools required. Installing..." -ForegroundColor Yellow
-
-    # Try winget
-    if (Test-Command "winget") {
-        Write-Host "Installing via winget (this may take 5-10 minutes)..." -ForegroundColor Cyan
-        winget install Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Visual Studio Build Tools installed!" -ForegroundColor Green
-            return $true
-        }
-    }
-
-    # Try chocolatey
-    if (Test-Command "choco") {
-        Write-Host "Installing via Chocolatey..." -ForegroundColor Cyan
-        choco install visualstudio2022buildtools visualstudio2022-workload-vctools -y 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Visual Studio Build Tools installed!" -ForegroundColor Green
-            return $true
-        }
-    }
-
-    # Direct download
-    Write-Host "Downloading Visual Studio Build Tools installer..." -ForegroundColor Cyan
-    $vsInstallerUrl = "https://aka.ms/vs/17/release/vs_BuildTools.exe"
-    $vsInstallerPath = "$env:TEMP\vs_BuildTools.exe"
-
-    try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        (New-Object System.Net.WebClient).DownloadFile($vsInstallerUrl, $vsInstallerPath)
-
-        Write-Host "Installing (this may take 5-10 minutes)..." -ForegroundColor Cyan
-        $process = Start-Process -FilePath $vsInstallerPath -ArgumentList "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" -Wait -PassThru
-
-        if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {
-            Write-Host "Visual Studio Build Tools installed!" -ForegroundColor Green
-            return $true
-        }
-    } catch {
-        Write-Host "Failed: $_" -ForegroundColor Red
-    } finally {
-        Remove-Item $vsInstallerPath -Force -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "`nPlease install manually from: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor Red
-    Write-Host "Select 'Desktop development with C++' workload" -ForegroundColor Red
-    return $false
 }
 
 # ============================================
@@ -203,39 +184,62 @@ function Install-VCBuildTools {
 
 Write-Host "`n[0/4] Checking prerequisites..." -ForegroundColor Yellow
 
-$needsRestart = $false
+# First, refresh PATH and try to find Node.js
+Refresh-Path
+$nodeFound = Find-NodeJS
 
-# Check/Install Node.js
-if (-not (Test-Command "node")) {
-    if (-not (Install-NodeJS)) {
+# Check if node command works
+if (-not $nodeFound -and -not (Test-Command "node")) {
+    Write-Host "`nNode.js not found. Installing..." -ForegroundColor Yellow
+
+    if (-not (Install-NodeJSDirect)) {
         Write-Host "Failed to install Node.js. Please install manually from https://nodejs.org/" -ForegroundColor Red
         exit 1
     }
-    Write-Host "`n============================================" -ForegroundColor Green
-    Write-Host "Node.js installed successfully!" -ForegroundColor Green
-    Write-Host "Please RESTART your terminal and run this script again." -ForegroundColor Yellow
-    Write-Host "============================================" -ForegroundColor Green
-    exit 0
+
+    # Try to find it again after install
+    Refresh-Path
+    Find-NodeJS | Out-Null
+
+    # Verify installation
+    if (-not (Test-Command "node")) {
+        Write-Host "`n============================================" -ForegroundColor Green
+        Write-Host "Node.js installed successfully!" -ForegroundColor Green
+        Write-Host "Please CLOSE this terminal, open a NEW one," -ForegroundColor Yellow
+        Write-Host "and run this script again." -ForegroundColor Yellow
+        Write-Host "============================================" -ForegroundColor Green
+        exit 0
+    }
+}
+
+# Get Node.js version
+$nodeVersion = node --version 2>$null
+if (-not $nodeVersion) {
+    Write-Host "Error: node command not working. Please restart your terminal." -ForegroundColor Red
+    exit 1
 }
 
 # Check Node.js version - auto-fix if Node 24+
-$nodeVersion = node --version 2>$null
-if ($nodeVersion) {
-    $nodeVersionMatch = [regex]::Match($nodeVersion, 'v(\d+)\.')
-    if ($nodeVersionMatch.Success) {
-        $nodeMajor = [int]$nodeVersionMatch.Groups[1].Value
-        if ($nodeMajor -ge 24) {
-            Write-Host "`nNode.js $nodeVersion detected - this version has compatibility issues." -ForegroundColor Yellow
-            Write-Host "Automatically switching to Node.js LTS..." -ForegroundColor Yellow
+$nodeVersionMatch = [regex]::Match($nodeVersion, 'v(\d+)\.')
+if ($nodeVersionMatch.Success) {
+    $nodeMajor = [int]$nodeVersionMatch.Groups[1].Value
+    if ($nodeMajor -ge 24) {
+        Write-Host "`nNode.js $nodeVersion detected - this version has compatibility issues." -ForegroundColor Yellow
+        Write-Host "Automatically switching to Node.js LTS..." -ForegroundColor Yellow
 
-            Uninstall-NodeJS
+        Uninstall-NodeJS
 
-            if (-not (Install-NodeJS -Force)) {
-                Write-Host "Failed to install Node.js LTS. Please install manually from https://nodejs.org/" -ForegroundColor Red
-                exit 1
-            }
-            $needsRestart = $true
+        if (-not (Install-NodeJSDirect)) {
+            Write-Host "Failed to install Node.js LTS. Please install manually from https://nodejs.org/" -ForegroundColor Red
+            exit 1
         }
+
+        Write-Host "`n============================================" -ForegroundColor Green
+        Write-Host "Node.js LTS installed!" -ForegroundColor Green
+        Write-Host "Please CLOSE this terminal, open a NEW one," -ForegroundColor Yellow
+        Write-Host "and run this script again." -ForegroundColor Yellow
+        Write-Host "============================================" -ForegroundColor Green
+        exit 0
     }
 }
 
@@ -244,13 +248,10 @@ if (-not (Test-VCBuildTools)) {
     if (-not (Install-VCBuildTools)) {
         exit 1
     }
-    $needsRestart = $true
-}
-
-if ($needsRestart) {
     Write-Host "`n============================================" -ForegroundColor Green
-    Write-Host "Prerequisites installed successfully!" -ForegroundColor Green
-    Write-Host "Please RESTART your terminal and run this script again." -ForegroundColor Yellow
+    Write-Host "Visual Studio Build Tools installed!" -ForegroundColor Green
+    Write-Host "Please CLOSE this terminal, open a NEW one," -ForegroundColor Yellow
+    Write-Host "and run this script again." -ForegroundColor Yellow
     Write-Host "============================================" -ForegroundColor Green
     exit 0
 }
