@@ -182,6 +182,7 @@ export class DatabaseService {
       { table: 'connections', column: 'os_type', sql: 'ALTER TABLE connections ADD COLUMN os_type TEXT' },
       { table: 'connections', column: 'provider_id', sql: 'ALTER TABLE connections ADD COLUMN provider_id TEXT' },
       { table: 'connections', column: 'provider_host_id', sql: 'ALTER TABLE connections ADD COLUMN provider_host_id TEXT' },
+      { table: 'connections', column: 'serial_settings', sql: 'ALTER TABLE connections ADD COLUMN serial_settings TEXT' },
       { table: 'credentials', column: 'domain', sql: 'ALTER TABLE credentials ADD COLUMN domain TEXT' },
       { table: 'credentials', column: 'auto_assign_patterns', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_patterns TEXT DEFAULT '[]'" },
       { table: 'credentials', column: 'auto_assign_os_types', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_os_types TEXT DEFAULT '[]'" },
