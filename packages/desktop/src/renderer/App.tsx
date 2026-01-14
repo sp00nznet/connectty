@@ -16,7 +16,7 @@ import type {
   HostFilter,
   CommandTargetOS,
 } from '@connectty/shared';
-import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress } from '../main/preload';
+import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -72,6 +72,9 @@ export default function App() {
   const [editingGroup, setEditingGroup] = useState<ConnectionGroup | null>(null);
   // FXP: track selected SFTP session for site-to-site transfer
   const [fxpSourceSession, setFxpSourceSession] = useState<string | null>(null);
+  // Settings modal
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>({ minimizeToTray: false, closeToTray: false, startMinimized: false });
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -128,16 +131,18 @@ export default function App() {
   }, [activeSessionId, sessions]);
 
   const loadData = async () => {
-    const [conns, creds, grps, provs] = await Promise.all([
+    const [conns, creds, grps, provs, settings] = await Promise.all([
       window.connectty.connections.list(),
       window.connectty.credentials.list(),
       window.connectty.groups.list(),
       window.connectty.providers.list(),
+      window.connectty.settings.get(),
     ]);
     setConnections(conns);
     setCredentials(creds);
     setGroups(grps);
     setProviders(provs);
+    setAppSettings(settings);
   };
 
   const handleSSHEvent = useCallback((sessionId: string, event: SSHSessionEvent) => {
@@ -394,6 +399,12 @@ export default function App() {
     }
   };
 
+  const handleSaveSettings = async (settings: Partial<AppSettings>) => {
+    const updated = await window.connectty.settings.set(settings);
+    setAppSettings(updated);
+    showNotification('success', 'Settings saved');
+  };
+
   const handleDiscoverAndImport = async (provider: Provider) => {
     setProviderContextMenu(null);
     setIsDiscovering(provider.id);
@@ -489,6 +500,9 @@ export default function App() {
           </button>
           <button className="btn btn-secondary btn-sm" onClick={handleImport}>Import</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowSettingsModal(true)}>
+            Settings
+          </button>
         </div>
 
         <div className="search-input">
@@ -703,6 +717,15 @@ export default function App() {
           groups={groups}
           onClose={() => setShowBulkActionsModal(false)}
           onNotification={showNotification}
+        />
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <SettingsModal
+          settings={appSettings}
+          onClose={() => setShowSettingsModal(false)}
+          onSave={handleSaveSettings}
         />
       )}
 
@@ -3600,6 +3623,94 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Settings Modal Component
+interface SettingsModalProps {
+  settings: AppSettings;
+  onClose: () => void;
+  onSave: (settings: Partial<AppSettings>) => Promise<void>;
+}
+
+function SettingsModal({ settings, onClose, onSave }: SettingsModalProps) {
+  const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
+  const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
+  const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onSave({
+        minimizeToTray,
+        closeToTray,
+        startMinimized,
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Settings</h3>
+          <button className="btn btn-icon" onClick={onClose}>×</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="settings-section">
+              <h4>System Tray</h4>
+              <p className="settings-description">
+                Configure how the app behaves with the system tray.
+              </p>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={minimizeToTray}
+                  onChange={(e) => setMinimizeToTray(e.target.checked)}
+                />
+                <span>Minimize to system tray</span>
+              </label>
+              <p className="checkbox-help">When minimizing, hide the window to the system tray instead of the taskbar.</p>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={closeToTray}
+                  onChange={(e) => setCloseToTray(e.target.checked)}
+                />
+                <span>Close to system tray</span>
+              </label>
+              <p className="checkbox-help">When closing, hide the window to the system tray instead of quitting the app.</p>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={startMinimized}
+                  onChange={(e) => setStartMinimized(e.target.checked)}
+                />
+                <span>Start minimized</span>
+              </label>
+              <p className="checkbox-help">Start the app hidden in the system tray.</p>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

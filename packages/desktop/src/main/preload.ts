@@ -55,6 +55,13 @@ export interface TransferProgress {
   error?: string;
 }
 
+// App settings types
+export interface AppSettings {
+  minimizeToTray: boolean;
+  closeToTray: boolean;
+  startMinimized: boolean;
+}
+
 const api = {
   // Connection operations
   connections: {
@@ -230,6 +237,12 @@ const api = {
       ipcRenderer.on('sftp:progress', handler);
       return () => ipcRenderer.removeListener('sftp:progress', handler);
     },
+  },
+
+  // Settings operations
+  settings: {
+    get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
+    set: (settings: Partial<AppSettings>): Promise<AppSettings> => ipcRenderer.invoke('settings:set', settings),
   },
 
   // App info
