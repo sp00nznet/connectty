@@ -38,8 +38,27 @@ export default function App() {
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [providerContextMenu, setProviderContextMenu] = useState<{ x: number; y: number; provider: Provider } | null>(null);
   const [isDiscovering, setIsDiscovering] = useState<string | null>(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
+
+  // Available themes
+  const themes = [
+    { id: 'midnight', name: 'Midnight', description: 'Default dark blue theme' },
+    { id: 'light', name: 'Light', description: 'Clean light theme' },
+    { id: 'dracula', name: 'Dracula', description: 'Popular dark purple theme' },
+    { id: 'nord', name: 'Nord', description: 'Arctic, north-bluish palette' },
+    { id: 'solarized', name: 'Solarized Dark', description: 'Precision colors for machines and people' },
+    { id: 'monokai', name: 'Monokai', description: 'Sublime Text inspired' },
+    { id: 'github', name: 'GitHub Dark', description: 'GitHub\'s dark mode' },
+    { id: 'high-contrast', name: 'High Contrast', description: 'Maximum visibility' },
+  ];
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('connectty-theme', theme);
+  }, [theme]);
 
   // Load data on mount
   useEffect(() => {
@@ -338,8 +357,23 @@ export default function App() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>Connectty</h1>
-          <p className="subtitle">SSH &amp; RDP Connection Manager</p>
+          <div className="header-row">
+            <div>
+              <h1>Connectty</h1>
+              <p className="subtitle">SSH &amp; RDP Connection Manager</p>
+            </div>
+            <div className="theme-selector">
+              <select
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+                title="Change theme"
+              >
+                {themes.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="sidebar-actions">

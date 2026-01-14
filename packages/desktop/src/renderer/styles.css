@@ -5,18 +5,151 @@
 }
 
 :root {
+  --sidebar-width: 280px;
+}
+
+/* Theme: Midnight (Default Dark) */
+[data-theme="midnight"], :root {
   --bg-primary: #1a1a2e;
   --bg-secondary: #16213e;
   --bg-tertiary: #0f3460;
   --text-primary: #edf2f4;
   --text-secondary: #8d99ae;
+  --text-muted: #6b7280;
   --accent: #e94560;
   --accent-hover: #ff6b6b;
   --success: #4ade80;
   --warning: #fbbf24;
   --error: #ef4444;
   --border: #2d3748;
-  --sidebar-width: 280px;
+  --input-bg: #1e293b;
+  --modal-bg: #1e293b;
+}
+
+/* Theme: Light */
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e2e8f0;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --border: #e2e8f0;
+  --input-bg: #ffffff;
+  --modal-bg: #ffffff;
+}
+
+/* Theme: Dracula */
+[data-theme="dracula"] {
+  --bg-primary: #282a36;
+  --bg-secondary: #21222c;
+  --bg-tertiary: #44475a;
+  --text-primary: #f8f8f2;
+  --text-secondary: #6272a4;
+  --text-muted: #6272a4;
+  --accent: #bd93f9;
+  --accent-hover: #ff79c6;
+  --success: #50fa7b;
+  --warning: #f1fa8c;
+  --error: #ff5555;
+  --border: #44475a;
+  --input-bg: #21222c;
+  --modal-bg: #21222c;
+}
+
+/* Theme: Nord */
+[data-theme="nord"] {
+  --bg-primary: #2e3440;
+  --bg-secondary: #3b4252;
+  --bg-tertiary: #434c5e;
+  --text-primary: #eceff4;
+  --text-secondary: #d8dee9;
+  --text-muted: #7b88a1;
+  --accent: #88c0d0;
+  --accent-hover: #81a1c1;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --error: #bf616a;
+  --border: #4c566a;
+  --input-bg: #3b4252;
+  --modal-bg: #3b4252;
+}
+
+/* Theme: Solarized Dark */
+[data-theme="solarized"] {
+  --bg-primary: #002b36;
+  --bg-secondary: #073642;
+  --bg-tertiary: #094050;
+  --text-primary: #fdf6e3;
+  --text-secondary: #93a1a1;
+  --text-muted: #657b83;
+  --accent: #2aa198;
+  --accent-hover: #268bd2;
+  --success: #859900;
+  --warning: #b58900;
+  --error: #dc322f;
+  --border: #094050;
+  --input-bg: #073642;
+  --modal-bg: #073642;
+}
+
+/* Theme: Monokai */
+[data-theme="monokai"] {
+  --bg-primary: #272822;
+  --bg-secondary: #1e1f1c;
+  --bg-tertiary: #3e3d32;
+  --text-primary: #f8f8f2;
+  --text-secondary: #a6a6a6;
+  --text-muted: #75715e;
+  --accent: #f92672;
+  --accent-hover: #fd971f;
+  --success: #a6e22e;
+  --warning: #e6db74;
+  --error: #f92672;
+  --border: #3e3d32;
+  --input-bg: #1e1f1c;
+  --modal-bg: #1e1f1c;
+}
+
+/* Theme: GitHub Dark */
+[data-theme="github"] {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --accent: #58a6ff;
+  --accent-hover: #79c0ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --error: #f85149;
+  --border: #30363d;
+  --input-bg: #161b22;
+  --modal-bg: #161b22;
+}
+
+/* Theme: High Contrast */
+[data-theme="high-contrast"] {
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #1a1a1a;
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-muted: #a0a0a0;
+  --accent: #00ff00;
+  --accent-hover: #00cc00;
+  --success: #00ff00;
+  --warning: #ffff00;
+  --error: #ff0000;
+  --border: #404040;
+  --input-bg: #0a0a0a;
+  --modal-bg: #0a0a0a;
 }
 
 body {
@@ -53,6 +186,13 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.sidebar-header .header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .sidebar-header h1 {
   font-size: 1.5rem;
   font-weight: 600;
@@ -63,6 +203,32 @@ body {
   font-size: 0.75rem;
   color: var(--text-secondary);
   margin-top: 4px;
+}
+
+.theme-selector {
+  flex-shrink: 0;
+}
+
+.theme-selector select {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s;
+}
+
+.theme-selector select:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.theme-selector select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
 }
 
 .sidebar-actions {
