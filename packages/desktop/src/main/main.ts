@@ -9,6 +9,7 @@ import { SSHService } from './ssh';
 import { RDPService } from './rdp';
 import { SyncService } from './sync';
 import { CommandService } from './command';
+import { SFTPService } from './sftp';
 import { getProviderService } from './providers';
 import type {
   ServerConnection,
@@ -30,6 +31,7 @@ let sshService: SSHService;
 let rdpService: RDPService;
 let syncService: SyncService;
 let commandService: CommandService;
+let sftpService: SFTPService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -532,6 +534,112 @@ function setupIpcHandlers(): void {
     db.clearCommandHistory();
     return true;
   });
+
+  // SFTP handlers
+  ipcMain.handle('sftp:connect', async (_event, connectionId: string) => {
+    const connection = db.getConnection(connectionId);
+    if (!connection) {
+      throw new Error('Connection not found');
+    }
+
+    let credential: Credential | null = null;
+    if (connection.credentialId) {
+      credential = db.getCredential(connection.credentialId);
+    }
+
+    const sessionId = await sftpService.connect(connection, credential);
+    return sessionId;
+  });
+
+  ipcMain.handle('sftp:disconnect', async (_event, sessionId: string) => {
+    sftpService.disconnect(sessionId);
+    return true;
+  });
+
+  ipcMain.handle('sftp:listRemote', async (_event, sessionId: string, remotePath: string) => {
+    return sftpService.listRemoteDirectory(sessionId, remotePath);
+  });
+
+  ipcMain.handle('sftp:listLocal', async (_event, localPath: string) => {
+    return sftpService.listLocalDirectory(localPath);
+  });
+
+  ipcMain.handle('sftp:upload', async (_event, sessionId: string, localPath: string, remotePath: string) => {
+    await sftpService.upload(sessionId, localPath, remotePath);
+    return true;
+  });
+
+  ipcMain.handle('sftp:download', async (_event, sessionId: string, remotePath: string, localPath: string) => {
+    await sftpService.download(sessionId, remotePath, localPath);
+    return true;
+  });
+
+  ipcMain.handle('sftp:mkdir', async (_event, sessionId: string, remotePath: string) => {
+    await sftpService.mkdir(sessionId, remotePath);
+    return true;
+  });
+
+  ipcMain.handle('sftp:rmdir', async (_event, sessionId: string, remotePath: string) => {
+    await sftpService.rmdir(sessionId, remotePath);
+    return true;
+  });
+
+  ipcMain.handle('sftp:unlink', async (_event, sessionId: string, remotePath: string) => {
+    await sftpService.unlink(sessionId, remotePath);
+    return true;
+  });
+
+  ipcMain.handle('sftp:rename', async (_event, sessionId: string, oldPath: string, newPath: string) => {
+    await sftpService.rename(sessionId, oldPath, newPath);
+    return true;
+  });
+
+  ipcMain.handle('sftp:chmod', async (_event, sessionId: string, remotePath: string, mode: number) => {
+    await sftpService.chmod(sessionId, remotePath, mode);
+    return true;
+  });
+
+  ipcMain.handle('sftp:stat', async (_event, sessionId: string, remotePath: string) => {
+    return sftpService.statRemote(sessionId, remotePath);
+  });
+
+  ipcMain.handle('sftp:homePath', async () => {
+    return sftpService.getHomePath();
+  });
+
+  ipcMain.handle('sftp:sessions', async () => {
+    return sftpService.getActiveSessions();
+  });
+
+  ipcMain.handle('sftp:selectLocalFolder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle('sftp:selectLocalFile', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths;
+  });
+
+  ipcMain.handle('sftp:selectSaveLocation', async (_event, defaultName: string) => {
+    const result = await dialog.showSaveDialog(mainWindow!, {
+      defaultPath: defaultName,
+    });
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+    return result.filePath;
+  });
 }
 
 /**
@@ -574,6 +682,9 @@ app.whenReady().then(async () => {
     rdpService = new RDPService();
     syncService = new SyncService(db);
     commandService = new CommandService();
+    sftpService = new SFTPService((progress) => {
+      mainWindow?.webContents.send('sftp:progress', progress);
+    });
 
     setupIpcHandlers();
   } catch (err) {
@@ -593,6 +704,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   sshService?.disconnectAll();
+  sftpService?.disconnectAll();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -600,4 +712,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   sshService?.disconnectAll();
+  sftpService?.disconnectAll();
 });

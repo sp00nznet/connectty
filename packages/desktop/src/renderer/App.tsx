@@ -16,7 +16,7 @@ import type {
   HostFilter,
   CommandTargetOS,
 } from '@connectty/shared';
-import type { ConnecttyAPI } from '../main/preload';
+import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -56,6 +56,8 @@ export default function App() {
   const [isDiscovering, setIsDiscovering] = useState<string | null>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
   const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
+  const [showSFTPModal, setShowSFTPModal] = useState(false);
+  const [sftpConnection, setSftpConnection] = useState<ServerConnection | null>(null);
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -293,6 +295,11 @@ export default function App() {
     }
   };
 
+  const handleOpenSFTP = (connection: ServerConnection) => {
+    setSftpConnection(connection);
+    setShowSFTPModal(true);
+  };
+
   // Provider handlers
   const handleCreateProvider = async (data: Partial<Provider>) => {
     try {
@@ -444,6 +451,7 @@ export default function App() {
                       onConnect={() => handleConnect(conn)}
                       onEdit={() => { setEditingConnection(conn); setShowConnectionModal(true); }}
                       onDelete={() => handleDeleteConnection(conn.id)}
+                      onSFTP={() => handleOpenSFTP(conn)}
                     />
                   ))}
                 </li>
@@ -462,6 +470,7 @@ export default function App() {
                     onConnect={() => handleConnect(conn)}
                     onEdit={() => { setEditingConnection(conn); setShowConnectionModal(true); }}
                     onDelete={() => handleDeleteConnection(conn.id)}
+                    onSFTP={() => handleOpenSFTP(conn)}
                   />
                 ))}
               </li>
@@ -591,6 +600,16 @@ export default function App() {
         />
       )}
 
+      {/* SFTP Modal */}
+      {showSFTPModal && sftpConnection && (
+        <SFTPModal
+          connection={sftpConnection}
+          credential={sftpConnection.credentialId ? credentials.find(c => c.id === sftpConnection.credentialId) || null : null}
+          onClose={() => { setShowSFTPModal(false); setSftpConnection(null); }}
+          onNotification={showNotification}
+        />
+      )}
+
       {/* Notification */}
       {notification && (
         <div className={`notification ${notification.type}`}>
@@ -608,9 +627,10 @@ interface ConnectionItemProps {
   onConnect: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSFTP?: () => void;
 }
 
-function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }: ConnectionItemProps) {
+function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete, onSFTP }: ConnectionItemProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
@@ -621,6 +641,7 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }
   };
 
   const isRDP = connection.connectionType === 'rdp';
+  const isSSH = connection.connectionType === 'ssh';
 
   return (
     <div
@@ -644,6 +665,11 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }
             <div className="context-menu-item" onClick={() => { onConnect(); setShowMenu(false); }}>
               Connect
             </div>
+            {isSSH && onSFTP && (
+              <div className="context-menu-item" onClick={() => { onSFTP(); setShowMenu(false); }}>
+                Open SFTP
+              </div>
+            )}
             <div className="context-menu-item" onClick={() => { onEdit(); setShowMenu(false); }}>
               Edit
             </div>
@@ -2304,6 +2330,517 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
             <button className="btn btn-primary" onClick={() => setShowCommandForm(true)}>
               + New Command
             </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// SFTP Modal Component
+interface SFTPModalProps {
+  connection: ServerConnection;
+  credential: Credential | null;
+  onClose: () => void;
+  onNotification: (type: 'success' | 'error', message: string) => void;
+}
+
+function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModalProps) {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Local file browser state
+  const [localPath, setLocalPath] = useState('');
+  const [localFiles, setLocalFiles] = useState<LocalFileInfo[]>([]);
+  const [localLoading, setLocalLoading] = useState(false);
+  const [selectedLocalFiles, setSelectedLocalFiles] = useState<Set<string>>(new Set());
+
+  // Remote file browser state
+  const [remotePath, setRemotePath] = useState('/');
+  const [remoteFiles, setRemoteFiles] = useState<RemoteFileInfo[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [selectedRemoteFiles, setSelectedRemoteFiles] = useState<Set<string>>(new Set());
+
+  // Transfer state
+  const [transfers, setTransfers] = useState<TransferProgress[]>([]);
+
+  // Connect on mount
+  useEffect(() => {
+    connectSFTP();
+    loadLocalHomePath();
+
+    // Subscribe to transfer progress
+    const unsubscribe = window.connectty.sftp.onProgress((progress) => {
+      setTransfers(prev => {
+        const existing = prev.findIndex(t => t.transferId === progress.transferId);
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = progress;
+          return updated;
+        }
+        return [...prev, progress];
+      });
+
+      if (progress.status === 'completed') {
+        onNotification('success', `${progress.direction === 'upload' ? 'Uploaded' : 'Downloaded'}: ${progress.filename}`);
+        // Refresh the directory that received the file
+        if (progress.direction === 'upload' && sessionId) {
+          loadRemoteDirectory(remotePath);
+        } else if (progress.direction === 'download') {
+          loadLocalDirectory(localPath);
+        }
+      } else if (progress.status === 'error') {
+        onNotification('error', `Transfer failed: ${progress.error}`);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (sessionId) {
+        window.connectty.sftp.disconnect(sessionId);
+      }
+    };
+  }, []);
+
+  // Reload directories when session connects
+  useEffect(() => {
+    if (sessionId) {
+      loadRemoteDirectory(remotePath);
+    }
+  }, [sessionId]);
+
+  // Reload local directory when path changes
+  useEffect(() => {
+    if (localPath) {
+      loadLocalDirectory(localPath);
+    }
+  }, [localPath]);
+
+  const connectSFTP = async () => {
+    try {
+      setIsConnecting(true);
+      setError(null);
+      const id = await window.connectty.sftp.connect(connection.id);
+      setSessionId(id);
+      onNotification('success', `SFTP connected to ${connection.name}`);
+    } catch (err) {
+      setError((err as Error).message);
+      onNotification('error', `SFTP connection failed: ${(err as Error).message}`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const loadLocalHomePath = async () => {
+    const home = await window.connectty.sftp.homePath();
+    setLocalPath(home);
+  };
+
+  const loadLocalDirectory = async (path: string) => {
+    try {
+      setLocalLoading(true);
+      const files = await window.connectty.sftp.listLocal(path);
+      setLocalFiles(files);
+      setSelectedLocalFiles(new Set());
+    } catch (err) {
+      onNotification('error', `Failed to read local directory: ${(err as Error).message}`);
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  const loadRemoteDirectory = async (path: string) => {
+    if (!sessionId) return;
+    try {
+      setRemoteLoading(true);
+      const files = await window.connectty.sftp.listRemote(sessionId, path);
+      setRemoteFiles(files);
+      setRemotePath(path);
+      setSelectedRemoteFiles(new Set());
+    } catch (err) {
+      onNotification('error', `Failed to read remote directory: ${(err as Error).message}`);
+    } finally {
+      setRemoteLoading(false);
+    }
+  };
+
+  const navigateLocal = (file: LocalFileInfo) => {
+    if (file.isDirectory) {
+      setLocalPath(file.path);
+    }
+  };
+
+  const navigateLocalUp = () => {
+    const parent = localPath.split(/[/\\]/).slice(0, -1).join('/') || '/';
+    setLocalPath(parent);
+  };
+
+  const navigateRemote = (file: RemoteFileInfo) => {
+    if (file.isDirectory) {
+      loadRemoteDirectory(file.path);
+    }
+  };
+
+  const navigateRemoteUp = () => {
+    const parent = remotePath.split('/').slice(0, -1).join('/') || '/';
+    loadRemoteDirectory(parent);
+  };
+
+  const handleUpload = async () => {
+    if (!sessionId || selectedLocalFiles.size === 0) return;
+
+    for (const filePath of selectedLocalFiles) {
+      const file = localFiles.find(f => f.path === filePath);
+      if (file && !file.isDirectory) {
+        const remoteFilePath = `${remotePath}/${file.name}`.replace(/\/+/g, '/');
+        try {
+          await window.connectty.sftp.upload(sessionId, file.path, remoteFilePath);
+        } catch (err) {
+          onNotification('error', `Upload failed: ${(err as Error).message}`);
+        }
+      }
+    }
+    loadRemoteDirectory(remotePath);
+  };
+
+  const handleDownload = async () => {
+    if (!sessionId || selectedRemoteFiles.size === 0) return;
+
+    for (const filePath of selectedRemoteFiles) {
+      const file = remoteFiles.find(f => f.path === filePath);
+      if (file && !file.isDirectory) {
+        const localFilePath = `${localPath}/${file.name}`.replace(/\/+/g, '/');
+        try {
+          await window.connectty.sftp.download(sessionId, file.path, localFilePath);
+        } catch (err) {
+          onNotification('error', `Download failed: ${(err as Error).message}`);
+        }
+      }
+    }
+    loadLocalDirectory(localPath);
+  };
+
+  const handleSelectLocalFolder = async () => {
+    const path = await window.connectty.sftp.selectLocalFolder();
+    if (path) {
+      setLocalPath(path);
+    }
+  };
+
+  const toggleLocalSelection = (path: string) => {
+    setSelectedLocalFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const toggleRemoteSelection = (path: string) => {
+    setSelectedRemoteFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '-';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (date: Date): string => {
+    return new Date(date).toLocaleDateString();
+  };
+
+  const handleCreateRemoteFolder = async () => {
+    if (!sessionId) return;
+    const name = prompt('Enter folder name:');
+    if (name) {
+      try {
+        await window.connectty.sftp.mkdir(sessionId, `${remotePath}/${name}`);
+        loadRemoteDirectory(remotePath);
+        onNotification('success', `Created folder: ${name}`);
+      } catch (err) {
+        onNotification('error', `Failed to create folder: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  const handleDeleteRemote = async () => {
+    if (!sessionId || selectedRemoteFiles.size === 0) return;
+    if (!confirm(`Delete ${selectedRemoteFiles.size} selected item(s)?`)) return;
+
+    for (const filePath of selectedRemoteFiles) {
+      const file = remoteFiles.find(f => f.path === filePath);
+      if (file) {
+        try {
+          if (file.isDirectory) {
+            await window.connectty.sftp.rmdir(sessionId, file.path);
+          } else {
+            await window.connectty.sftp.unlink(sessionId, file.path);
+          }
+        } catch (err) {
+          onNotification('error', `Failed to delete ${file.name}: ${(err as Error).message}`);
+        }
+      }
+    }
+    loadRemoteDirectory(remotePath);
+    onNotification('success', 'Deleted selected items');
+  };
+
+  const handleRefresh = () => {
+    loadLocalDirectory(localPath);
+    if (sessionId) {
+      loadRemoteDirectory(remotePath);
+    }
+  };
+
+  if (isConnecting) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>SFTP - {connection.name}</h3>
+            <button className="btn btn-icon" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-body sftp-connecting">
+            <div className="sftp-loading">
+              <div className="spinner"></div>
+              <p>Connecting to {connection.hostname}...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>SFTP - {connection.name}</h3>
+            <button className="btn btn-icon" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="sftp-error">
+              <p>Connection failed:</p>
+              <p className="error-message">{error}</p>
+              <button className="btn btn-primary" onClick={connectSFTP}>
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-fullscreen" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>SFTP - {connection.name}</h3>
+          <div className="sftp-header-actions">
+            <button className="btn btn-sm btn-secondary" onClick={handleRefresh}>
+              Refresh
+            </button>
+            <button className="btn btn-icon" onClick={onClose}>×</button>
+          </div>
+        </div>
+
+        <div className="modal-body sftp-body">
+          {/* Transfer Actions Bar */}
+          <div className="sftp-actions-bar">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleUpload}
+              disabled={selectedLocalFiles.size === 0}
+            >
+              Upload →
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleDownload}
+              disabled={selectedRemoteFiles.size === 0}
+            >
+              ← Download
+            </button>
+          </div>
+
+          <div className="sftp-panels">
+            {/* Local Panel */}
+            <div className="sftp-panel local-panel">
+              <div className="sftp-panel-header">
+                <h4>Local</h4>
+                <button className="btn btn-sm btn-secondary" onClick={handleSelectLocalFolder}>
+                  Browse...
+                </button>
+              </div>
+              <div className="sftp-path-bar">
+                <button className="btn btn-sm btn-icon" onClick={navigateLocalUp} title="Go up">
+                  ↑
+                </button>
+                <input
+                  type="text"
+                  className="form-input sftp-path-input"
+                  value={localPath}
+                  onChange={(e) => setLocalPath(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && loadLocalDirectory(localPath)}
+                />
+              </div>
+              <div className="sftp-file-list">
+                {localLoading ? (
+                  <div className="sftp-loading-inline">Loading...</div>
+                ) : (
+                  <table className="sftp-table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Name</th>
+                        <th>Size</th>
+                        <th>Modified</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {localFiles.map(file => (
+                        <tr
+                          key={file.path}
+                          className={`sftp-file-row ${selectedLocalFiles.has(file.path) ? 'selected' : ''}`}
+                          onClick={() => toggleLocalSelection(file.path)}
+                          onDoubleClick={() => navigateLocal(file)}
+                        >
+                          <td className="sftp-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={selectedLocalFiles.has(file.path)}
+                              onChange={() => toggleLocalSelection(file.path)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </td>
+                          <td className="sftp-filename">
+                            <span className={`file-icon ${file.isDirectory ? 'folder' : 'file'}`}>
+                              {file.isDirectory ? '📁' : '📄'}
+                            </span>
+                            {file.name}
+                          </td>
+                          <td className="sftp-filesize">{file.isDirectory ? '-' : formatFileSize(file.size)}</td>
+                          <td className="sftp-filedate">{formatDate(file.modifiedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* Remote Panel */}
+            <div className="sftp-panel remote-panel">
+              <div className="sftp-panel-header">
+                <h4>Remote ({connection.hostname})</h4>
+                <div className="sftp-panel-actions">
+                  <button className="btn btn-sm btn-secondary" onClick={handleCreateRemoteFolder}>
+                    New Folder
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={handleDeleteRemote}
+                    disabled={selectedRemoteFiles.size === 0}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <div className="sftp-path-bar">
+                <button className="btn btn-sm btn-icon" onClick={navigateRemoteUp} title="Go up">
+                  ↑
+                </button>
+                <input
+                  type="text"
+                  className="form-input sftp-path-input"
+                  value={remotePath}
+                  onChange={(e) => setRemotePath(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && loadRemoteDirectory(remotePath)}
+                />
+              </div>
+              <div className="sftp-file-list">
+                {remoteLoading ? (
+                  <div className="sftp-loading-inline">Loading...</div>
+                ) : (
+                  <table className="sftp-table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Name</th>
+                        <th>Size</th>
+                        <th>Permissions</th>
+                        <th>Modified</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {remoteFiles.map(file => (
+                        <tr
+                          key={file.path}
+                          className={`sftp-file-row ${selectedRemoteFiles.has(file.path) ? 'selected' : ''}`}
+                          onClick={() => toggleRemoteSelection(file.path)}
+                          onDoubleClick={() => navigateRemote(file)}
+                        >
+                          <td className="sftp-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={selectedRemoteFiles.has(file.path)}
+                              onChange={() => toggleRemoteSelection(file.path)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </td>
+                          <td className="sftp-filename">
+                            <span className={`file-icon ${file.isDirectory ? 'folder' : 'file'}`}>
+                              {file.isDirectory ? '📁' : file.isSymlink ? '🔗' : '📄'}
+                            </span>
+                            {file.name}
+                          </td>
+                          <td className="sftp-filesize">{file.isDirectory ? '-' : formatFileSize(file.size)}</td>
+                          <td className="sftp-permissions">{file.permissions}</td>
+                          <td className="sftp-filedate">{formatDate(file.modifiedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Transfer Progress */}
+          {transfers.filter(t => t.status === 'transferring').length > 0 && (
+            <div className="sftp-transfers">
+              <h4>Transfers</h4>
+              {transfers.filter(t => t.status === 'transferring').map(transfer => (
+                <div key={transfer.transferId} className="sftp-transfer-item">
+                  <span className="transfer-filename">{transfer.filename}</span>
+                  <span className="transfer-direction">{transfer.direction === 'upload' ? '↑' : '↓'}</span>
+                  <div className="transfer-progress">
+                    <div
+                      className="transfer-progress-bar"
+                      style={{ width: `${transfer.percentage}%` }}
+                    />
+                  </div>
+                  <span className="transfer-percent">{transfer.percentage}%</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
