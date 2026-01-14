@@ -49,6 +49,7 @@ export class DatabaseService {
   }
 
   private initialize(): void {
+    // Create tables first
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS connections (
         id TEXT PRIMARY KEY,
@@ -124,16 +125,19 @@ export class DatabaseService {
         connection_id TEXT,
         FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
       );
+    `);
 
+    // Run migrations for existing databases BEFORE creating indexes
+    this.runMigrations();
+
+    // Create indexes after migrations have added any missing columns
+    this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_connections_group ON connections(group_id);
       CREATE INDEX IF NOT EXISTS idx_connections_credential ON connections(credential_id);
       CREATE INDEX IF NOT EXISTS idx_connections_provider ON connections(provider_id);
       CREATE INDEX IF NOT EXISTS idx_groups_parent ON connection_groups(parent_id);
       CREATE INDEX IF NOT EXISTS idx_discovered_provider ON discovered_hosts(provider_id);
     `);
-
-    // Run migrations for existing databases
-    this.runMigrations();
   }
 
   private runMigrations(): void {
