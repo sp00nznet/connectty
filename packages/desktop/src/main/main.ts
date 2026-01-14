@@ -97,7 +97,15 @@ function setupIpcHandlers(): void {
   });
 
   ipcMain.handle('credentials:create', async (_event, credential: Omit<Credential, 'id' | 'createdAt' | 'updatedAt' | 'usedBy'>) => {
-    return db.createCredential(credential);
+    try {
+      console.log('Creating credential:', credential.name, credential.type);
+      const result = db.createCredential(credential);
+      console.log('Credential created:', result.id);
+      return result;
+    } catch (err) {
+      console.error('Failed to create credential:', err);
+      throw err;
+    }
   });
 
   ipcMain.handle('credentials:update', async (_event, id: string, updates: Partial<Credential>) => {
@@ -424,12 +432,12 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  sshService.disconnectAll();
+  sshService?.disconnectAll();
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
-  sshService.disconnectAll();
+  sshService?.disconnectAll();
 });
