@@ -39,25 +39,22 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-    titleBarStyle: 'hiddenInset',
-    show: false,
   });
-
-  // Register event listener BEFORE loading content
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
-  });
-
-  if (isDev) {
-    await mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
-  } else {
-    await mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  try {
+    if (isDev) {
+      await mainWindow.loadURL('http://localhost:5173');
+      mainWindow.webContents.openDevTools();
+    } else {
+      await mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    }
+  } catch (err) {
+    console.error('Failed to load window content:', err);
+  }
 }
 
 function setupIpcHandlers(): void {
