@@ -1,0 +1,19 @@
+{
+  "name": "@connectty/shared",
+  "version": "1.0.0",
+  "description": "Shared types and utilities for connectty",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.3"
+  }
+}
