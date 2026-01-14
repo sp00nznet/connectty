@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { ServerConnection, Credential, ConnectionGroup, SSHSessionEvent, ConnectionType, OSType, CredentialType } from '@connectty/shared';
+import type { ServerConnection, Credential, ConnectionGroup, SSHSessionEvent, ConnectionType, OSType, CredentialType, Provider, ProviderType, DiscoveredHost } from '@connectty/shared';
 import type { ConnecttyAPI } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -33,6 +33,11 @@ export default function App() {
   const [editingConnection, setEditingConnection] = useState<ServerConnection | null>(null);
   const [editingCredential, setEditingCredential] = useState<Credential | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  const [providerContextMenu, setProviderContextMenu] = useState<{ x: number; y: number; provider: Provider } | null>(null);
+  const [isDiscovering, setIsDiscovering] = useState<string | null>(null);
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -71,14 +76,16 @@ export default function App() {
   }, [activeSessionId, sessions]);
 
   const loadData = async () => {
-    const [conns, creds, grps] = await Promise.all([
+    const [conns, creds, grps, provs] = await Promise.all([
       window.connectty.connections.list(),
       window.connectty.credentials.list(),
       window.connectty.groups.list(),
+      window.connectty.providers.list(),
     ]);
     setConnections(conns);
     setCredentials(creds);
     setGroups(grps);
+    setProviders(provs);
   };
 
   const handleSSHEvent = useCallback((sessionId: string, event: SSHSessionEvent) => {
@@ -250,6 +257,70 @@ export default function App() {
     }
   };
 
+  // Provider handlers
+  const handleCreateProvider = async (data: Partial<Provider>) => {
+    try {
+      if (editingProvider) {
+        await window.connectty.providers.update(editingProvider.id, data);
+        showNotification('success', 'Provider updated');
+      } else {
+        await window.connectty.providers.create(data as Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>);
+        showNotification('success', 'Provider created');
+      }
+      await loadData();
+      setShowProviderModal(false);
+      setEditingProvider(null);
+    } catch (err) {
+      showNotification('error', (err as Error).message);
+    }
+  };
+
+  const handleDeleteProvider = async (id: string) => {
+    if (confirm('Are you sure you want to delete this provider?')) {
+      await window.connectty.providers.delete(id);
+      await loadData();
+      showNotification('success', 'Provider deleted');
+    }
+  };
+
+  const handleDiscoverAndImport = async (provider: Provider) => {
+    setProviderContextMenu(null);
+    setIsDiscovering(provider.id);
+    try {
+      // Discover hosts from the provider
+      const result = await window.connectty.providers.discover(provider.id);
+
+      if (result.hosts.length === 0) {
+        showNotification('error', 'No hosts found on this provider');
+        setIsDiscovering(null);
+        return;
+      }
+
+      // Import all discovered hosts with auto-assigned credentials
+      const imported = await window.connectty.discovered.importAll(provider.id);
+
+      await loadData();
+      showNotification('success', `Imported ${imported.length} connections from ${provider.name}`);
+    } catch (err) {
+      showNotification('error', `Discovery failed: ${(err as Error).message}`);
+    }
+    setIsDiscovering(null);
+  };
+
+  const handleProviderContextMenu = (e: React.MouseEvent, provider: Provider) => {
+    e.preventDefault();
+    setProviderContextMenu({ x: e.clientX, y: e.clientY, provider });
+  };
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => setProviderContextMenu(null);
+    if (providerContextMenu) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [providerContextMenu]);
+
   const filteredConnections = connections.filter(conn =>
     conn.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     conn.hostname.toLowerCase().includes(searchQuery.toLowerCase())
@@ -277,6 +348,9 @@ export default function App() {
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowCredentialModal(true)}>
             Credentials
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowProviderModal(true)}>
+            Providers
           </button>
         </div>
 
@@ -419,6 +493,38 @@ export default function App() {
           onSubmit={handlePasswordSubmit}
           onCancel={() => { setShowPasswordPrompt(false); setPendingConnection(null); }}
         />
+      )}
+
+      {/* Provider Modal */}
+      {showProviderModal && (
+        <ProviderModal
+          provider={editingProvider}
+          providers={providers}
+          onClose={() => { setShowProviderModal(false); setEditingProvider(null); }}
+          onSave={handleCreateProvider}
+          onEdit={(prov) => { setEditingProvider(prov); }}
+          onDelete={handleDeleteProvider}
+          onDiscover={handleDiscoverAndImport}
+          isDiscovering={isDiscovering}
+        />
+      )}
+
+      {/* Provider Context Menu */}
+      {providerContextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: providerContextMenu.x, top: providerContextMenu.y }}
+        >
+          <button onClick={() => handleDiscoverAndImport(providerContextMenu.provider)}>
+            Discover & Import Hosts
+          </button>
+          <button onClick={() => { setEditingProvider(providerContextMenu.provider); setShowProviderModal(true); setProviderContextMenu(null); }}>
+            Edit Provider
+          </button>
+          <button onClick={() => { handleDeleteProvider(providerContextMenu.provider.id); setProviderContextMenu(null); }}>
+            Delete Provider
+          </button>
+        </div>
       )}
 
       {/* Notification */}
@@ -961,6 +1067,278 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
             </button>
             <button type="submit" className="btn btn-primary">
               {credential ? 'Save Changes' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Provider Modal Component
+interface ProviderModalProps {
+  provider: Provider | null;
+  providers: Provider[];
+  onClose: () => void;
+  onSave: (data: Partial<Provider>) => Promise<void>;
+  onEdit: (provider: Provider) => void;
+  onDelete: (id: string) => void;
+  onDiscover: (provider: Provider) => void;
+  isDiscovering: string | null;
+}
+
+function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete, onDiscover, isDiscovering }: ProviderModalProps) {
+  const [showForm, setShowForm] = useState(!!provider);
+  const [name, setName] = useState(provider?.name || '');
+  const [type, setType] = useState<ProviderType>(provider?.type || 'esxi');
+  const [host, setHost] = useState((provider?.config as any)?.host || '');
+  const [port, setPort] = useState((provider?.config as any)?.port || (type === 'esxi' ? 443 : type === 'proxmox' ? 8006 : 443));
+  const [username, setUsername] = useState((provider?.config as any)?.username || '');
+  const [password, setPassword] = useState('');
+  const [realm, setRealm] = useState((provider?.config as any)?.realm || 'pam');
+  const [ignoreCertErrors, setIgnoreCertErrors] = useState((provider?.config as any)?.ignoreCertErrors ?? true);
+  const [enabled, setEnabled] = useState(provider?.enabled ?? true);
+
+  const providerTypes: { value: ProviderType; label: string; defaultPort: number }[] = [
+    { value: 'esxi', label: 'VMware ESXi / vSphere', defaultPort: 443 },
+    { value: 'proxmox', label: 'Proxmox VE', defaultPort: 8006 },
+    { value: 'aws', label: 'AWS (Coming Soon)', defaultPort: 443 },
+    { value: 'gcp', label: 'Google Cloud (Coming Soon)', defaultPort: 443 },
+    { value: 'azure', label: 'Azure (Coming Soon)', defaultPort: 443 },
+  ];
+
+  useEffect(() => {
+    const providerType = providerTypes.find(p => p.value === type);
+    if (providerType && !provider) {
+      setPort(providerType.defaultPort);
+    }
+  }, [type]);
+
+  const resetForm = () => {
+    setName('');
+    setType('esxi');
+    setHost('');
+    setPort(443);
+    setUsername('');
+    setPassword('');
+    setRealm('pam');
+    setIgnoreCertErrors(true);
+    setEnabled(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const config: any = {
+      type,
+      host,
+      port,
+      username,
+      ignoreCertErrors,
+    };
+
+    if (password) {
+      config.password = password;
+    }
+
+    if (type === 'proxmox') {
+      config.realm = realm;
+    }
+
+    const data: Partial<Provider> = {
+      name,
+      type,
+      enabled,
+      config,
+      autoDiscover: false,
+    };
+
+    await onSave(data);
+    resetForm();
+    setShowForm(false);
+  };
+
+  if (!showForm) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>Providers (Hypervisors)</h3>
+            <button className="btn btn-icon" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-body">
+            {providers.length === 0 ? (
+              <p style={{ color: '#a0aec0', textAlign: 'center' }}>
+                No providers configured. Add a hypervisor to discover and import hosts automatically.
+              </p>
+            ) : (
+              <ul className="provider-list">
+                {providers.map((prov) => (
+                  <li key={prov.id} className="provider-item">
+                    <div className="provider-info">
+                      <div className="provider-name">
+                        {prov.name}
+                        <span className={`provider-badge ${prov.type}`}>{prov.type.toUpperCase()}</span>
+                      </div>
+                      <div className="provider-details">
+                        {(prov.config as any).host}:{(prov.config as any).port}
+                        {prov.lastDiscoveryAt && (
+                          <span className="provider-last-scan">
+                            Last scan: {new Date(prov.lastDiscoveryAt).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="provider-actions">
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => onDiscover(prov)}
+                        disabled={isDiscovering === prov.id}
+                      >
+                        {isDiscovering === prov.id ? 'Scanning...' : 'Import Hosts'}
+                      </button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(prov); setShowForm(true); }}>
+                        Edit
+                      </button>
+                      <button className="btn btn-sm btn-danger" onClick={() => onDelete(prov.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose}>
+              Close
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+              + Add Provider
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{provider ? 'Edit Provider' : 'Add Provider'}</h3>
+          <button className="btn btn-icon" onClick={() => { resetForm(); setShowForm(false); }}>×</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">Name *</label>
+              <input
+                type="text"
+                className="form-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Production vSphere"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Provider Type</label>
+              <select
+                className="form-select"
+                value={type}
+                onChange={(e) => setType(e.target.value as ProviderType)}
+                disabled={!!provider}
+              >
+                {providerTypes.map(pt => (
+                  <option key={pt.value} value={pt.value} disabled={['aws', 'gcp', 'azure'].includes(pt.value)}>
+                    {pt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group" style={{ flex: 2 }}>
+                <label className="form-label">Host *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  placeholder="192.168.1.100 or vcenter.local"
+                  required
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Port</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={port}
+                  onChange={(e) => setPort(parseInt(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Username *</label>
+              <input
+                type="text"
+                className="form-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={type === 'esxi' ? 'root' : 'root@pam'}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Password {provider ? '' : '*'}</label>
+              <input
+                type="password"
+                className="form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={provider ? '(unchanged)' : 'Enter password'}
+                required={!provider}
+              />
+            </div>
+
+            {type === 'proxmox' && (
+              <div className="form-group">
+                <label className="form-label">Realm</label>
+                <select
+                  className="form-select"
+                  value={realm}
+                  onChange={(e) => setRealm(e.target.value)}
+                >
+                  <option value="pam">PAM (Linux)</option>
+                  <option value="pve">PVE (Proxmox)</option>
+                  <option value="pmxceph">PMXCeph</option>
+                </select>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={ignoreCertErrors}
+                  onChange={(e) => setIgnoreCertErrors(e.target.checked)}
+                />
+                <span>Ignore SSL certificate errors</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={() => { resetForm(); setShowForm(false); }}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              {provider ? 'Save Changes' : 'Add Provider'}
             </button>
           </div>
         </form>
