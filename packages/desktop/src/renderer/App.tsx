@@ -364,12 +364,19 @@ interface ConnectionItemProps {
 
 function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }: ConnectionItemProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenuPosition({ x: e.clientX, y: e.clientY });
+    setShowMenu(true);
+  };
 
   return (
     <div
       className="connection-item"
       onDoubleClick={onConnect}
-      onContextMenu={(e) => { e.preventDefault(); setShowMenu(true); }}
+      onContextMenu={handleContextMenu}
     >
       <span className={`status-dot ${isConnected ? 'connected' : ''}`} />
       <div className="connection-info">
@@ -380,7 +387,7 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }
       {showMenu && (
         <>
           <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowMenu(false)} />
-          <div className="context-menu" style={{ top: 'auto', right: 16 }}>
+          <div className="context-menu" style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y }}>
             <div className="context-menu-item" onClick={() => { onConnect(); setShowMenu(false); }}>
               Connect
             </div>
