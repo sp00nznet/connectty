@@ -718,7 +718,7 @@ interface CredentialModalProps {
   credential: Credential | null;
   credentials: Credential[];
   onClose: () => void;
-  onSave: (data: Partial<Credential>) => void;
+  onSave: (data: Partial<Credential>) => Promise<void>;
   onEdit: (cred: Credential) => void;
   onDelete: (id: string) => void;
 }
@@ -760,7 +760,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
     setAutoAssignOSTypes([]);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const data: Partial<Credential> = {
       name,
@@ -777,7 +777,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
       data.passphrase = passphrase || undefined;
     }
 
-    onSave(data);
+    await onSave(data);
     resetForm();
     setShowForm(false);
   };
