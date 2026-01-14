@@ -732,6 +732,22 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState(credential?.privateKey || '');
   const [passphrase, setPassphrase] = useState('');
+  const [autoAssignOSTypes, setAutoAssignOSTypes] = useState<string[]>(credential?.autoAssignOSTypes || []);
+
+  const osTypeOptions: { value: OSType; label: string }[] = [
+    { value: 'linux', label: 'Linux (Ubuntu, CentOS, Debian, etc.)' },
+    { value: 'windows', label: 'Windows' },
+    { value: 'unix', label: 'Unix (FreeBSD, Solaris, etc.)' },
+    { value: 'esxi', label: 'VMware ESXi' },
+  ];
+
+  const toggleOSType = (osType: string) => {
+    setAutoAssignOSTypes(prev =>
+      prev.includes(osType)
+        ? prev.filter(t => t !== osType)
+        : [...prev, osType]
+    );
+  };
 
   const resetForm = () => {
     setName('');
@@ -741,6 +757,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
     setPassword('');
     setPrivateKey('');
     setPassphrase('');
+    setAutoAssignOSTypes([]);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -750,6 +767,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
       type,
       username,
       domain: domain || undefined,
+      autoAssignOSTypes: autoAssignOSTypes.length > 0 ? autoAssignOSTypes as OSType[] : undefined,
     };
 
     if (type === 'password' || type === 'domain') {
@@ -784,6 +802,13 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
                       <div className="credential-details">
                         {cred.domain ? `${cred.domain}\\` : ''}{cred.username} ({cred.type})
                       </div>
+                      {cred.autoAssignOSTypes && cred.autoAssignOSTypes.length > 0 && (
+                        <div className="credential-os-tags">
+                          {cred.autoAssignOSTypes.map(os => (
+                            <span key={os} className="os-tag">{os}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="credential-actions">
                       <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(cred); setShowForm(true); }}>
@@ -909,6 +934,25 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
                 </div>
               </>
             )}
+
+            <div className="form-group">
+              <label className="form-label">Auto-assign to OS Types</label>
+              <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginBottom: '8px' }}>
+                When importing discovered hosts, automatically assign this credential to systems with these OS types
+              </p>
+              <div className="checkbox-group">
+                {osTypeOptions.map(({ value, label }) => (
+                  <label key={value} className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={autoAssignOSTypes.includes(value)}
+                      onChange={() => toggleOSType(value)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="modal-footer">
