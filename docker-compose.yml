@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: connectty-db
+    environment:
+      POSTGRES_DB: connectty
+      POSTGRES_USER: connectty
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-connectty_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U connectty"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - connectty-network
+    restart: unless-stopped
+
+  # Connectty Server
+  server:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
+    container_name: connectty-server
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: connectty
+      DB_USER: connectty
+      DB_PASSWORD: ${DB_PASSWORD:-connectty_secret}
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      JWT_EXPIRY: 24h
+      MASTER_KEY: ${MASTER_KEY:-}
+      AD_ENABLED: ${AD_ENABLED:-false}
+      AD_URL: ${AD_URL:-}
+      AD_BASE_DN: ${AD_BASE_DN:-}
+      AD_DOMAIN: ${AD_DOMAIN:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - connectty-network
+    restart: unless-stopped
+
+  # Connectty Web Client
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    container_name: connectty-web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - server
+    networks:
+      - connectty-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  connectty-network:
+    driver: bridge
