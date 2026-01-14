@@ -36,12 +36,18 @@ let sftpService: SFTPService;
 const isDev = process.env.NODE_ENV === 'development';
 
 async function createWindow(): Promise<void> {
+  // Determine icon path based on platform
+  const iconPath = process.platform === 'win32'
+    ? path.join(__dirname, '../../assets/icon.ico')
+    : path.join(__dirname, '../../assets/icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     show: true,
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
