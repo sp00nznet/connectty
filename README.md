@@ -1,1 +1,3 @@
 # connectty
+
+connectty will be a ssh client. it will consist of a windows desktop client and a debian desktop client. in addition to the clients there will be an optional server platform for linux. the server platform will be containerized. all 3 builds will have persistent storage. The work flow is such that a user using the desktop builds can add or import servers or lists of servers and save these connections. credentials can be created and stored and shared amongst each connection. All of this data can be pushed to a server for back up and export to others. the server will also have a html5 client that sits in a container next to it. all of these will use windows ad auth to connect. 
