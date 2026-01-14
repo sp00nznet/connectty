@@ -6,8 +6,24 @@
 // Connection Types
 // ============================================================================
 
-export type ConnectionType = 'ssh' | 'rdp';
+export type ConnectionType = 'ssh' | 'rdp' | 'serial';
 export type OSType = 'linux' | 'windows' | 'unix' | 'esxi' | 'unknown';
+
+// Serial port settings
+export type SerialBaudRate = 300 | 1200 | 2400 | 4800 | 9600 | 19200 | 38400 | 57600 | 115200 | 230400 | 460800 | 921600;
+export type SerialDataBits = 5 | 6 | 7 | 8;
+export type SerialStopBits = 1 | 1.5 | 2;
+export type SerialParity = 'none' | 'odd' | 'even' | 'mark' | 'space';
+export type SerialFlowControl = 'none' | 'hardware' | 'software';
+
+export interface SerialSettings {
+  device: string;  // COM1, /dev/ttyUSB0, etc.
+  baudRate: SerialBaudRate;
+  dataBits: SerialDataBits;
+  stopBits: SerialStopBits;
+  parity: SerialParity;
+  flowControl: SerialFlowControl;
+}
 
 export interface ServerConnection {
   id: string;
@@ -21,6 +37,8 @@ export interface ServerConnection {
   tags: string[];
   group?: string;
   description?: string;
+  // Serial connection settings
+  serialSettings?: SerialSettings;
   // Provider info (if discovered)
   providerId?: string;
   providerHostId?: string;

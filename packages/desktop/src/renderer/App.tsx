@@ -15,6 +15,12 @@ import type {
   CommandResult,
   HostFilter,
   CommandTargetOS,
+  SerialSettings,
+  SerialBaudRate,
+  SerialDataBits,
+  SerialStopBits,
+  SerialParity,
+  SerialFlowControl,
 } from '@connectty/shared';
 import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings } from '../main/preload';
 import { Terminal } from 'xterm';
@@ -36,6 +42,15 @@ interface SSHSession {
   fitAddon: FitAddon;
 }
 
+interface SerialSession {
+  id: string;
+  type: 'serial';
+  connectionId: string;
+  connectionName: string;
+  terminal: Terminal;
+  fitAddon: FitAddon;
+}
+
 interface SFTPSession {
   id: string;
   type: 'sftp';
@@ -45,7 +60,7 @@ interface SFTPSession {
   sessionId: string; // The backend SFTP session ID
 }
 
-type Session = SSHSession | SFTPSession;
+type Session = SSHSession | SerialSession | SFTPSession;
 
 export default function App() {
   const [connections, setConnections] = useState<ServerConnection[]>([]);
@@ -103,29 +118,36 @@ export default function App() {
   useEffect(() => {
     loadData();
 
-    // Listen for SSH events
-    const unsubscribe = window.connectty.ssh.onEvent(handleSSHEvent);
-    return () => unsubscribe();
+    // Listen for SSH and serial events
+    const unsubscribeSSH = window.connectty.ssh.onEvent(handleSSHEvent);
+    const unsubscribeSerial = window.connectty.serial.onEvent(handleSerialEvent);
+    return () => {
+      unsubscribeSSH();
+      unsubscribeSerial();
+    };
   }, []);
 
-  // Fit terminal on active session change (only for SSH sessions)
+  // Fit terminal on active session change (for SSH and serial sessions)
   useEffect(() => {
     const activeSession = sessions.find(s => s.id === activeSessionId);
-    if (activeSession && activeSession.type === 'ssh' && terminalContainerRef.current) {
+    if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial') && terminalContainerRef.current) {
       terminalContainerRef.current.innerHTML = '';
       activeSession.terminal.open(terminalContainerRef.current);
       activeSession.fitAddon.fit();
     }
   }, [activeSessionId, sessions]);
 
-  // Handle window resize (only for SSH sessions)
+  // Handle window resize (for SSH and serial sessions)
   useEffect(() => {
     const handleResize = () => {
       const activeSession = sessions.find(s => s.id === activeSessionId);
-      if (activeSession && activeSession.type === 'ssh') {
+      if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial')) {
         activeSession.fitAddon.fit();
         const { cols, rows } = activeSession.terminal;
-        window.connectty.ssh.resize(activeSession.id, cols, rows);
+        if (activeSession.type === 'ssh') {
+          window.connectty.ssh.resize(activeSession.id, cols, rows);
+        }
+        // Serial doesn't need resize
       }
     };
 
@@ -168,6 +190,26 @@ export default function App() {
     });
   }, []);
 
+  const handleSerialEvent = useCallback((sessionId: string, event: SSHSessionEvent) => {
+    setSessions(prev => {
+      const session = prev.find(s => s.id === sessionId);
+      if (!session || session.type !== 'serial') return prev;
+
+      switch (event.type) {
+        case 'data':
+          session.terminal.write(event.data || '');
+          break;
+        case 'close':
+          showNotification('success', `Disconnected from ${session.connectionName}`);
+          return prev.filter(s => s.id !== sessionId);
+        case 'error':
+          showNotification('error', event.message || 'Connection error');
+          break;
+      }
+      return prev;
+    });
+  }, []);
+
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
@@ -181,6 +223,47 @@ export default function App() {
         showNotification('success', `Launching RDP client for ${connection.name}`);
       } catch (err) {
         showNotification('error', `Failed to launch RDP: ${(err as Error).message}`);
+      }
+      return;
+    }
+
+    // Serial connection
+    if (connection.connectionType === 'serial') {
+      try {
+        const sessionId = await window.connectty.serial.connect(connection.id);
+
+        const terminal = new Terminal({
+          cursorBlink: true,
+          fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+          fontSize: 14,
+          theme: {
+            background: '#000000',
+            foreground: '#ffffff',
+            cursor: '#ffffff',
+          },
+        });
+
+        const fitAddon = new FitAddon();
+        terminal.loadAddon(fitAddon);
+
+        terminal.onData((data) => {
+          window.connectty.serial.write(sessionId, data);
+        });
+
+        const newSession: SerialSession = {
+          id: sessionId,
+          type: 'serial',
+          connectionId: connection.id,
+          connectionName: connection.name,
+          terminal,
+          fitAddon,
+        };
+
+        setSessions(prev => [...prev, newSession]);
+        setActiveSessionId(sessionId);
+        showNotification('success', `Connected to ${connection.name}`);
+      } catch (err) {
+        showNotification('error', `Failed to connect: ${(err as Error).message}`);
       }
       return;
     }
@@ -917,26 +1000,65 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
   const [groupId, setGroupId] = useState(connection?.group || '');
   const [description, setDescription] = useState(connection?.description || '');
 
+  // Serial settings
+  const [serialDevice, setSerialDevice] = useState(connection?.serialSettings?.device || '');
+  const [baudRate, setBaudRate] = useState<SerialBaudRate>(connection?.serialSettings?.baudRate || 9600);
+  const [dataBits, setDataBits] = useState<SerialDataBits>(connection?.serialSettings?.dataBits || 8);
+  const [stopBits, setStopBits] = useState<SerialStopBits>(connection?.serialSettings?.stopBits || 1);
+  const [parity, setParity] = useState<SerialParity>(connection?.serialSettings?.parity || 'none');
+  const [flowControl, setFlowControl] = useState<SerialFlowControl>(connection?.serialSettings?.flowControl || 'none');
+  const [availablePorts, setAvailablePorts] = useState<{ path: string; manufacturer?: string }[]>([]);
+
+  // Load available serial ports
+  useEffect(() => {
+    if (connectionType === 'serial') {
+      window.connectty.serial.listPorts().then(setAvailablePorts).catch(() => setAvailablePorts([]));
+    }
+  }, [connectionType]);
+
   // Update port when connection type changes
   useEffect(() => {
     if (!connection) {
-      setPort(connectionType === 'rdp' ? 3389 : 22);
+      if (connectionType === 'rdp') {
+        setPort(3389);
+      } else if (connectionType === 'ssh') {
+        setPort(22);
+      } else {
+        setPort(0);
+      }
     }
   }, [connectionType, connection]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
+
+    const data: Partial<ServerConnection> = {
       name,
-      hostname,
-      port,
       connectionType,
-      username: username || undefined,
-      credentialId: credentialId || undefined,
       group: groupId || undefined,
       description: description || undefined,
       tags: connection?.tags || [],
-    });
+    };
+
+    if (connectionType === 'serial') {
+      data.hostname = serialDevice || 'serial';
+      data.port = 0;
+      data.serialSettings = {
+        device: serialDevice,
+        baudRate,
+        dataBits,
+        stopBits,
+        parity,
+        flowControl,
+      };
+    } else {
+      data.hostname = hostname;
+      data.port = port;
+      data.username = username || undefined;
+      data.credentialId = credentialId || undefined;
+    }
+
+    onSave(data);
   };
 
   return (
@@ -957,6 +1079,7 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
               >
                 <option value="ssh">SSH (Linux/Unix)</option>
                 <option value="rdp">RDP (Windows)</option>
+                <option value="serial">Serial</option>
               </select>
             </div>
 
@@ -967,61 +1090,177 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
                 className="form-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="My Server"
+                placeholder={connectionType === 'serial' ? 'My Device' : 'My Server'}
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Hostname *</label>
-              <input
-                type="text"
-                className="form-input"
-                value={hostname}
-                onChange={(e) => setHostname(e.target.value)}
-                placeholder="192.168.1.1 or server.example.com"
-                required
-              />
-            </div>
+            {/* Network connection fields (SSH/RDP) */}
+            {connectionType !== 'serial' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Hostname *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={hostname}
+                    onChange={(e) => setHostname(e.target.value)}
+                    placeholder="192.168.1.1 or server.example.com"
+                    required
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Port</label>
-              <input
-                type="number"
-                className="form-input"
-                value={port}
-                onChange={(e) => setPort(parseInt(e.target.value) || (connectionType === 'rdp' ? 3389 : 22))}
-                min="1"
-                max="65535"
-              />
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Port</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={port}
+                    onChange={(e) => setPort(parseInt(e.target.value) || (connectionType === 'rdp' ? 3389 : 22))}
+                    min="1"
+                    max="65535"
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Username</label>
-              <input
-                type="text"
-                className="form-input"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={connectionType === 'rdp' ? 'Administrator' : 'root'}
-              />
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Username</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={connectionType === 'rdp' ? 'Administrator' : 'root'}
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Credential</label>
-              <select
-                className="form-select"
-                value={credentialId}
-                onChange={(e) => setCredentialId(e.target.value)}
-              >
-                <option value="">None (prompt for password)</option>
-                {credentials.map((cred) => (
-                  <option key={cred.id} value={cred.id}>
-                    {cred.name} ({cred.type}{cred.domain ? ` - ${cred.domain}` : ''})
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Credential</label>
+                  <select
+                    className="form-select"
+                    value={credentialId}
+                    onChange={(e) => setCredentialId(e.target.value)}
+                  >
+                    <option value="">None (prompt for password)</option>
+                    {credentials.map((cred) => (
+                      <option key={cred.id} value={cred.id}>
+                        {cred.name} ({cred.type}{cred.domain ? ` - ${cred.domain}` : ''})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {/* Serial connection fields */}
+            {connectionType === 'serial' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Serial Port *</label>
+                  <select
+                    className="form-select"
+                    value={serialDevice}
+                    onChange={(e) => setSerialDevice(e.target.value)}
+                    required
+                  >
+                    <option value="">Select a port...</option>
+                    {availablePorts.map((port) => (
+                      <option key={port.path} value={port.path}>
+                        {port.path}{port.manufacturer ? ` (${port.manufacturer})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={serialDevice}
+                    onChange={(e) => setSerialDevice(e.target.value)}
+                    placeholder="COM1 or /dev/ttyUSB0"
+                    style={{ marginTop: '0.5rem' }}
+                  />
+                </div>
+
+                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Baud Rate</label>
+                    <select
+                      className="form-select"
+                      value={baudRate}
+                      onChange={(e) => setBaudRate(parseInt(e.target.value) as SerialBaudRate)}
+                    >
+                      <option value="300">300</option>
+                      <option value="1200">1200</option>
+                      <option value="2400">2400</option>
+                      <option value="4800">4800</option>
+                      <option value="9600">9600</option>
+                      <option value="19200">19200</option>
+                      <option value="38400">38400</option>
+                      <option value="57600">57600</option>
+                      <option value="115200">115200</option>
+                      <option value="230400">230400</option>
+                      <option value="460800">460800</option>
+                      <option value="921600">921600</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Data Bits</label>
+                    <select
+                      className="form-select"
+                      value={dataBits}
+                      onChange={(e) => setDataBits(parseInt(e.target.value) as SerialDataBits)}
+                    >
+                      <option value="5">5</option>
+                      <option value="6">6</option>
+                      <option value="7">7</option>
+                      <option value="8">8</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Stop Bits</label>
+                    <select
+                      className="form-select"
+                      value={stopBits}
+                      onChange={(e) => setStopBits(parseFloat(e.target.value) as SerialStopBits)}
+                    >
+                      <option value="1">1</option>
+                      <option value="1.5">1.5</option>
+                      <option value="2">2</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Parity</label>
+                    <select
+                      className="form-select"
+                      value={parity}
+                      onChange={(e) => setParity(e.target.value as SerialParity)}
+                    >
+                      <option value="none">None</option>
+                      <option value="odd">Odd</option>
+                      <option value="even">Even</option>
+                      <option value="mark">Mark</option>
+                      <option value="space">Space</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Flow Control</label>
+                  <select
+                    className="form-select"
+                    value={flowControl}
+                    onChange={(e) => setFlowControl(e.target.value as SerialFlowControl)}
+                  >
+                    <option value="none">None</option>
+                    <option value="hardware">Hardware (RTS/CTS)</option>
+                    <option value="software">Software (XON/XOFF)</option>
+                  </select>
+                </div>
+              </>
+            )}
 
             <div className="form-group">
               <label className="form-label">Group</label>
