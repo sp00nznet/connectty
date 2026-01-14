@@ -20,6 +20,41 @@ import type {
   CommandTargetOS,
 } from '@connectty/shared';
 
+// SFTP types (matching the types in sftp.ts)
+export interface RemoteFileInfo {
+  name: string;
+  path: string;
+  size: number;
+  isDirectory: boolean;
+  isSymlink: boolean;
+  permissions: string;
+  owner: number;
+  group: number;
+  modifiedAt: Date;
+  accessedAt: Date;
+}
+
+export interface LocalFileInfo {
+  name: string;
+  path: string;
+  size: number;
+  isDirectory: boolean;
+  isSymlink: boolean;
+  modifiedAt: Date;
+}
+
+export interface TransferProgress {
+  sessionId: string;
+  transferId: string;
+  filename: string;
+  direction: 'upload' | 'download';
+  bytesTransferred: number;
+  totalBytes: number;
+  percentage: number;
+  status: 'pending' | 'transferring' | 'completed' | 'error';
+  error?: string;
+}
+
 const api = {
   // Connection operations
   connections: {
@@ -156,6 +191,44 @@ const api = {
       };
       ipcRenderer.on('command:complete', handler);
       return () => ipcRenderer.removeListener('command:complete', handler);
+    },
+  },
+
+  // SFTP operations
+  sftp: {
+    connect: (connectionId: string): Promise<string> => ipcRenderer.invoke('sftp:connect', connectionId),
+    disconnect: (sessionId: string): Promise<boolean> => ipcRenderer.invoke('sftp:disconnect', sessionId),
+    listRemote: (sessionId: string, remotePath: string): Promise<RemoteFileInfo[]> =>
+      ipcRenderer.invoke('sftp:listRemote', sessionId, remotePath),
+    listLocal: (localPath: string): Promise<LocalFileInfo[]> => ipcRenderer.invoke('sftp:listLocal', localPath),
+    upload: (sessionId: string, localPath: string, remotePath: string): Promise<boolean> =>
+      ipcRenderer.invoke('sftp:upload', sessionId, localPath, remotePath),
+    download: (sessionId: string, remotePath: string, localPath: string): Promise<boolean> =>
+      ipcRenderer.invoke('sftp:download', sessionId, remotePath, localPath),
+    mkdir: (sessionId: string, remotePath: string): Promise<boolean> =>
+      ipcRenderer.invoke('sftp:mkdir', sessionId, remotePath),
+    rmdir: (sessionId: string, remotePath: string): Promise<boolean> =>
+      ipcRenderer.invoke('sftp:rmdir', sessionId, remotePath),
+    unlink: (sessionId: string, remotePath: string): Promise<boolean> =>
+      ipcRenderer.invoke('sftp:unlink', sessionId, remotePath),
+    rename: (sessionId: string, oldPath: string, newPath: string): Promise<boolean> =>
+      ipcRenderer.invoke('sftp:rename', sessionId, oldPath, newPath),
+    chmod: (sessionId: string, remotePath: string, mode: number): Promise<boolean> =>
+      ipcRenderer.invoke('sftp:chmod', sessionId, remotePath, mode),
+    stat: (sessionId: string, remotePath: string): Promise<RemoteFileInfo> =>
+      ipcRenderer.invoke('sftp:stat', sessionId, remotePath),
+    homePath: (): Promise<string> => ipcRenderer.invoke('sftp:homePath'),
+    sessions: (): Promise<string[]> => ipcRenderer.invoke('sftp:sessions'),
+    selectLocalFolder: (): Promise<string | null> => ipcRenderer.invoke('sftp:selectLocalFolder'),
+    selectLocalFile: (): Promise<string[] | null> => ipcRenderer.invoke('sftp:selectLocalFile'),
+    selectSaveLocation: (defaultName: string): Promise<string | null> =>
+      ipcRenderer.invoke('sftp:selectSaveLocation', defaultName),
+    onProgress: (callback: (progress: TransferProgress) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, progress: TransferProgress) => {
+        callback(progress);
+      };
+      ipcRenderer.on('sftp:progress', handler);
+      return () => ipcRenderer.removeListener('sftp:progress', handler);
     },
   },
 
