@@ -298,6 +298,21 @@ if (-not $SkipInstall) {
     Write-Host "`n[2/4] Skipping npm install" -ForegroundColor Gray
 }
 
+# Fix 7zip-bin if system 7-Zip is available (npm sometimes fails to download 7za.exe)
+$sevenZipExe = "C:\Program Files\7-Zip\7z.exe"
+$sevenZipDll = "C:\Program Files\7-Zip\7z.dll"
+$sevenZipBinDir = Join-Path $ProjectRoot "node_modules\7zip-bin\win\x64"
+$sevenZipBinExe = Join-Path $sevenZipBinDir "7za.exe"
+
+if ((Test-Path $sevenZipExe) -and (-not (Test-Path $sevenZipBinExe))) {
+    Write-Host "  Fixing 7zip-bin with system 7-Zip..." -ForegroundColor Gray
+    New-Item -ItemType Directory -Force -Path $sevenZipBinDir | Out-Null
+    Copy-Item $sevenZipExe $sevenZipBinExe -Force
+    if (Test-Path $sevenZipDll) {
+        Copy-Item $sevenZipDll (Join-Path $sevenZipBinDir "7z.dll") -Force
+    }
+}
+
 # Build shared
 Write-Host "`n[3/4] Building shared package..." -ForegroundColor Yellow
 npm run build -w @connectty/shared
