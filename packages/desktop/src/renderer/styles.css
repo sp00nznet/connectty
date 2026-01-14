@@ -702,3 +702,102 @@ body {
   color: white;
   text-transform: uppercase;
 }
+
+/* Provider List */
+.provider-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.provider-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background-color: var(--bg-tertiary);
+  border-radius: 8px;
+  gap: 16px;
+}
+
+.provider-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.provider-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.provider-badge.esxi {
+  background-color: #6ba53f;
+  color: white;
+}
+
+.provider-badge.proxmox {
+  background-color: #e57000;
+  color: white;
+}
+
+.provider-badge.aws {
+  background-color: #ff9900;
+  color: #232f3e;
+}
+
+.provider-badge.gcp {
+  background-color: #4285f4;
+  color: white;
+}
+
+.provider-badge.azure {
+  background-color: #0078d4;
+  color: white;
+}
+
+.provider-details {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.provider-last-scan {
+  margin-left: 16px;
+  color: var(--text-muted);
+}
+
+.provider-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Larger Modal */
+.modal.modal-lg {
+  max-width: 700px;
+}
+
+/* Form Row for side-by-side inputs */
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row .form-group {
+  margin-bottom: 0;
+}
