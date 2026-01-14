@@ -1091,20 +1091,40 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
   const [showForm, setShowForm] = useState(!!provider);
   const [name, setName] = useState(provider?.name || '');
   const [type, setType] = useState<ProviderType>(provider?.type || 'esxi');
+  // ESXi/Proxmox fields
   const [host, setHost] = useState((provider?.config as any)?.host || '');
   const [port, setPort] = useState((provider?.config as any)?.port || (type === 'esxi' ? 443 : type === 'proxmox' ? 8006 : 443));
   const [username, setUsername] = useState((provider?.config as any)?.username || '');
   const [password, setPassword] = useState('');
   const [realm, setRealm] = useState((provider?.config as any)?.realm || 'pam');
   const [ignoreCertErrors, setIgnoreCertErrors] = useState((provider?.config as any)?.ignoreCertErrors ?? true);
+  // AWS fields
+  const [accessKeyId, setAccessKeyId] = useState((provider?.config as any)?.accessKeyId || '');
+  const [secretAccessKey, setSecretAccessKey] = useState('');
+  const [region, setRegion] = useState((provider?.config as any)?.region || 'us-east-1');
+  // GCP fields
+  const [projectId, setProjectId] = useState((provider?.config as any)?.projectId || '');
+  const [serviceAccountKey, setServiceAccountKey] = useState('');
+  // Azure fields
+  const [tenantId, setTenantId] = useState((provider?.config as any)?.tenantId || '');
+  const [clientId, setClientId] = useState((provider?.config as any)?.clientId || '');
+  const [clientSecret, setClientSecret] = useState('');
+  const [subscriptionId, setSubscriptionId] = useState((provider?.config as any)?.subscriptionId || '');
   const [enabled, setEnabled] = useState(provider?.enabled ?? true);
 
   const providerTypes: { value: ProviderType; label: string; defaultPort: number }[] = [
     { value: 'esxi', label: 'VMware ESXi / vSphere', defaultPort: 443 },
     { value: 'proxmox', label: 'Proxmox VE', defaultPort: 8006 },
-    { value: 'aws', label: 'AWS (Coming Soon)', defaultPort: 443 },
-    { value: 'gcp', label: 'Google Cloud (Coming Soon)', defaultPort: 443 },
-    { value: 'azure', label: 'Azure (Coming Soon)', defaultPort: 443 },
+    { value: 'aws', label: 'Amazon Web Services (AWS)', defaultPort: 443 },
+    { value: 'gcp', label: 'Google Cloud Platform (GCP)', defaultPort: 443 },
+    { value: 'azure', label: 'Microsoft Azure', defaultPort: 443 },
+  ];
+
+  const awsRegions = [
+    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+    'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-north-1',
+    'ap-northeast-1', 'ap-northeast-2', 'ap-southeast-1', 'ap-southeast-2', 'ap-south-1',
+    'sa-east-1', 'ca-central-1',
   ];
 
   useEffect(() => {
@@ -1123,26 +1143,63 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     setPassword('');
     setRealm('pam');
     setIgnoreCertErrors(true);
+    setAccessKeyId('');
+    setSecretAccessKey('');
+    setRegion('us-east-1');
+    setProjectId('');
+    setServiceAccountKey('');
+    setTenantId('');
+    setClientId('');
+    setClientSecret('');
+    setSubscriptionId('');
     setEnabled(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const config: any = {
-      type,
-      host,
-      port,
-      username,
-      ignoreCertErrors,
-    };
+    let config: any;
 
-    if (password) {
-      config.password = password;
-    }
-
-    if (type === 'proxmox') {
-      config.realm = realm;
+    if (type === 'esxi') {
+      config = {
+        type: 'esxi',
+        host,
+        port,
+        username,
+        ignoreCertErrors,
+      };
+      if (password) config.password = password;
+    } else if (type === 'proxmox') {
+      config = {
+        type: 'proxmox',
+        host,
+        port,
+        username,
+        realm,
+        ignoreCertErrors,
+      };
+      if (password) config.password = password;
+    } else if (type === 'aws') {
+      config = {
+        type: 'aws',
+        accessKeyId,
+        region,
+      };
+      if (secretAccessKey) config.secretAccessKey = secretAccessKey;
+    } else if (type === 'gcp') {
+      config = {
+        type: 'gcp',
+        projectId,
+      };
+      if (serviceAccountKey) config.serviceAccountKey = serviceAccountKey;
+    } else if (type === 'azure') {
+      config = {
+        type: 'azure',
+        tenantId,
+        clientId,
+        subscriptionId,
+      };
+      if (clientSecret) config.clientSecret = clientSecret;
     }
 
     const data: Partial<Provider> = {
@@ -1252,85 +1309,226 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                 disabled={!!provider}
               >
                 {providerTypes.map(pt => (
-                  <option key={pt.value} value={pt.value} disabled={['aws', 'gcp', 'azure'].includes(pt.value)}>
+                  <option key={pt.value} value={pt.value}>
                     {pt.label}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="form-row">
-              <div className="form-group" style={{ flex: 2 }}>
-                <label className="form-label">Host *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                  placeholder="192.168.1.100 or vcenter.local"
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Port</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={port}
-                  onChange={(e) => setPort(parseInt(e.target.value))}
-                />
-              </div>
-            </div>
+            {/* ESXi / Proxmox Fields */}
+            {(type === 'esxi' || type === 'proxmox') && (
+              <>
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 2 }}>
+                    <label className="form-label">Host *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={host}
+                      onChange={(e) => setHost(e.target.value)}
+                      placeholder="192.168.1.100 or vcenter.local"
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label className="form-label">Port</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={port}
+                      onChange={(e) => setPort(parseInt(e.target.value))}
+                    />
+                  </div>
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Username *</label>
-              <input
-                type="text"
-                className="form-input"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={type === 'esxi' ? 'root' : 'root@pam'}
-                required
-              />
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Username *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={type === 'esxi' ? 'root' : 'root@pam'}
+                    required
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Password {provider ? '' : '*'}</label>
-              <input
-                type="password"
-                className="form-input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={provider ? '(unchanged)' : 'Enter password'}
-                required={!provider}
-              />
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Password {provider ? '' : '*'}</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={provider ? '(unchanged)' : 'Enter password'}
+                    required={!provider}
+                  />
+                </div>
 
-            {type === 'proxmox' && (
-              <div className="form-group">
-                <label className="form-label">Realm</label>
-                <select
-                  className="form-select"
-                  value={realm}
-                  onChange={(e) => setRealm(e.target.value)}
-                >
-                  <option value="pam">PAM (Linux)</option>
-                  <option value="pve">PVE (Proxmox)</option>
-                  <option value="pmxceph">PMXCeph</option>
-                </select>
-              </div>
+                {type === 'proxmox' && (
+                  <div className="form-group">
+                    <label className="form-label">Realm</label>
+                    <select
+                      className="form-select"
+                      value={realm}
+                      onChange={(e) => setRealm(e.target.value)}
+                    >
+                      <option value="pam">PAM (Linux)</option>
+                      <option value="pve">PVE (Proxmox)</option>
+                      <option value="pmxceph">PMXCeph</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={ignoreCertErrors}
+                      onChange={(e) => setIgnoreCertErrors(e.target.checked)}
+                    />
+                    <span>Ignore SSL certificate errors</span>
+                  </label>
+                </div>
+              </>
             )}
 
-            <div className="form-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={ignoreCertErrors}
-                  onChange={(e) => setIgnoreCertErrors(e.target.checked)}
-                />
-                <span>Ignore SSL certificate errors</span>
-              </label>
-            </div>
+            {/* AWS Fields */}
+            {type === 'aws' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Access Key ID *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={accessKeyId}
+                    onChange={(e) => setAccessKeyId(e.target.value)}
+                    placeholder="AKIAIOSFODNN7EXAMPLE"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Secret Access Key {provider ? '' : '*'}</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={secretAccessKey}
+                    onChange={(e) => setSecretAccessKey(e.target.value)}
+                    placeholder={provider ? '(unchanged)' : 'Enter secret access key'}
+                    required={!provider}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Region</label>
+                  <select
+                    className="form-select"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                  >
+                    {awsRegions.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '-8px' }}>
+                  Note: Requires @aws-sdk/client-ec2 package to be installed
+                </p>
+              </>
+            )}
+
+            {/* GCP Fields */}
+            {type === 'gcp' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Project ID *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    placeholder="my-project-123456"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Service Account Key (JSON)</label>
+                  <textarea
+                    className="form-input"
+                    value={serviceAccountKey}
+                    onChange={(e) => setServiceAccountKey(e.target.value)}
+                    placeholder={provider ? '(unchanged - paste new key to update)' : 'Paste service account JSON key'}
+                    rows={4}
+                    style={{ fontFamily: 'monospace', fontSize: '11px' }}
+                  />
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '-8px' }}>
+                  Note: Requires @google-cloud/compute package to be installed
+                </p>
+              </>
+            )}
+
+            {/* Azure Fields */}
+            {type === 'azure' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Tenant ID *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={tenantId}
+                    onChange={(e) => setTenantId(e.target.value)}
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Client ID (App ID) *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Client Secret {provider ? '' : '*'}</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    placeholder={provider ? '(unchanged)' : 'Enter client secret'}
+                    required={!provider}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Subscription ID *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={subscriptionId}
+                    onChange={(e) => setSubscriptionId(e.target.value)}
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    required
+                  />
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '-8px' }}>
+                  Note: Requires @azure/arm-compute, @azure/arm-network, and @azure/identity packages
+                </p>
+              </>
+            )}
           </div>
 
           <div className="modal-footer">
