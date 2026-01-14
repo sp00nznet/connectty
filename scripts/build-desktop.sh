@@ -8,6 +8,11 @@ CLEAN=false
 SKIP_INSTALL=false
 PLATFORM="linux"
 
+# Detect platform if not specified
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    PLATFORM="mac"
+fi
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -40,6 +45,100 @@ echo "Project root: $PROJECT_ROOT"
 echo "Platform: $PLATFORM"
 
 cd "$PROJECT_ROOT"
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to install Node.js
+install_nodejs() {
+    echo -e "\nNode.js/npm not found. Attempting to install..."
+
+    # macOS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if command_exists brew; then
+            echo "Installing Node.js via Homebrew..."
+            brew install node
+            return 0
+        else
+            echo "Homebrew not found. Installing Homebrew first..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            # Add to path for current session
+            eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
+            brew install node
+            return 0
+        fi
+    fi
+
+    # Linux - try various package managers
+    if command_exists apt-get; then
+        echo "Installing Node.js via apt..."
+        # Install Node.js 20.x LTS
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+        return 0
+    elif command_exists dnf; then
+        echo "Installing Node.js via dnf..."
+        sudo dnf install -y nodejs npm
+        return 0
+    elif command_exists yum; then
+        echo "Installing Node.js via yum..."
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+        sudo yum install -y nodejs
+        return 0
+    elif command_exists pacman; then
+        echo "Installing Node.js via pacman..."
+        sudo pacman -S --noconfirm nodejs npm
+        return 0
+    elif command_exists zypper; then
+        echo "Installing Node.js via zypper..."
+        sudo zypper install -y nodejs npm
+        return 0
+    fi
+
+    # Fallback to nvm
+    if ! command_exists nvm; then
+        echo "Installing nvm..."
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    fi
+
+    if command_exists nvm; then
+        echo "Installing Node.js via nvm..."
+        nvm install --lts
+        nvm use --lts
+        return 0
+    fi
+
+    # Manual instructions
+    echo ""
+    echo "Automatic installation failed. Please install Node.js manually:"
+    echo "1. Visit: https://nodejs.org/"
+    echo "2. Download and install the LTS version"
+    echo "3. Restart your terminal"
+    echo "4. Run this script again"
+    exit 1
+}
+
+# Check for Node.js and npm
+echo -e "\n[0/4] Checking prerequisites..."
+
+if ! command_exists node; then
+    install_nodejs
+    # Reload path
+    hash -r
+fi
+
+if ! command_exists npm; then
+    install_nodejs
+    hash -r
+fi
+
+# Display versions
+echo "  Node.js: $(node --version)"
+echo "  npm: $(npm --version)"
 
 # Clean if requested
 if [ "$CLEAN" = true ]; then
