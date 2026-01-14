@@ -237,6 +237,12 @@ body {
   gap: 8px;
 }
 
+.sidebar-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .sidebar-content {
   flex: 1;
   overflow-y: auto;

@@ -428,7 +428,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="sidebar-actions">
+        <div className="sidebar-actions sidebar-actions-grid">
           <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
             + New Connection
           </button>
