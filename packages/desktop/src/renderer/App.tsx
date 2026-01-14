@@ -58,6 +58,8 @@ export default function App() {
   const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
   const [showSFTPModal, setShowSFTPModal] = useState(false);
   const [sftpConnection, setSftpConnection] = useState<ServerConnection | null>(null);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<ConnectionGroup | null>(null);
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -326,6 +328,32 @@ export default function App() {
     }
   };
 
+  // Group handlers
+  const handleCreateGroup = async (data: Partial<ConnectionGroup>) => {
+    try {
+      if (editingGroup) {
+        await window.connectty.groups.update(editingGroup.id, data);
+        showNotification('success', 'Group updated');
+      } else {
+        await window.connectty.groups.create(data as Omit<ConnectionGroup, 'id' | 'createdAt' | 'updatedAt'>);
+        showNotification('success', 'Group created');
+      }
+      await loadData();
+      setShowGroupModal(false);
+      setEditingGroup(null);
+    } catch (err) {
+      showNotification('error', (err as Error).message);
+    }
+  };
+
+  const handleDeleteGroup = async (id: string) => {
+    if (confirm('Are you sure you want to delete this group? Connections in this group will become ungrouped.')) {
+      await window.connectty.groups.delete(id);
+      await loadData();
+      showNotification('success', 'Group deleted');
+    }
+  };
+
   const handleDiscoverAndImport = async (provider: Provider) => {
     setProviderContextMenu(null);
     setIsDiscovering(provider.id);
@@ -406,6 +434,9 @@ export default function App() {
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowCredentialModal(true)}>
             Credentials
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowGroupModal(true)}>
+            Groups
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowProviderModal(true)}>
             Providers
@@ -569,6 +600,18 @@ export default function App() {
           onDelete={handleDeleteProvider}
           onDiscover={handleDiscoverAndImport}
           isDiscovering={isDiscovering}
+        />
+      )}
+
+      {/* Group Modal */}
+      {showGroupModal && (
+        <GroupModal
+          group={editingGroup}
+          groups={groups}
+          onClose={() => { setShowGroupModal(false); setEditingGroup(null); }}
+          onSave={handleCreateGroup}
+          onEdit={(grp) => { setEditingGroup(grp); }}
+          onDelete={handleDeleteGroup}
         />
       )}
 
@@ -1627,6 +1670,176 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
             </button>
             <button type="submit" className="btn btn-primary">
               {provider ? 'Save Changes' : 'Add Provider'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Group Modal Component
+interface GroupModalProps {
+  group: ConnectionGroup | null;
+  groups: ConnectionGroup[];
+  onClose: () => void;
+  onSave: (data: Partial<ConnectionGroup>) => Promise<void>;
+  onEdit: (group: ConnectionGroup) => void;
+  onDelete: (id: string) => void;
+}
+
+function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupModalProps) {
+  const [showForm, setShowForm] = useState(!!group);
+  const [name, setName] = useState(group?.name || '');
+  const [description, setDescription] = useState(group?.description || '');
+  const [color, setColor] = useState(group?.color || '#6366f1');
+
+  const colorOptions = [
+    { value: '#6366f1', name: 'Indigo' },
+    { value: '#8b5cf6', name: 'Violet' },
+    { value: '#ec4899', name: 'Pink' },
+    { value: '#ef4444', name: 'Red' },
+    { value: '#f97316', name: 'Orange' },
+    { value: '#eab308', name: 'Yellow' },
+    { value: '#22c55e', name: 'Green' },
+    { value: '#14b8a6', name: 'Teal' },
+    { value: '#3b82f6', name: 'Blue' },
+    { value: '#64748b', name: 'Slate' },
+  ];
+
+  const resetForm = () => {
+    setName('');
+    setDescription('');
+    setColor('#6366f1');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave({
+      name,
+      description: description || undefined,
+      color,
+    });
+    resetForm();
+    setShowForm(false);
+  };
+
+  if (!showForm) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>Groups</h3>
+            <button className="btn btn-icon" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-body">
+            {groups.length === 0 ? (
+              <p style={{ color: '#a0aec0', textAlign: 'center' }}>
+                No groups created. Create groups to organize your connections.
+              </p>
+            ) : (
+              <ul className="group-list">
+                {groups.map((grp) => (
+                  <li key={grp.id} className="group-item">
+                    <div className="group-info">
+                      <div className="group-name">
+                        <span className="group-color-dot" style={{ backgroundColor: grp.color || '#6366f1' }} />
+                        {grp.name}
+                      </div>
+                      {grp.description && (
+                        <div className="group-description">{grp.description}</div>
+                      )}
+                    </div>
+                    <div className="group-actions">
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => {
+                          onEdit(grp);
+                          setName(grp.name);
+                          setDescription(grp.description || '');
+                          setColor(grp.color || '#6366f1');
+                          setShowForm(true);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button className="btn btn-sm btn-danger" onClick={() => onDelete(grp.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose}>
+              Close
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+              + New Group
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{group ? 'Edit Group' : 'New Group'}</h3>
+          <button className="btn btn-icon" onClick={() => { resetForm(); setShowForm(false); }}>×</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">Name *</label>
+              <input
+                type="text"
+                className="form-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Production Servers"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <input
+                type="text"
+                className="form-input"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional description"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Color</label>
+              <div className="color-picker">
+                {colorOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`color-option ${color === opt.value ? 'selected' : ''}`}
+                    style={{ backgroundColor: opt.value }}
+                    onClick={() => setColor(opt.value)}
+                    title={opt.name}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={() => { resetForm(); setShowForm(false); }}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              {group ? 'Save Changes' : 'Create'}
             </button>
           </div>
         </form>
