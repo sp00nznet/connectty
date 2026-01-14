@@ -424,12 +424,12 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  sshService.disconnectAll();
+  sshService?.disconnectAll();
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
-  sshService.disconnectAll();
+  sshService?.disconnectAll();
 });
