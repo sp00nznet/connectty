@@ -211,7 +211,11 @@ if (-not (Test-Command "node")) {
         Write-Host "Failed to install Node.js. Please install manually from https://nodejs.org/" -ForegroundColor Red
         exit 1
     }
-    $needsRestart = $true
+    Write-Host "`n============================================" -ForegroundColor Green
+    Write-Host "Node.js installed successfully!" -ForegroundColor Green
+    Write-Host "Please RESTART your terminal and run this script again." -ForegroundColor Yellow
+    Write-Host "============================================" -ForegroundColor Green
+    exit 0
 }
 
 # Check Node.js version - auto-fix if Node 24+
