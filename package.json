@@ -15,6 +15,7 @@
     "start:desktop": "npm run start -w @connectty/desktop",
     "start:server": "npm run start -w @connectty/server",
     "start:web": "npm run start -w @connectty/web",
+    "dev:desktop": "npm run dev -w @connectty/desktop",
     "dev:server": "npm run dev -w @connectty/server",
     "dev:web": "npm run dev -w @connectty/web",
     "docker:build": "docker-compose build",

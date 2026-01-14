@@ -4,7 +4,7 @@
   "description": "Connectty Desktop SSH Client",
   "main": "dist/main/main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "npm run build:main && electron .",
     "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
     "dev:main": "tsc -p tsconfig.main.json --watch",
     "dev:renderer": "vite",
