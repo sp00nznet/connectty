@@ -344,6 +344,45 @@ function setupIpcHandlers(): void {
     return connections;
   });
 
+  ipcMain.handle('discovered:importSelected', async (_event, hostIds: string[]) => {
+    const connections: ServerConnection[] = [];
+
+    for (const hostId of hostIds) {
+      const host = db.getDiscoveredHost(hostId);
+      if (!host || host.imported) continue;
+
+      const connectionType = host.osType === 'windows' ? 'rdp' : 'ssh';
+      const port = connectionType === 'rdp' ? 3389 : 22;
+      const credentialId = findMatchingCredential(db, host);
+
+      const connection = db.createConnection({
+        name: host.name,
+        hostname: host.publicIp || host.privateIp || host.hostname || host.name,
+        port,
+        connectionType,
+        osType: host.osType,
+        credentialId,
+        tags: Object.entries(host.tags).map(([k, v]) => `${k}:${v}`),
+        providerId: host.providerId,
+        providerHostId: host.providerHostId,
+        description: host.osName,
+      });
+
+      db.markHostImported(host.id, connection.id);
+      connections.push(connection);
+    }
+
+    return connections;
+  });
+
+  ipcMain.handle('connections:getByProvider', async (_event, providerId: string) => {
+    return db.getConnectionsByProvider(providerId);
+  });
+
+  ipcMain.handle('connections:deleteByProvider', async (_event, providerId: string) => {
+    return db.deleteConnectionsByProvider(providerId);
+  });
+
   // SSH session handlers
   ipcMain.handle('ssh:connect', async (_event, connectionId: string, password?: string) => {
     const connection = db.getConnection(connectionId);

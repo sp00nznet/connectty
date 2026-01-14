@@ -66,6 +66,9 @@ export default function App() {
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [providerContextMenu, setProviderContextMenu] = useState<{ x: number; y: number; provider: Provider } | null>(null);
   const [isDiscovering, setIsDiscovering] = useState<string | null>(null);
+  const [showHostSelectionModal, setShowHostSelectionModal] = useState(false);
+  const [discoveredHosts, setDiscoveredHosts] = useState<DiscoveredHost[]>([]);
+  const [hostSelectionProvider, setHostSelectionProvider] = useState<Provider | null>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
   const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -418,15 +421,38 @@ export default function App() {
         return;
       }
 
-      // Import all discovered hosts with auto-assigned credentials
-      const imported = await window.connectty.discovered.importAll(provider.id);
-
-      await loadData();
-      showNotification('success', `Imported ${imported.length} connections from ${provider.name}`);
+      // Get the discovered hosts list (includes already imported ones)
+      const hosts = await window.connectty.discovered.list(provider.id);
+      setDiscoveredHosts(hosts);
+      setHostSelectionProvider(provider);
+      setShowHostSelectionModal(true);
     } catch (err) {
       showNotification('error', `Discovery failed: ${(err as Error).message}`);
     }
     setIsDiscovering(null);
+  };
+
+  const handleImportSelectedHosts = async (hostIds: string[]) => {
+    try {
+      const imported = await window.connectty.discovered.importSelected(hostIds);
+      await loadData();
+      showNotification('success', `Imported ${imported.length} connections`);
+      setShowHostSelectionModal(false);
+      setDiscoveredHosts([]);
+      setHostSelectionProvider(null);
+    } catch (err) {
+      showNotification('error', `Import failed: ${(err as Error).message}`);
+    }
+  };
+
+  const handleDeleteProviderConnections = async (providerId: string) => {
+    try {
+      const deleted = await window.connectty.connectionsBulk.deleteByProvider(providerId);
+      await loadData();
+      showNotification('success', `Deleted ${deleted} connections`);
+    } catch (err) {
+      showNotification('error', `Delete failed: ${(err as Error).message}`);
+    }
   };
 
   const handleProviderContextMenu = (e: React.MouseEvent, provider: Provider) => {
@@ -676,7 +702,18 @@ export default function App() {
           onEdit={(prov) => { setEditingProvider(prov); }}
           onDelete={handleDeleteProvider}
           onDiscover={handleDiscoverAndImport}
+          onDeleteConnections={handleDeleteProviderConnections}
           isDiscovering={isDiscovering}
+        />
+      )}
+
+      {/* Host Selection Modal */}
+      {showHostSelectionModal && hostSelectionProvider && (
+        <HostSelectionModal
+          provider={hostSelectionProvider}
+          hosts={discoveredHosts}
+          onClose={() => { setShowHostSelectionModal(false); setDiscoveredHosts([]); setHostSelectionProvider(null); }}
+          onImport={handleImportSelectedHosts}
         />
       )}
 
@@ -1293,10 +1330,11 @@ interface ProviderModalProps {
   onEdit: (provider: Provider) => void;
   onDelete: (id: string) => void;
   onDiscover: (provider: Provider) => void;
+  onDeleteConnections: (providerId: string) => Promise<void>;
   isDiscovering: string | null;
 }
 
-function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete, onDiscover, isDiscovering }: ProviderModalProps) {
+function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete, onDiscover, onDeleteConnections, isDiscovering }: ProviderModalProps) {
   const [showForm, setShowForm] = useState(!!provider);
   const [name, setName] = useState(provider?.name || '');
   const [type, setType] = useState<ProviderType>(provider?.type || 'esxi');
@@ -1465,6 +1503,16 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                       </button>
                       <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(prov); setShowForm(true); }}>
                         Edit
+                      </button>
+                      <button
+                        className="btn btn-sm btn-warning"
+                        onClick={() => {
+                          if (window.confirm('Delete all connections imported from this provider?')) {
+                            onDeleteConnections(prov.id);
+                          }
+                        }}
+                      >
+                        Remove Hosts
                       </button>
                       <button className="btn btn-sm btn-danger" onClick={() => onDelete(prov.id)}>
                         Delete
@@ -3711,6 +3759,213 @@ function SettingsModal({ settings, onClose, onSave }: SettingsModalProps) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Host Selection Modal Component
+interface HostSelectionModalProps {
+  provider: Provider;
+  hosts: DiscoveredHost[];
+  onClose: () => void;
+  onImport: (hostIds: string[]) => Promise<void>;
+}
+
+function HostSelectionModal({ provider, hosts, onClose, onImport }: HostSelectionModalProps) {
+  const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState(false);
+  const [selectAll, setSelectAll] = useState(false);
+
+  // Filter to show only non-imported hosts
+  const availableHosts = hosts.filter(h => !h.imported);
+  const importedHosts = hosts.filter(h => h.imported);
+
+  const handleToggleHost = (hostId: string) => {
+    const newSelected = new Set(selectedHosts);
+    if (newSelected.has(hostId)) {
+      newSelected.delete(hostId);
+    } else {
+      newSelected.add(hostId);
+    }
+    setSelectedHosts(newSelected);
+    setSelectAll(newSelected.size === availableHosts.length && availableHosts.length > 0);
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedHosts(new Set());
+      setSelectAll(false);
+    } else {
+      setSelectedHosts(new Set(availableHosts.map(h => h.id)));
+      setSelectAll(true);
+    }
+  };
+
+  const handleImport = async () => {
+    if (selectedHosts.size === 0) return;
+    setImporting(true);
+    try {
+      await onImport(Array.from(selectedHosts));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const getStateColor = (state: string) => {
+    switch (state) {
+      case 'running': return '#48bb78';
+      case 'stopped': return '#f56565';
+      case 'suspended': return '#ed8936';
+      default: return '#a0aec0';
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Import Hosts from {provider.name}</h3>
+          <button className="btn btn-icon" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          {hosts.length === 0 ? (
+            <p style={{ color: '#a0aec0', textAlign: 'center' }}>
+              No hosts discovered from this provider.
+            </p>
+          ) : (
+            <>
+              {availableHosts.length > 0 && (
+                <>
+                  <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <label className="checkbox-label" style={{ margin: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectAll}
+                        onChange={handleSelectAll}
+                      />
+                      <span>Select All ({availableHosts.length} available)</span>
+                    </label>
+                    <span style={{ color: '#a0aec0', fontSize: '0.875rem' }}>
+                      {selectedHosts.size} selected
+                    </span>
+                  </div>
+                  <div className="host-list">
+                    {availableHosts.map((host) => (
+                      <div
+                        key={host.id}
+                        className={`host-item ${selectedHosts.has(host.id) ? 'selected' : ''}`}
+                        onClick={() => handleToggleHost(host.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0.75rem 1rem',
+                          borderRadius: '0.5rem',
+                          marginBottom: '0.5rem',
+                          background: selectedHosts.has(host.id) ? 'rgba(66, 153, 225, 0.2)' : 'var(--bg-secondary)',
+                          cursor: 'pointer',
+                          border: selectedHosts.has(host.id) ? '1px solid #4299e1' : '1px solid transparent',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedHosts.has(host.id)}
+                          onChange={() => handleToggleHost(host.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ marginRight: '1rem' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500, marginBottom: '0.25rem' }}>
+                            {host.name}
+                            <span
+                              style={{
+                                marginLeft: '0.5rem',
+                                fontSize: '0.75rem',
+                                padding: '0.125rem 0.5rem',
+                                borderRadius: '0.25rem',
+                                background: getStateColor(host.state),
+                                color: '#fff',
+                              }}
+                            >
+                              {host.state}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.875rem', color: '#a0aec0' }}>
+                            {host.publicIp || host.privateIp || host.hostname || 'No IP'}
+                            {host.osName && ` • ${host.osName}`}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {importedHosts.length > 0 && (
+                <div style={{ marginTop: availableHosts.length > 0 ? '1.5rem' : 0 }}>
+                  <h4 style={{ color: '#a0aec0', marginBottom: '0.5rem' }}>
+                    Already Imported ({importedHosts.length})
+                  </h4>
+                  <div className="host-list">
+                    {importedHosts.map((host) => (
+                      <div
+                        key={host.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0.75rem 1rem',
+                          borderRadius: '0.5rem',
+                          marginBottom: '0.5rem',
+                          background: 'var(--bg-secondary)',
+                          opacity: 0.6,
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500, marginBottom: '0.25rem' }}>
+                            {host.name}
+                            <span
+                              style={{
+                                marginLeft: '0.5rem',
+                                fontSize: '0.75rem',
+                                padding: '0.125rem 0.5rem',
+                                borderRadius: '0.25rem',
+                                background: '#4299e1',
+                                color: '#fff',
+                              }}
+                            >
+                              imported
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.875rem', color: '#a0aec0' }}>
+                            {host.publicIp || host.privateIp || host.hostname || 'No IP'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {availableHosts.length === 0 && importedHosts.length > 0 && (
+                <p style={{ color: '#a0aec0', textAlign: 'center', marginTop: '1rem' }}>
+                  All hosts from this provider have been imported. Use "Remove Hosts" to reset and reimport.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={handleImport}
+            disabled={selectedHosts.size === 0 || importing}
+          >
+            {importing ? 'Importing...' : `Import ${selectedHosts.size} Host${selectedHosts.size !== 1 ? 's' : ''}`}
+          </button>
+        </div>
       </div>
     </div>
   );
