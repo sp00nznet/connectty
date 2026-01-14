@@ -248,3 +248,92 @@ export interface ExportOptions {
   encryptSecrets: boolean;
   password?: string;
 }
+
+// ============================================================================
+// Bulk Actions / Command Execution Types
+// ============================================================================
+
+export type CommandType = 'inline' | 'script';
+export type CommandTargetOS = 'linux' | 'windows' | 'all';
+
+export interface SavedCommand {
+  id: string;
+  name: string;
+  description?: string;
+  type: CommandType;
+  targetOS: CommandTargetOS;
+  // For inline commands
+  command?: string;
+  // For scripts
+  scriptContent?: string;
+  scriptLanguage?: 'bash' | 'powershell' | 'python';
+  // Metadata
+  category?: string; // e.g., 'user-management', 'system', 'networking'
+  tags?: string[];
+  // Variables that can be substituted (e.g., {{username}}, {{password}})
+  variables?: CommandVariable[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CommandVariable {
+  name: string;
+  description?: string;
+  defaultValue?: string;
+  required: boolean;
+  type: 'string' | 'password' | 'number' | 'boolean';
+}
+
+export interface CommandExecution {
+  id: string;
+  commandId?: string; // Reference to saved command (if used)
+  commandName: string;
+  command: string; // Actual command/script that was run
+  targetOS: CommandTargetOS;
+  // Targeting
+  connectionIds: string[];
+  // Results per host
+  results: CommandResult[];
+  // Timing
+  startedAt: Date;
+  completedAt?: Date;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+}
+
+export interface CommandResult {
+  connectionId: string;
+  connectionName: string;
+  hostname: string;
+  status: 'pending' | 'running' | 'success' | 'error' | 'skipped';
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+}
+
+export interface HostFilter {
+  type: 'all' | 'group' | 'pattern' | 'selection' | 'os';
+  // For group filter
+  groupId?: string;
+  // For pattern filter
+  pattern?: string; // e.g., "web-*", "*-prod-*"
+  // For selection filter
+  connectionIds?: string[];
+  // For OS filter
+  osType?: OSType;
+}
+
+// Pre-built action templates
+export interface ActionTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon?: string;
+  targetOS: CommandTargetOS;
+  variables: CommandVariable[];
+  linuxCommand?: string;
+  windowsCommand?: string;
+}

@@ -13,6 +13,11 @@ import type {
   ProviderConfig,
   ConnectionType,
   OSType,
+  SavedCommand,
+  CommandExecution,
+  CommandType,
+  CommandTargetOS,
+  CommandVariable,
 } from '@connectty/shared';
 
 export class DatabaseService {
@@ -124,6 +129,35 @@ export class DatabaseService {
         imported INTEGER DEFAULT 0,
         connection_id TEXT,
         FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS saved_commands (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        type TEXT NOT NULL DEFAULT 'inline',
+        target_os TEXT NOT NULL DEFAULT 'all',
+        command TEXT,
+        script_content TEXT,
+        script_language TEXT,
+        category TEXT,
+        tags TEXT DEFAULT '[]',
+        variables TEXT DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS command_history (
+        id TEXT PRIMARY KEY,
+        command_id TEXT,
+        command_name TEXT NOT NULL,
+        command TEXT NOT NULL,
+        target_os TEXT NOT NULL,
+        connection_ids TEXT NOT NULL DEFAULT '[]',
+        results TEXT NOT NULL DEFAULT '[]',
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
       );
     `);
 
@@ -645,6 +679,195 @@ export class DatabaseService {
     stmt.run(providerId);
   }
 
+  // Saved command methods
+  getSavedCommands(category?: string): SavedCommand[] {
+    const sql = category
+      ? 'SELECT * FROM saved_commands WHERE category = ? ORDER BY name'
+      : 'SELECT * FROM saved_commands ORDER BY name';
+    const stmt = this.db.prepare(sql);
+    const rows = (category ? stmt.all(category) : stmt.all()) as SavedCommandRow[];
+    return rows.map((row) => this.rowToSavedCommand(row));
+  }
+
+  getSavedCommand(id: string): SavedCommand | null {
+    const stmt = this.db.prepare('SELECT * FROM saved_commands WHERE id = ?');
+    const row = stmt.get(id) as SavedCommandRow | undefined;
+    return row ? this.rowToSavedCommand(row) : null;
+  }
+
+  createSavedCommand(data: Omit<SavedCommand, 'id' | 'createdAt' | 'updatedAt'>): SavedCommand {
+    const id = generateId();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO saved_commands (
+        id, name, description, type, target_os, command,
+        script_content, script_language, category, tags, variables,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.name,
+      data.description || null,
+      data.type,
+      data.targetOS,
+      data.command || null,
+      data.scriptContent || null,
+      data.scriptLanguage || null,
+      data.category || null,
+      JSON.stringify(data.tags || []),
+      JSON.stringify(data.variables || []),
+      now,
+      now
+    );
+
+    return this.getSavedCommand(id)!;
+  }
+
+  updateSavedCommand(id: string, updates: Partial<SavedCommand>): SavedCommand | null {
+    const existing = this.getSavedCommand(id);
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    const fields: string[] = ['updated_at = ?'];
+    const values: unknown[] = [now];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.description !== undefined) {
+      fields.push('description = ?');
+      values.push(updates.description);
+    }
+    if (updates.type !== undefined) {
+      fields.push('type = ?');
+      values.push(updates.type);
+    }
+    if (updates.targetOS !== undefined) {
+      fields.push('target_os = ?');
+      values.push(updates.targetOS);
+    }
+    if (updates.command !== undefined) {
+      fields.push('command = ?');
+      values.push(updates.command);
+    }
+    if (updates.scriptContent !== undefined) {
+      fields.push('script_content = ?');
+      values.push(updates.scriptContent);
+    }
+    if (updates.scriptLanguage !== undefined) {
+      fields.push('script_language = ?');
+      values.push(updates.scriptLanguage);
+    }
+    if (updates.category !== undefined) {
+      fields.push('category = ?');
+      values.push(updates.category);
+    }
+    if (updates.tags !== undefined) {
+      fields.push('tags = ?');
+      values.push(JSON.stringify(updates.tags));
+    }
+    if (updates.variables !== undefined) {
+      fields.push('variables = ?');
+      values.push(JSON.stringify(updates.variables));
+    }
+
+    values.push(id);
+    const stmt = this.db.prepare(`UPDATE saved_commands SET ${fields.join(', ')} WHERE id = ?`);
+    stmt.run(...values);
+
+    return this.getSavedCommand(id);
+  }
+
+  deleteSavedCommand(id: string): boolean {
+    const stmt = this.db.prepare('DELETE FROM saved_commands WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  // Command execution history methods
+  getCommandHistory(limit = 50): CommandExecution[] {
+    const stmt = this.db.prepare(
+      'SELECT * FROM command_history ORDER BY started_at DESC LIMIT ?'
+    );
+    const rows = stmt.all(limit) as CommandHistoryRow[];
+    return rows.map((row) => this.rowToCommandExecution(row));
+  }
+
+  getCommandExecution(id: string): CommandExecution | null {
+    const stmt = this.db.prepare('SELECT * FROM command_history WHERE id = ?');
+    const row = stmt.get(id) as CommandHistoryRow | undefined;
+    return row ? this.rowToCommandExecution(row) : null;
+  }
+
+  createCommandExecution(data: Omit<CommandExecution, 'id'>): CommandExecution {
+    const id = generateId();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO command_history (
+        id, command_id, command_name, command, target_os,
+        connection_ids, results, started_at, completed_at, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.commandId || null,
+      data.commandName,
+      data.command,
+      data.targetOS,
+      JSON.stringify(data.connectionIds),
+      JSON.stringify(data.results),
+      data.startedAt instanceof Date ? data.startedAt.toISOString() : data.startedAt,
+      data.completedAt ? (data.completedAt instanceof Date ? data.completedAt.toISOString() : data.completedAt) : null,
+      data.status
+    );
+
+    return this.getCommandExecution(id)!;
+  }
+
+  updateCommandExecution(id: string, updates: Partial<CommandExecution>): CommandExecution | null {
+    const existing = this.getCommandExecution(id);
+    if (!existing) return null;
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    if (updates.results !== undefined) {
+      fields.push('results = ?');
+      values.push(JSON.stringify(updates.results));
+    }
+    if (updates.completedAt !== undefined) {
+      fields.push('completed_at = ?');
+      values.push(updates.completedAt instanceof Date ? updates.completedAt.toISOString() : updates.completedAt);
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = ?');
+      values.push(updates.status);
+    }
+
+    if (fields.length === 0) return existing;
+
+    values.push(id);
+    const stmt = this.db.prepare(`UPDATE command_history SET ${fields.join(', ')} WHERE id = ?`);
+    stmt.run(...values);
+
+    return this.getCommandExecution(id);
+  }
+
+  deleteCommandExecution(id: string): boolean {
+    const stmt = this.db.prepare('DELETE FROM command_history WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  clearCommandHistory(): void {
+    this.db.prepare('DELETE FROM command_history').run();
+  }
+
   // Helper to encrypt sensitive provider config fields
   private encryptProviderConfig(config: ProviderConfig): Record<string, unknown> {
     const result: Record<string, unknown> = { ...config };
@@ -783,6 +1006,39 @@ export class DatabaseService {
     };
   }
 
+  private rowToSavedCommand(row: SavedCommandRow): SavedCommand {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description || undefined,
+      type: row.type as CommandType,
+      targetOS: row.target_os as CommandTargetOS,
+      command: row.command || undefined,
+      scriptContent: row.script_content || undefined,
+      scriptLanguage: row.script_language as SavedCommand['scriptLanguage'],
+      category: row.category || undefined,
+      tags: JSON.parse(row.tags || '[]'),
+      variables: JSON.parse(row.variables || '[]') as CommandVariable[],
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  private rowToCommandExecution(row: CommandHistoryRow): CommandExecution {
+    return {
+      id: row.id,
+      commandId: row.command_id || undefined,
+      commandName: row.command_name,
+      command: row.command,
+      targetOS: row.target_os as CommandTargetOS,
+      connectionIds: JSON.parse(row.connection_ids || '[]'),
+      results: JSON.parse(row.results || '[]'),
+      startedAt: new Date(row.started_at),
+      completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
+      status: row.status as CommandExecution['status'],
+    };
+  }
+
   // Export all data for sync
   exportAll(): { connections: ServerConnection[]; credentials: Credential[]; groups: ConnectionGroup[] } {
     return {
@@ -869,4 +1125,33 @@ interface DiscoveredHostRow {
   last_seen_at: string;
   imported: number;
   connection_id: string | null;
+}
+
+interface SavedCommandRow {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string;
+  target_os: string;
+  command: string | null;
+  script_content: string | null;
+  script_language: string | null;
+  category: string | null;
+  tags: string;
+  variables: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CommandHistoryRow {
+  id: string;
+  command_id: string | null;
+  command_name: string;
+  command: string;
+  target_os: string;
+  connection_ids: string;
+  results: string;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
 }

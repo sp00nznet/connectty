@@ -1,0 +1,375 @@
+/**
+ * Command execution service for bulk actions
+ * Supports SSH for Linux/Unix and WinRM for Windows
+ */
+
+import { Client } from 'ssh2';
+import { spawn } from 'child_process';
+import type {
+  ServerConnection,
+  Credential,
+  CommandResult,
+  CommandExecution,
+  CommandTargetOS,
+} from '@connectty/shared';
+
+interface CommandExecutionCallbacks {
+  onProgress: (connectionId: string, result: Partial<CommandResult>) => void;
+  onComplete: (executionId: string) => void;
+}
+
+export class CommandService {
+  private runningExecutions: Map<string, { cancelled: boolean }> = new Map();
+
+  /**
+   * Execute a command across multiple hosts
+   */
+  async executeCommand(
+    execution: CommandExecution,
+    connections: ServerConnection[],
+    getCredential: (id: string) => Credential | null,
+    callbacks: CommandExecutionCallbacks
+  ): Promise<CommandResult[]> {
+    const results: CommandResult[] = [];
+    this.runningExecutions.set(execution.id, { cancelled: false });
+
+    // Execute in parallel with concurrency limit
+    const concurrencyLimit = 10;
+    const chunks = this.chunkArray(connections, concurrencyLimit);
+
+    for (const chunk of chunks) {
+      if (this.runningExecutions.get(execution.id)?.cancelled) {
+        break;
+      }
+
+      const chunkResults = await Promise.all(
+        chunk.map(async (connection) => {
+          if (this.runningExecutions.get(execution.id)?.cancelled) {
+            return this.createSkippedResult(connection, 'Execution cancelled');
+          }
+
+          // Notify start
+          callbacks.onProgress(connection.id, {
+            connectionId: connection.id,
+            connectionName: connection.name,
+            hostname: connection.hostname,
+            status: 'running',
+            startedAt: new Date(),
+          });
+
+          // Determine target OS and skip if incompatible
+          const targetOS = execution.targetOS;
+          const isWindows = connection.osType === 'windows';
+
+          if (targetOS === 'linux' && isWindows) {
+            return this.createSkippedResult(connection, 'Skipped: Windows host for Linux command');
+          }
+          if (targetOS === 'windows' && !isWindows) {
+            return this.createSkippedResult(connection, 'Skipped: Linux host for Windows command');
+          }
+
+          // Get credential
+          const credential = connection.credentialId
+            ? getCredential(connection.credentialId)
+            : null;
+
+          try {
+            let result: CommandResult;
+
+            if (isWindows) {
+              result = await this.executeWinRMCommand(connection, credential, execution.command);
+            } else {
+              result = await this.executeSSHCommand(connection, credential, execution.command);
+            }
+
+            callbacks.onProgress(connection.id, result);
+            return result;
+          } catch (error) {
+            const result = this.createErrorResult(connection, error);
+            callbacks.onProgress(connection.id, result);
+            return result;
+          }
+        })
+      );
+
+      results.push(...chunkResults);
+    }
+
+    this.runningExecutions.delete(execution.id);
+    callbacks.onComplete(execution.id);
+
+    return results;
+  }
+
+  /**
+   * Cancel a running execution
+   */
+  cancelExecution(executionId: string): void {
+    const execution = this.runningExecutions.get(executionId);
+    if (execution) {
+      execution.cancelled = true;
+    }
+  }
+
+  /**
+   * Execute command via SSH
+   */
+  private executeSSHCommand(
+    connection: ServerConnection,
+    credential: Credential | null,
+    command: string
+  ): Promise<CommandResult> {
+    return new Promise((resolve) => {
+      const client = new Client();
+      const startedAt = new Date();
+      let stdout = '';
+      let stderr = '';
+
+      const timeout = setTimeout(() => {
+        client.end();
+        resolve({
+          connectionId: connection.id,
+          connectionName: connection.name,
+          hostname: connection.hostname,
+          status: 'error',
+          error: 'Command timed out after 5 minutes',
+          startedAt,
+          completedAt: new Date(),
+        });
+      }, 5 * 60 * 1000); // 5 minute timeout
+
+      client.on('ready', () => {
+        client.exec(command, (err, stream) => {
+          if (err) {
+            clearTimeout(timeout);
+            client.end();
+            resolve({
+              connectionId: connection.id,
+              connectionName: connection.name,
+              hostname: connection.hostname,
+              status: 'error',
+              error: err.message,
+              startedAt,
+              completedAt: new Date(),
+            });
+            return;
+          }
+
+          stream.on('data', (data: Buffer) => {
+            stdout += data.toString('utf-8');
+          });
+
+          stream.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString('utf-8');
+          });
+
+          stream.on('close', (code: number) => {
+            clearTimeout(timeout);
+            client.end();
+            resolve({
+              connectionId: connection.id,
+              connectionName: connection.name,
+              hostname: connection.hostname,
+              status: code === 0 ? 'success' : 'error',
+              exitCode: code,
+              stdout: stdout.trim(),
+              stderr: stderr.trim(),
+              startedAt,
+              completedAt: new Date(),
+            });
+          });
+        });
+      });
+
+      client.on('error', (err) => {
+        clearTimeout(timeout);
+        resolve({
+          connectionId: connection.id,
+          connectionName: connection.name,
+          hostname: connection.hostname,
+          status: 'error',
+          error: err.message,
+          startedAt,
+          completedAt: new Date(),
+        });
+      });
+
+      // Build connection config
+      const config: Parameters<Client['connect']>[0] = {
+        host: connection.hostname,
+        port: connection.port,
+        username: credential?.username || connection.username || 'root',
+        readyTimeout: 30000,
+      };
+
+      if (credential) {
+        switch (credential.type) {
+          case 'password':
+            config.password = credential.secret;
+            break;
+          case 'privateKey':
+            config.privateKey = credential.privateKey;
+            if (credential.passphrase) {
+              config.passphrase = credential.passphrase;
+            }
+            break;
+          case 'agent':
+            config.agent = process.env.SSH_AUTH_SOCK;
+            break;
+        }
+      } else {
+        // Try SSH agent
+        if (process.platform === 'win32') {
+          config.agent = '\\\\.\\pipe\\openssh-ssh-agent';
+        } else if (process.env.SSH_AUTH_SOCK) {
+          config.agent = process.env.SSH_AUTH_SOCK;
+        }
+      }
+
+      client.connect(config);
+    });
+  }
+
+  /**
+   * Execute command via WinRM (using PowerShell remoting)
+   * Uses external winrs or PowerShell Invoke-Command
+   */
+  private executeWinRMCommand(
+    connection: ServerConnection,
+    credential: Credential | null,
+    command: string
+  ): Promise<CommandResult> {
+    return new Promise((resolve) => {
+      const startedAt = new Date();
+
+      // Build PowerShell command for remote execution
+      const hostname = connection.hostname;
+      const username = credential?.username || connection.username;
+      const password = credential?.secret;
+      const domain = credential?.domain;
+
+      // Use full username with domain if available
+      const fullUsername = domain ? `${domain}\\${username}` : username;
+
+      let psCommand: string;
+      let args: string[];
+
+      if (process.platform === 'win32') {
+        // On Windows, use PowerShell Invoke-Command with credential
+        if (password) {
+          // Create credential object and invoke command
+          psCommand = 'powershell.exe';
+          args = [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$secpasswd = ConvertTo-SecureString '${password.replace(/'/g, "''")}' -AsPlainText -Force; ` +
+            `$cred = New-Object System.Management.Automation.PSCredential ('${fullUsername}', $secpasswd); ` +
+            `Invoke-Command -ComputerName '${hostname}' -Credential $cred -ScriptBlock { ${command} }`
+          ];
+        } else {
+          // Use current credentials (integrated auth)
+          psCommand = 'powershell.exe';
+          args = [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `Invoke-Command -ComputerName '${hostname}' -ScriptBlock { ${command} }`
+          ];
+        }
+      } else {
+        // On Linux/macOS, try to use pwsh (PowerShell Core) if available
+        psCommand = 'pwsh';
+        args = [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          `$secpasswd = ConvertTo-SecureString '${password?.replace(/'/g, "''") || ''}' -AsPlainText -Force; ` +
+          `$cred = New-Object System.Management.Automation.PSCredential ('${fullUsername}', $secpasswd); ` +
+          `Invoke-Command -ComputerName '${hostname}' -Credential $cred -Authentication Negotiate -ScriptBlock { ${command} }`
+        ];
+      }
+
+      let stdout = '';
+      let stderr = '';
+
+      const proc = spawn(psCommand, args, {
+        timeout: 5 * 60 * 1000, // 5 minute timeout
+      });
+
+      proc.stdout.on('data', (data: Buffer) => {
+        stdout += data.toString('utf-8');
+      });
+
+      proc.stderr.on('data', (data: Buffer) => {
+        stderr += data.toString('utf-8');
+      });
+
+      proc.on('error', (err) => {
+        resolve({
+          connectionId: connection.id,
+          connectionName: connection.name,
+          hostname: connection.hostname,
+          status: 'error',
+          error: `WinRM execution failed: ${err.message}. Ensure PowerShell remoting is enabled on the target.`,
+          startedAt,
+          completedAt: new Date(),
+        });
+      });
+
+      proc.on('close', (code) => {
+        resolve({
+          connectionId: connection.id,
+          connectionName: connection.name,
+          hostname: connection.hostname,
+          status: code === 0 ? 'success' : 'error',
+          exitCode: code ?? undefined,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+          startedAt,
+          completedAt: new Date(),
+        });
+      });
+    });
+  }
+
+  /**
+   * Substitute variables in a command template
+   */
+  substituteVariables(command: string, variables: Record<string, string>): string {
+    let result = command;
+    for (const [key, value] of Object.entries(variables)) {
+      result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
+    }
+    return result;
+  }
+
+  private createSkippedResult(connection: ServerConnection, reason: string): CommandResult {
+    return {
+      connectionId: connection.id,
+      connectionName: connection.name,
+      hostname: connection.hostname,
+      status: 'skipped',
+      error: reason,
+    };
+  }
+
+  private createErrorResult(connection: ServerConnection, error: unknown): CommandResult {
+    return {
+      connectionId: connection.id,
+      connectionName: connection.name,
+      hostname: connection.hostname,
+      status: 'error',
+      error: error instanceof Error ? error.message : String(error),
+      completedAt: new Date(),
+    };
+  }
+
+  private chunkArray<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+  }
+}
