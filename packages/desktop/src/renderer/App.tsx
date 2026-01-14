@@ -494,7 +494,7 @@ export default function App() {
           </button>
         </div>
 
-        <div className="sidebar-actions">
+        <div className="sidebar-actions sidebar-actions-grid">
           <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkActionsModal(true)}>
             Bulk Actions
           </button>
