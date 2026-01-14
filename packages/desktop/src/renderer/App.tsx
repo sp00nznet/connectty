@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { ServerConnection, Credential, ConnectionGroup, SSHSessionEvent } from '@connectty/shared';
+import type { ServerConnection, Credential, ConnectionGroup, SSHSessionEvent, ConnectionType, OSType, CredentialType } from '@connectty/shared';
 import type { ConnecttyAPI } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -28,7 +28,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showCredentialModal, setShowCredentialModal] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [pendingConnection, setPendingConnection] = useState<ServerConnection | null>(null);
   const [editingConnection, setEditingConnection] = useState<ServerConnection | null>(null);
+  const [editingCredential, setEditingCredential] = useState<Credential | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
@@ -103,9 +106,28 @@ export default function App() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handleConnect = async (connection: ServerConnection) => {
+  const handleConnect = async (connection: ServerConnection, password?: string) => {
+    // If RDP connection, launch external client
+    if (connection.connectionType === 'rdp') {
+      try {
+        await window.connectty.rdp.connect(connection.id);
+        showNotification('success', `Launching RDP client for ${connection.name}`);
+      } catch (err) {
+        showNotification('error', `Failed to launch RDP: ${(err as Error).message}`);
+      }
+      return;
+    }
+
+    // SSH connection
+    // If no credential and no password provided, show password prompt
+    if (!connection.credentialId && !password) {
+      setPendingConnection(connection);
+      setShowPasswordPrompt(true);
+      return;
+    }
+
     try {
-      const sessionId = await window.connectty.ssh.connect(connection.id);
+      const sessionId = await window.connectty.ssh.connect(connection.id, password);
 
       const terminal = new Terminal({
         cursorBlink: true,
@@ -145,6 +167,14 @@ export default function App() {
     }
   };
 
+  const handlePasswordSubmit = async (password: string) => {
+    setShowPasswordPrompt(false);
+    if (pendingConnection) {
+      await handleConnect(pendingConnection, password);
+      setPendingConnection(null);
+    }
+  };
+
   const handleDisconnect = async (sessionId: string) => {
     await window.connectty.ssh.disconnect(sessionId);
     setSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -165,6 +195,23 @@ export default function App() {
       await loadData();
       setShowConnectionModal(false);
       setEditingConnection(null);
+    } catch (err) {
+      showNotification('error', (err as Error).message);
+    }
+  };
+
+  const handleCreateCredential = async (data: Partial<Credential>) => {
+    try {
+      if (editingCredential) {
+        await window.connectty.credentials.update(editingCredential.id, data);
+        showNotification('success', 'Credential updated');
+      } else {
+        await window.connectty.credentials.create(data as Omit<Credential, 'id' | 'createdAt' | 'updatedAt' | 'usedBy'>);
+        showNotification('success', 'Credential created');
+      }
+      await loadData();
+      setShowCredentialModal(false);
+      setEditingCredential(null);
     } catch (err) {
       showNotification('error', (err as Error).message);
     }
@@ -221,13 +268,19 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1>Connectty</h1>
-          <p className="subtitle">SSH Connection Manager</p>
+          <p className="subtitle">SSH &amp; RDP Connection Manager</p>
         </div>
 
         <div className="sidebar-actions">
           <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
             + New Connection
           </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowCredentialModal(true)}>
+            Credentials
+          </button>
+        </div>
+
+        <div className="sidebar-actions">
           <button className="btn btn-secondary btn-sm" onClick={handleImport}>Import</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export</button>
         </div>
@@ -343,6 +396,31 @@ export default function App() {
         />
       )}
 
+      {/* Credential Modal */}
+      {showCredentialModal && (
+        <CredentialModal
+          credential={editingCredential}
+          credentials={credentials}
+          onClose={() => { setShowCredentialModal(false); setEditingCredential(null); }}
+          onSave={handleCreateCredential}
+          onEdit={(cred) => { setEditingCredential(cred); }}
+          onDelete={async (id) => {
+            await window.connectty.credentials.delete(id);
+            await loadData();
+            showNotification('success', 'Credential deleted');
+          }}
+        />
+      )}
+
+      {/* Password Prompt Modal */}
+      {showPasswordPrompt && pendingConnection && (
+        <PasswordPrompt
+          connection={pendingConnection}
+          onSubmit={handlePasswordSubmit}
+          onCancel={() => { setShowPasswordPrompt(false); setPendingConnection(null); }}
+        />
+      )}
+
       {/* Notification */}
       {notification && (
         <div className={`notification ${notification.type}`}>
@@ -372,6 +450,8 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }
     setShowMenu(true);
   };
 
+  const isRDP = connection.connectionType === 'rdp';
+
   return (
     <div
       className="connection-item"
@@ -380,7 +460,10 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }
     >
       <span className={`status-dot ${isConnected ? 'connected' : ''}`} />
       <div className="connection-info">
-        <div className="connection-name">{connection.name}</div>
+        <div className="connection-name">
+          <span className="connection-type-badge">{isRDP ? 'RDP' : 'SSH'}</span>
+          {connection.name}
+        </div>
         <div className="connection-host">{connection.username ? `${connection.username}@` : ''}{connection.hostname}:{connection.port}</div>
       </div>
 
@@ -405,6 +488,64 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete }
   );
 }
 
+// Password Prompt Modal
+interface PasswordPromptProps {
+  connection: ServerConnection;
+  onSubmit: (password: string) => void;
+  onCancel: () => void;
+}
+
+function PasswordPrompt({ connection, onSubmit, onCancel }: PasswordPromptProps) {
+  const [password, setPassword] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(password);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Enter Password</h3>
+          <button className="btn btn-icon" onClick={onCancel}>×</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <p style={{ marginBottom: '1rem', color: '#a0aec0' }}>
+              Enter password for <strong>{connection.username || 'root'}@{connection.hostname}</strong>
+            </p>
+            <div className="form-group">
+              <input
+                ref={inputRef}
+                type="password"
+                className="form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                autoComplete="current-password"
+              />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onCancel}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Connect
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // Connection Modal Component
 interface ConnectionModalProps {
   connection: ServerConnection | null;
@@ -417,11 +558,19 @@ interface ConnectionModalProps {
 function ConnectionModal({ connection, credentials, groups, onClose, onSave }: ConnectionModalProps) {
   const [name, setName] = useState(connection?.name || '');
   const [hostname, setHostname] = useState(connection?.hostname || '');
+  const [connectionType, setConnectionType] = useState<ConnectionType>(connection?.connectionType || 'ssh');
   const [port, setPort] = useState(connection?.port || 22);
   const [username, setUsername] = useState(connection?.username || '');
   const [credentialId, setCredentialId] = useState(connection?.credentialId || '');
   const [groupId, setGroupId] = useState(connection?.group || '');
   const [description, setDescription] = useState(connection?.description || '');
+
+  // Update port when connection type changes
+  useEffect(() => {
+    if (!connection) {
+      setPort(connectionType === 'rdp' ? 3389 : 22);
+    }
+  }, [connectionType, connection]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -429,6 +578,7 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
       name,
       hostname,
       port,
+      connectionType,
       username: username || undefined,
       credentialId: credentialId || undefined,
       group: groupId || undefined,
@@ -446,6 +596,18 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">Connection Type</label>
+              <select
+                className="form-select"
+                value={connectionType}
+                onChange={(e) => setConnectionType(e.target.value as ConnectionType)}
+              >
+                <option value="ssh">SSH (Linux/Unix)</option>
+                <option value="rdp">RDP (Windows)</option>
+              </select>
+            </div>
+
             <div className="form-group">
               <label className="form-label">Name *</label>
               <input
@@ -476,7 +638,7 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
                 type="number"
                 className="form-input"
                 value={port}
-                onChange={(e) => setPort(parseInt(e.target.value) || 22)}
+                onChange={(e) => setPort(parseInt(e.target.value) || (connectionType === 'rdp' ? 3389 : 22))}
                 min="1"
                 max="65535"
               />
@@ -489,7 +651,7 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
                 className="form-input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="root"
+                placeholder={connectionType === 'rdp' ? 'Administrator' : 'root'}
               />
             </div>
 
@@ -503,7 +665,7 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
                 <option value="">None (prompt for password)</option>
                 {credentials.map((cred) => (
                   <option key={cred.id} value={cred.id}>
-                    {cred.name} ({cred.type})
+                    {cred.name} ({cred.type}{cred.domain ? ` - ${cred.domain}` : ''})
                   </option>
                 ))}
               </select>
@@ -543,6 +705,218 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
             </button>
             <button type="submit" className="btn btn-primary">
               {connection ? 'Save Changes' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Credential Modal Component
+interface CredentialModalProps {
+  credential: Credential | null;
+  credentials: Credential[];
+  onClose: () => void;
+  onSave: (data: Partial<Credential>) => void;
+  onEdit: (cred: Credential) => void;
+  onDelete: (id: string) => void;
+}
+
+function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onDelete }: CredentialModalProps) {
+  const [showForm, setShowForm] = useState(!!credential);
+  const [name, setName] = useState(credential?.name || '');
+  const [type, setType] = useState<CredentialType>(credential?.type || 'password');
+  const [username, setUsername] = useState(credential?.username || '');
+  const [domain, setDomain] = useState(credential?.domain || '');
+  const [password, setPassword] = useState('');
+  const [privateKey, setPrivateKey] = useState(credential?.privateKey || '');
+  const [passphrase, setPassphrase] = useState('');
+
+  const resetForm = () => {
+    setName('');
+    setType('password');
+    setUsername('');
+    setDomain('');
+    setPassword('');
+    setPrivateKey('');
+    setPassphrase('');
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const data: Partial<Credential> = {
+      name,
+      type,
+      username,
+      domain: domain || undefined,
+    };
+
+    if (type === 'password' || type === 'domain') {
+      data.secret = password || undefined;
+    } else if (type === 'privateKey') {
+      data.privateKey = privateKey || undefined;
+      data.passphrase = passphrase || undefined;
+    }
+
+    onSave(data);
+    resetForm();
+    setShowForm(false);
+  };
+
+  if (!showForm) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>Credentials</h3>
+            <button className="btn btn-icon" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-body">
+            {credentials.length === 0 ? (
+              <p style={{ color: '#a0aec0', textAlign: 'center' }}>No credentials saved</p>
+            ) : (
+              <ul className="credential-list">
+                {credentials.map((cred) => (
+                  <li key={cred.id} className="credential-item">
+                    <div className="credential-info">
+                      <div className="credential-name">{cred.name}</div>
+                      <div className="credential-details">
+                        {cred.domain ? `${cred.domain}\\` : ''}{cred.username} ({cred.type})
+                      </div>
+                    </div>
+                    <div className="credential-actions">
+                      <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(cred); setShowForm(true); }}>
+                        Edit
+                      </button>
+                      <button className="btn btn-sm btn-danger" onClick={() => onDelete(cred.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose}>
+              Close
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+              + New Credential
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{credential ? 'Edit Credential' : 'New Credential'}</h3>
+          <button className="btn btn-icon" onClick={() => { resetForm(); setShowForm(false); }}>×</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">Name *</label>
+              <input
+                type="text"
+                className="form-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="My SSH Key"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Type</label>
+              <select
+                className="form-select"
+                value={type}
+                onChange={(e) => setType(e.target.value as CredentialType)}
+              >
+                <option value="password">Password</option>
+                <option value="privateKey">SSH Private Key</option>
+                <option value="domain">Domain (DOMAIN\user)</option>
+                <option value="agent">SSH Agent</option>
+              </select>
+            </div>
+
+            {type === 'domain' && (
+              <div className="form-group">
+                <label className="form-label">Domain</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  placeholder="MYDOMAIN"
+                />
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">Username *</label>
+              <input
+                type="text"
+                className="form-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={type === 'domain' ? 'Administrator' : 'root'}
+                required
+              />
+            </div>
+
+            {(type === 'password' || type === 'domain') && (
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={credential ? '(unchanged)' : 'Enter password'}
+                />
+              </div>
+            )}
+
+            {type === 'privateKey' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Private Key</label>
+                  <textarea
+                    className="form-input"
+                    value={privateKey}
+                    onChange={(e) => setPrivateKey(e.target.value)}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                    rows={6}
+                    style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Passphrase (if encrypted)</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={passphrase}
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    placeholder="Optional passphrase"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={() => { resetForm(); setShowForm(false); }}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              {credential ? 'Save Changes' : 'Create'}
             </button>
           </div>
         </form>

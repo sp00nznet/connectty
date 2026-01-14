@@ -590,3 +590,66 @@ body {
     opacity: 1;
   }
 }
+
+/* Connection Type Badges */
+.connection-type-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  border-radius: 3px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  margin-right: 6px;
+  text-transform: uppercase;
+}
+
+/* Credential List */
+.credential-list {
+  list-style: none;
+}
+
+.credential-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background-color: var(--bg-tertiary);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.credential-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.credential-name {
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.credential-details {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.credential-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Small Modal */
+.modal-sm {
+  max-width: 360px;
+}
+
+/* Danger Button */
+.btn-danger {
+  background-color: var(--error);
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+}
