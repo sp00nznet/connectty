@@ -68,6 +68,7 @@ export class DatabaseService {
         tags TEXT DEFAULT '[]',
         group_id TEXT,
         description TEXT,
+        serial_settings TEXT,
         provider_id TEXT,
         provider_host_id TEXT,
         created_at TEXT NOT NULL,
@@ -215,11 +216,11 @@ export class DatabaseService {
     const id = generateId();
     const now = new Date().toISOString();
     const connectionType = data.connectionType || 'ssh';
-    const defaultPort = connectionType === 'rdp' ? 3389 : 22;
+    const defaultPort = connectionType === 'rdp' ? 3389 : connectionType === 'serial' ? 0 : 22;
 
     const stmt = this.db.prepare(`
-      INSERT INTO connections (id, name, hostname, port, connection_type, os_type, username, credential_id, tags, group_id, description, provider_id, provider_host_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO connections (id, name, hostname, port, connection_type, os_type, username, credential_id, tags, group_id, description, serial_settings, provider_id, provider_host_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -234,6 +235,7 @@ export class DatabaseService {
       JSON.stringify(data.tags || []),
       data.group || null,
       data.description || null,
+      data.serialSettings ? JSON.stringify(data.serialSettings) : null,
       data.providerId || null,
       data.providerHostId || null,
       now,
@@ -302,6 +304,10 @@ export class DatabaseService {
     if (updates.providerHostId !== undefined) {
       fields.push('provider_host_id = ?');
       values.push(updates.providerHostId);
+    }
+    if (updates.serialSettings !== undefined) {
+      fields.push('serial_settings = ?');
+      values.push(updates.serialSettings ? JSON.stringify(updates.serialSettings) : null);
     }
 
     values.push(id);
@@ -936,6 +942,7 @@ export class DatabaseService {
       tags: JSON.parse(row.tags || '[]'),
       group: row.group_id || undefined,
       description: row.description || undefined,
+      serialSettings: row.serial_settings ? JSON.parse(row.serial_settings) : undefined,
       providerId: row.provider_id || undefined,
       providerHostId: row.provider_host_id || undefined,
       createdAt: new Date(row.created_at),
@@ -1087,6 +1094,7 @@ interface ConnectionRow {
   tags: string;
   group_id: string | null;
   description: string | null;
+  serial_settings: string | null;
   provider_id: string | null;
   provider_host_id: string | null;
   created_at: string;

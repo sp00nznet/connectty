@@ -149,6 +149,22 @@ const api = {
     connect: (connectionId: string): Promise<void> => ipcRenderer.invoke('rdp:connect', connectionId),
   },
 
+  // Serial operations
+  serial: {
+    connect: (connectionId: string): Promise<string> => ipcRenderer.invoke('serial:connect', connectionId),
+    disconnect: (sessionId: string): Promise<void> => ipcRenderer.invoke('serial:disconnect', sessionId),
+    write: (sessionId: string, data: string): Promise<void> => ipcRenderer.invoke('serial:write', sessionId, data),
+    listPorts: (): Promise<{ path: string; manufacturer?: string; productId?: string }[]> =>
+      ipcRenderer.invoke('serial:listPorts'),
+    onEvent: (callback: (sessionId: string, event: SSHSessionEvent) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, sessionId: string, serialEvent: SSHSessionEvent) => {
+        callback(sessionId, serialEvent);
+      };
+      ipcRenderer.on('serial:event', handler);
+      return () => ipcRenderer.removeListener('serial:event', handler);
+    },
+  },
+
   // Import/Export operations
   import: {
     file: (options: ImportOptions): Promise<{ connections: number; credentials: number; groups: number } | null> =>

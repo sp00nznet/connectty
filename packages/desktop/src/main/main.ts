@@ -8,6 +8,7 @@ import Store from 'electron-store';
 import { DatabaseService } from './database';
 import { SSHService } from './ssh';
 import { RDPService } from './rdp';
+import { SerialService } from './serial';
 import { SyncService } from './sync';
 import { CommandService } from './command';
 import { SFTPService } from './sftp';
@@ -48,6 +49,7 @@ let isQuitting = false;
 let db: DatabaseService;
 let sshService: SSHService;
 let rdpService: RDPService;
+let serialService: SerialService;
 let syncService: SyncService;
 let commandService: CommandService;
 let sftpService: SFTPService;
@@ -447,6 +449,40 @@ function setupIpcHandlers(): void {
     db.updateConnection(connectionId, { lastConnectedAt: new Date() });
   });
 
+  // Serial handlers
+  ipcMain.handle('serial:connect', async (_event, connectionId: string) => {
+    const connection = db.getConnection(connectionId);
+    if (!connection) {
+      throw new Error('Connection not found');
+    }
+
+    if (connection.connectionType !== 'serial') {
+      throw new Error('Not a serial connection');
+    }
+
+    if (!connection.serialSettings) {
+      throw new Error('Serial settings are required');
+    }
+
+    const sessionId = await serialService.connect(connection);
+
+    // Update last connected timestamp
+    db.updateConnection(connectionId, { lastConnectedAt: new Date() });
+    return sessionId;
+  });
+
+  ipcMain.handle('serial:disconnect', async (_event, sessionId: string) => {
+    return serialService.disconnect(sessionId);
+  });
+
+  ipcMain.handle('serial:write', async (_event, sessionId: string, data: string) => {
+    return serialService.write(sessionId, data);
+  });
+
+  ipcMain.handle('serial:listPorts', async () => {
+    return SerialService.listPorts();
+  });
+
   // Import/Export handlers
   ipcMain.handle('import:file', async (_event, options: ImportOptions) => {
     const result = await dialog.showOpenDialog(mainWindow!, {
@@ -829,6 +865,9 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('ssh:event', sessionId, event);
     });
     rdpService = new RDPService();
+    serialService = new SerialService((sessionId, event) => {
+      mainWindow?.webContents.send('serial:event', sessionId, event);
+    });
     syncService = new SyncService(db);
     commandService = new CommandService();
     sftpService = new SFTPService((progress) => {
