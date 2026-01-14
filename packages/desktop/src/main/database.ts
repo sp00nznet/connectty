@@ -670,7 +670,7 @@ export class DatabaseService {
       }
     }
 
-    return result as ProviderConfig;
+    return result as unknown as ProviderConfig;
   }
 
   // Helper methods

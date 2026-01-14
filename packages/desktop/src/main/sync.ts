@@ -30,6 +30,7 @@ export class SyncService {
               name: conn.name,
               hostname: conn.hostname,
               port: conn.port || 22,
+              connectionType: 'ssh',
               username: conn.username,
               tags: conn.tags || [],
               group: conn.group,
@@ -48,6 +49,7 @@ export class SyncService {
               name: conn.name,
               hostname: conn.hostname,
               port: conn.port || 22,
+              connectionType: 'ssh',
               username: conn.username,
               tags: conn.tags || [],
             });
@@ -71,6 +73,7 @@ export class SyncService {
               name: session.name,
               hostname: session.hostname,
               port: session.port || 22,
+              connectionType: 'ssh',
               username: session.username,
               tags: ['imported', 'putty'],
             });
@@ -128,6 +131,8 @@ export class SyncService {
         name: conn.name,
         hostname: conn.hostname,
         port: conn.port,
+        connectionType: conn.connectionType || 'ssh',
+        osType: conn.osType,
         username: conn.username,
         credentialId: conn.credentialId ? credentialIdMap.get(conn.credentialId) : undefined,
         tags: conn.tags,
