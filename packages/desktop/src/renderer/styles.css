@@ -1828,3 +1828,79 @@ body {
   border-color: var(--text-primary);
   box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--text-secondary);
 }
+
+/* ==========================================
+   Session Tab Type Badges
+   ========================================== */
+
+.session-type-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  border-radius: 3px;
+  margin-right: 6px;
+  text-transform: uppercase;
+}
+
+.session-type-badge.ssh {
+  background-color: #22c55e;
+  color: white;
+}
+
+.session-type-badge.sftp {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.session-tab.sftp {
+  border-left-color: #3b82f6;
+}
+
+/* ==========================================
+   SFTP Browser (inline, not modal)
+   ========================================== */
+
+.sftp-browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.sftp-browser .sftp-actions-bar {
+  border-bottom: 1px solid var(--border);
+}
+
+.sftp-actions-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 8px;
+}
+
+.sftp-browser .sftp-panels {
+  flex: 1;
+  min-height: 0;
+}
+
+/* FXP Panel */
+.fxp-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.fxp-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.fxp-select {
+  flex: 1;
+  max-width: 300px;
+}
