@@ -112,6 +112,17 @@ export class SSHService {
             config.agent = process.env.SSH_AUTH_SOCK;
             break;
         }
+      } else {
+        // No credential provided - try SSH agent first (works on Windows with Pageant/OpenSSH, macOS/Linux with ssh-agent)
+        if (process.platform === 'win32') {
+          // On Windows, try named pipe for OpenSSH agent
+          config.agent = '\\\\.\\pipe\\openssh-ssh-agent';
+        } else if (process.env.SSH_AUTH_SOCK) {
+          config.agent = process.env.SSH_AUTH_SOCK;
+        }
+
+        // Also enable keyboard-interactive auth to allow password prompts
+        config.tryKeyboard = true;
       }
 
       client.connect(config);

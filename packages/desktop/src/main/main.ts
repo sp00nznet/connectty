@@ -6,12 +6,24 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import { DatabaseService } from './database';
 import { SSHService } from './ssh';
+import { RDPService } from './rdp';
 import { SyncService } from './sync';
-import type { ServerConnection, Credential, ConnectionGroup, ImportOptions, ExportOptions } from '@connectty/shared';
+import { getProviderService } from './providers';
+import type {
+  ServerConnection,
+  Credential,
+  ConnectionGroup,
+  Provider,
+  DiscoveredHost,
+  ImportOptions,
+  ExportOptions,
+  OSType,
+} from '@connectty/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let db: DatabaseService;
 let sshService: SSHService;
+let rdpService: RDPService;
 let syncService: SyncService;
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -107,8 +119,128 @@ function setupIpcHandlers(): void {
     return db.deleteGroup(id);
   });
 
+  // Provider handlers
+  ipcMain.handle('providers:list', async () => {
+    return db.getProviders();
+  });
+
+  ipcMain.handle('providers:get', async (_event, id: string) => {
+    return db.getProvider(id);
+  });
+
+  ipcMain.handle('providers:create', async (_event, provider: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>) => {
+    return db.createProvider(provider);
+  });
+
+  ipcMain.handle('providers:update', async (_event, id: string, updates: Partial<Provider>) => {
+    return db.updateProvider(id, updates);
+  });
+
+  ipcMain.handle('providers:delete', async (_event, id: string) => {
+    return db.deleteProvider(id);
+  });
+
+  ipcMain.handle('providers:test', async (_event, id: string) => {
+    const provider = db.getProvider(id);
+    if (!provider) {
+      throw new Error('Provider not found');
+    }
+    const service = getProviderService(provider.type);
+    return service.testConnection(provider);
+  });
+
+  ipcMain.handle('providers:discover', async (_event, id: string) => {
+    const provider = db.getProvider(id);
+    if (!provider) {
+      throw new Error('Provider not found');
+    }
+
+    const service = getProviderService(provider.type);
+    const result = await service.discoverHosts(provider);
+
+    // Store discovered hosts
+    for (const host of result.hosts) {
+      db.upsertDiscoveredHost(host);
+    }
+
+    // Update last discovery time
+    db.updateProvider(id, { lastDiscoveryAt: new Date() });
+
+    return result;
+  });
+
+  // Discovered hosts handlers
+  ipcMain.handle('discovered:list', async (_event, providerId?: string) => {
+    return db.getDiscoveredHosts(providerId);
+  });
+
+  ipcMain.handle('discovered:import', async (_event, hostId: string, credentialId?: string) => {
+    const host = db.getDiscoveredHost(hostId);
+    if (!host) {
+      throw new Error('Host not found');
+    }
+
+    // Determine connection type and port based on OS
+    const connectionType = host.osType === 'windows' ? 'rdp' : 'ssh';
+    const port = connectionType === 'rdp' ? 3389 : 22;
+
+    // Auto-assign credential if not provided
+    let finalCredentialId = credentialId;
+    if (!finalCredentialId) {
+      finalCredentialId = findMatchingCredential(db, host);
+    }
+
+    // Create the connection
+    const connection = db.createConnection({
+      name: host.name,
+      hostname: host.publicIp || host.privateIp || host.hostname || host.name,
+      port,
+      connectionType,
+      osType: host.osType,
+      credentialId: finalCredentialId,
+      tags: Object.entries(host.tags).map(([k, v]) => `${k}:${v}`),
+      providerId: host.providerId,
+      providerHostId: host.providerHostId,
+      description: host.osName,
+    });
+
+    // Mark as imported
+    db.markHostImported(hostId, connection.id);
+
+    return connection;
+  });
+
+  ipcMain.handle('discovered:importAll', async (_event, providerId: string) => {
+    const hosts = db.getDiscoveredHosts(providerId).filter(h => !h.imported);
+    const connections: ServerConnection[] = [];
+
+    for (const host of hosts) {
+      const connectionType = host.osType === 'windows' ? 'rdp' : 'ssh';
+      const port = connectionType === 'rdp' ? 3389 : 22;
+      const credentialId = findMatchingCredential(db, host);
+
+      const connection = db.createConnection({
+        name: host.name,
+        hostname: host.publicIp || host.privateIp || host.hostname || host.name,
+        port,
+        connectionType,
+        osType: host.osType,
+        credentialId,
+        tags: Object.entries(host.tags).map(([k, v]) => `${k}:${v}`),
+        providerId: host.providerId,
+        providerHostId: host.providerHostId,
+        description: host.osName,
+      });
+
+      db.markHostImported(host.id, connection.id);
+      connections.push(connection);
+    }
+
+    return connections;
+  });
+
   // SSH session handlers
-  ipcMain.handle('ssh:connect', async (_event, connectionId: string) => {
+  ipcMain.handle('ssh:connect', async (_event, connectionId: string, password?: string) => {
     const connection = db.getConnection(connectionId);
     if (!connection) {
       throw new Error('Connection not found');
@@ -117,6 +249,20 @@ function setupIpcHandlers(): void {
     let credential: Credential | null = null;
     if (connection.credentialId) {
       credential = db.getCredential(connection.credentialId);
+    }
+
+    // If password provided (from prompt), create a temporary credential
+    if (password && !credential) {
+      credential = {
+        id: 'temp',
+        name: 'temp',
+        type: 'password',
+        username: connection.username || 'root',
+        secret: password,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        usedBy: [],
+      };
     }
 
     const sessionId = await sshService.connect(connection, credential);
@@ -137,6 +283,24 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('ssh:resize', async (_event, sessionId: string, cols: number, rows: number) => {
     return sshService.resize(sessionId, cols, rows);
+  });
+
+  // RDP handlers
+  ipcMain.handle('rdp:connect', async (_event, connectionId: string) => {
+    const connection = db.getConnection(connectionId);
+    if (!connection) {
+      throw new Error('Connection not found');
+    }
+
+    let credential: Credential | null = null;
+    if (connection.credentialId) {
+      credential = db.getCredential(connection.credentialId);
+    }
+
+    await rdpService.connect(connection, credential);
+
+    // Update last connected timestamp
+    db.updateConnection(connectionId, { lastConnectedAt: new Date() });
   });
 
   // Import/Export handlers
@@ -197,6 +361,35 @@ function setupIpcHandlers(): void {
   });
 }
 
+/**
+ * Find a matching credential for a discovered host based on auto-assign rules
+ */
+function findMatchingCredential(database: DatabaseService, host: DiscoveredHost): string | undefined {
+  const credentials = database.getCredentials();
+
+  for (const cred of credentials) {
+    // Check OS type match
+    if (cred.autoAssignOSTypes?.length) {
+      if (cred.autoAssignOSTypes.includes(host.osType)) {
+        return cred.id;
+      }
+    }
+
+    // Check hostname pattern match
+    if (cred.autoAssignPatterns?.length) {
+      const hostname = host.hostname || host.name;
+      for (const pattern of cred.autoAssignPatterns) {
+        const regex = new RegExp(pattern.replace(/\*/g, '.*'), 'i');
+        if (regex.test(hostname)) {
+          return cred.id;
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
 app.whenReady().then(async () => {
   // Initialize services
   const userDataPath = app.getPath('userData');
@@ -204,6 +397,7 @@ app.whenReady().then(async () => {
   sshService = new SSHService((sessionId, event) => {
     mainWindow?.webContents.send('ssh:event', sessionId, event);
   });
+  rdpService = new RDPService();
   syncService = new SyncService(db);
 
   setupIpcHandlers();

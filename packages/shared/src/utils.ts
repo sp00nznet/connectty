@@ -13,9 +13,11 @@ export function createConnection(
   partial: Partial<ServerConnection> & Pick<ServerConnection, 'name' | 'hostname'>
 ): ServerConnection {
   const now = new Date();
+  const connectionType = partial.connectionType || 'ssh';
   return {
     id: generateId(),
-    port: 22,
+    port: connectionType === 'rdp' ? 3389 : 22,
+    connectionType,
     tags: [],
     createdAt: now,
     updatedAt: now,
