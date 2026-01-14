@@ -312,9 +312,31 @@ export class DatabaseService {
   }
 
   deleteConnection(id: string): boolean {
+    // Reset the discovered_hosts imported flag if this connection was imported from a provider
+    this.db.prepare(
+      'UPDATE discovered_hosts SET imported = 0, connection_id = NULL WHERE connection_id = ?'
+    ).run(id);
+
     const stmt = this.db.prepare('DELETE FROM connections WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
+  }
+
+  getConnectionsByProvider(providerId: string): ServerConnection[] {
+    const stmt = this.db.prepare('SELECT * FROM connections WHERE provider_id = ? ORDER BY name');
+    const rows = stmt.all(providerId) as ConnectionRow[];
+    return rows.map((row) => this.rowToConnection(row));
+  }
+
+  deleteConnectionsByProvider(providerId: string): number {
+    // Reset all discovered_hosts imported flags for this provider
+    this.db.prepare(
+      'UPDATE discovered_hosts SET imported = 0, connection_id = NULL WHERE provider_id = ?'
+    ).run(providerId);
+
+    const stmt = this.db.prepare('DELETE FROM connections WHERE provider_id = ?');
+    const result = stmt.run(providerId);
+    return result.changes;
   }
 
   // Credential methods

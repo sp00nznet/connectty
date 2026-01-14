@@ -115,6 +115,16 @@ const api = {
       ipcRenderer.invoke('discovered:import', hostId, credentialId),
     importAll: (providerId: string): Promise<ServerConnection[]> =>
       ipcRenderer.invoke('discovered:importAll', providerId),
+    importSelected: (hostIds: string[]): Promise<ServerConnection[]> =>
+      ipcRenderer.invoke('discovered:importSelected', hostIds),
+  },
+
+  // Connection bulk operations
+  connectionsBulk: {
+    getByProvider: (providerId: string): Promise<ServerConnection[]> =>
+      ipcRenderer.invoke('connections:getByProvider', providerId),
+    deleteByProvider: (providerId: string): Promise<number> =>
+      ipcRenderer.invoke('connections:deleteByProvider', providerId),
   },
 
   // SSH operations
