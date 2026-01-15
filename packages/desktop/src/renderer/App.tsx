@@ -1247,6 +1247,7 @@ export default function App() {
         <CredentialModal
           credential={editingCredential}
           credentials={credentials}
+          groups={groups}
           onClose={() => { setShowCredentialModal(false); setEditingCredential(null); }}
           onSave={handleCreateCredential}
           onEdit={(cred) => { setEditingCredential(cred); }}
@@ -1846,13 +1847,14 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
 interface CredentialModalProps {
   credential: Credential | null;
   credentials: Credential[];
+  groups: ConnectionGroup[];
   onClose: () => void;
   onSave: (data: Partial<Credential>) => Promise<void>;
   onEdit: (cred: Credential | null) => void;
   onDelete: (id: string) => void;
 }
 
-function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onDelete }: CredentialModalProps) {
+function CredentialModal({ credential, credentials, groups, onClose, onSave, onEdit, onDelete }: CredentialModalProps) {
   const [showForm, setShowForm] = useState(!!credential);
   const [name, setName] = useState(credential?.name || '');
   const [type, setType] = useState<CredentialType>(credential?.type || 'password');
@@ -1861,29 +1863,14 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState(credential?.privateKey || '');
   const [passphrase, setPassphrase] = useState('');
-  const [autoAssignOSTypes, setAutoAssignOSTypes] = useState<string[]>(credential?.autoAssignOSTypes || []);
-
-  const osTypeOptions: { value: OSType; label: string }[] = [
-    { value: 'linux', label: 'Linux (Ubuntu, CentOS, Debian, etc.)' },
-    { value: 'windows', label: 'Windows' },
-    { value: 'unix', label: 'Unix (FreeBSD, Solaris, etc.)' },
-    { value: 'esxi', label: 'VMware ESXi' },
-  ];
-
-  const toggleOSType = (osType: string) => {
-    setAutoAssignOSTypes(prev =>
-      prev.includes(osType)
-        ? prev.filter(t => t !== osType)
-        : [...prev, osType]
-    );
-  };
+  const [autoAssignGroup, setAutoAssignGroup] = useState<string>(credential?.autoAssignGroup || '');
 
   const populateForm = (cred: Credential) => {
     setName(cred.name);
     setType(cred.type);
     setUsername(cred.username);
     setDomain(cred.domain || '');
-    setAutoAssignOSTypes(cred.autoAssignOSTypes || []);
+    setAutoAssignGroup(cred.autoAssignGroup || '');
     setPrivateKey(cred.privateKey || '');
     // Don't populate password/passphrase for security - user must re-enter
     setPassword('');
@@ -1898,7 +1885,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
     setPassword('');
     setPrivateKey('');
     setPassphrase('');
-    setAutoAssignOSTypes([]);
+    setAutoAssignGroup('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1908,7 +1895,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
       type,
       username,
       domain: domain || undefined,
-      autoAssignOSTypes: autoAssignOSTypes.length > 0 ? autoAssignOSTypes as OSType[] : undefined,
+      autoAssignGroup: autoAssignGroup || undefined,
     };
 
     if (type === 'password' || type === 'domain') {
@@ -1943,11 +1930,11 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
                       <div className="credential-details">
                         {cred.domain ? `${cred.domain}\\` : ''}{cred.username} ({cred.type})
                       </div>
-                      {cred.autoAssignOSTypes && cred.autoAssignOSTypes.length > 0 && (
+                      {cred.autoAssignGroup && (
                         <div className="credential-os-tags">
-                          {cred.autoAssignOSTypes.map(os => (
-                            <span key={os} className="os-tag">{os}</span>
-                          ))}
+                          <span className="os-tag">
+                            Auto-assign: {groups.find(g => g.id === cred.autoAssignGroup)?.name || 'Unknown group'}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -2077,22 +2064,20 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
             )}
 
             <div className="form-group">
-              <label className="form-label">Auto-assign to OS Types</label>
+              <label className="form-label">Auto-assign to Group</label>
               <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginBottom: '8px' }}>
-                When importing discovered hosts, automatically assign this credential to systems with these OS types
+                When importing discovered hosts into this group, automatically assign this credential
               </p>
-              <div className="checkbox-group">
-                {osTypeOptions.map(({ value, label }) => (
-                  <label key={value} className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={autoAssignOSTypes.includes(value)}
-                      onChange={() => toggleOSType(value)}
-                    />
-                    <span>{label}</span>
-                  </label>
+              <select
+                className="form-input"
+                value={autoAssignGroup}
+                onChange={(e) => setAutoAssignGroup(e.target.value)}
+              >
+                <option value="">None</option>
+                {groups.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
-              </div>
+              </select>
             </div>
           </div>
 

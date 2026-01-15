@@ -100,7 +100,7 @@ Manage authentication credentials.
   "username": "root",
   "domain": "CORP",         // For domain credentials
   "secret": "********",     // Masked in responses
-  "autoAssignOSTypes": ["linux", "unix"],
+  "autoAssignGroup": "group-uuid",    // Auto-assign to hosts imported into this group
   "autoAssignPatterns": ["web-*", "*-prod-*"],
   "createdAt": "2024-01-15T10:30:00Z",
   "updatedAt": "2024-01-15T10:30:00Z"
