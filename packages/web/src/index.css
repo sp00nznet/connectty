@@ -1579,6 +1579,24 @@ body {
   font-size: 0.875rem;
 }
 
+/* Welcome buttons */
+.welcome-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Local shell button in tab bar */
+.local-shell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.local-shell-btn svg {
+  flex-shrink: 0;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
   .command-execute,

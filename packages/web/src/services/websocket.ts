@@ -101,6 +101,10 @@ class WebSocketService {
     this.send({ type: 'connect', connectionId });
   }
 
+  connectLocal(): void {
+    this.send({ type: 'local-connect' });
+  }
+
   disconnectSSH(sessionId: string): void {
     this.send({ type: 'disconnect', sessionId });
   }

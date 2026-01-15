@@ -197,6 +197,70 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     wsService.connectSSH(connection.id);
   };
 
+  const handleLocalShell = () => {
+    if (connectingId === 'local') return;
+
+    setConnectingId('local');
+
+    // Create terminal before connecting
+    const terminal = new Terminal({
+      cursorBlink: true,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontSize: 14,
+      theme: {
+        background: '#000000',
+        foreground: '#ffffff',
+        cursor: '#ffffff',
+      },
+    });
+
+    const fitAddon = new FitAddon();
+    const webLinksAddon = new WebLinksAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.loadAddon(webLinksAddon);
+
+    // We need to wait for the sessionId from the server
+    const handleConnected = (event: SSHSessionEvent & { sessionId?: string; sessionType?: string; type: string }) => {
+      if (event.type === 'connected' && event.sessionId && event.sessionType === 'local') {
+        const sessionId = event.sessionId;
+
+        terminal.onData((data) => {
+          wsService.sendData(sessionId, data);
+        });
+
+        terminal.onResize(({ cols, rows }) => {
+          wsService.resize(sessionId, cols, rows);
+        });
+
+        const newSession: SSHSession = {
+          id: sessionId,
+          connectionId: 'local',
+          connectionName: 'Local Shell',
+          terminal,
+          fitAddon,
+        };
+
+        setSessions((prev) => [...prev, newSession]);
+        setActiveSessionId(sessionId);
+        setConnectingId(null);
+        showNotification('success', 'Local shell connected');
+
+        // Remove this one-time handler
+        unsubscribe();
+      } else if (event.type === 'error') {
+        setConnectingId(null);
+        showNotification('error', event.message || 'Failed to connect local shell');
+        terminal.dispose();
+        unsubscribe();
+      }
+    };
+
+    const unsubscribe = wsService.onMessage(handleConnected);
+
+    // Initiate local connection
+    wsService.connectLocal();
+  };
+
   const handleDisconnect = (sessionId: string) => {
     wsService.disconnectSSH(sessionId);
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
@@ -414,6 +478,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     >
                       +
                     </button>
+                    <button
+                      className="new-tab-btn local-shell-btn"
+                      onClick={handleLocalShell}
+                      disabled={connectingId === 'local'}
+                      title="Local Shell"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                      </svg>
+                    </button>
                   </div>
 
                   {/* Terminal */}
@@ -427,9 +503,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </svg>
                   <h2>Welcome to Connectty</h2>
                   <p>Select a connection from the sidebar or create a new one to get started.</p>
-                  <button className="btn btn-primary" onClick={() => setShowConnectionModal(true)}>
-                    Create Connection
-                  </button>
+                  <div className="welcome-buttons">
+                    <button className="btn btn-primary" onClick={() => setShowConnectionModal(true)}>
+                      Create Connection
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleLocalShell}
+                      disabled={connectingId === 'local'}
+                    >
+                      {connectingId === 'local' ? 'Connecting...' : 'Local Shell'}
+                    </button>
+                  </div>
                 </div>
               )}
             </>
