@@ -122,6 +122,7 @@ const api = {
       ipcRenderer.invoke('providers:update', id, updates),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('providers:delete', id),
     test: (id: string): Promise<boolean> => ipcRenderer.invoke('providers:test', id),
+    testConfig: (providerData: Partial<Provider>): Promise<boolean> => ipcRenderer.invoke('providers:testConfig', providerData),
     discover: (id: string): Promise<DiscoveryResult> => ipcRenderer.invoke('providers:discover', id),
   },
 

@@ -260,6 +260,26 @@ function setupIpcHandlers(): void {
     return service.testConnection(provider);
   });
 
+  // Test provider connection with config (before saving)
+  ipcMain.handle('providers:testConfig', async (_event, providerData: Partial<Provider>) => {
+    if (!providerData.type || !providerData.config) {
+      throw new Error('Provider type and config are required');
+    }
+    const service = getProviderService(providerData.type);
+    // Create a temporary provider object for testing
+    const tempProvider: Provider = {
+      id: 'temp-test',
+      name: providerData.name || 'Test',
+      type: providerData.type,
+      enabled: true,
+      config: providerData.config,
+      autoDiscover: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    return service.testConnection(tempProvider);
+  });
+
   ipcMain.handle('providers:discover', async (_event, id: string) => {
     const provider = db.getProvider(id);
     if (!provider) {

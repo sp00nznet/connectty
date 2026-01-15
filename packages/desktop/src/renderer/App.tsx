@@ -104,7 +104,7 @@ export default function App() {
   const [discoveredHosts, setDiscoveredHosts] = useState<DiscoveredHost[]>([]);
   const [hostSelectionProvider, setHostSelectionProvider] = useState<Provider | null>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
-  const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
+  const [showRepeatedActionsModal, setShowRepeatedActionsModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<ConnectionGroup | null>(null);
   // FXP: track selected SFTP session for site-to-site transfer
@@ -127,6 +127,16 @@ export default function App() {
   const tabContextMenuRef = useRef<HTMLDivElement>(null);
   const [customTabNames, setCustomTabNames] = useState<Map<string, string>>(new Map());
   const [renamingTab, setRenamingTab] = useState<{ sessionId: string; currentName: string } | null>(null);
+
+  // Terminal command history (from SSH and local shells)
+  interface TerminalCommand {
+    command: string;
+    sessionType: 'ssh' | 'local' | 'serial';
+    sessionName: string;
+    timestamp: Date;
+  }
+  const [terminalCommands, setTerminalCommands] = useState<TerminalCommand[]>([]);
+  const commandBuffersRef = useRef<Map<string, string>>(new Map());
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -385,6 +395,38 @@ export default function App() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  // Helper to capture terminal commands when Enter is pressed
+  const captureTerminalCommand = (sessionId: string, data: string, sessionType: 'ssh' | 'local' | 'serial', sessionName: string) => {
+    const buffer = commandBuffersRef.current.get(sessionId) || '';
+
+    // Check for Enter key (carriage return)
+    if (data === '\r' || data === '\n') {
+      const command = buffer.trim();
+      if (command && command.length > 0) {
+        setTerminalCommands(prev => {
+          const newCommands = [{
+            command,
+            sessionType,
+            sessionName,
+            timestamp: new Date(),
+          }, ...prev].slice(0, 100); // Keep last 100 commands
+          return newCommands;
+        });
+      }
+      commandBuffersRef.current.set(sessionId, '');
+    } else if (data === '\x7f' || data === '\b') {
+      // Backspace - remove last character
+      commandBuffersRef.current.set(sessionId, buffer.slice(0, -1));
+    } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+      // Printable character
+      commandBuffersRef.current.set(sessionId, buffer + data);
+    } else if (data.length > 1 && !data.includes('\x1b')) {
+      // Pasted text (multiple printable chars without escape sequences)
+      commandBuffersRef.current.set(sessionId, buffer + data);
+    }
+    // Ignore control sequences (arrow keys, etc.)
+  };
+
   const handleConnect = async (connection: ServerConnection, password?: string) => {
     // If RDP connection, try embedded client first, fall back to external
     if (connection.connectionType === 'rdp') {
@@ -485,6 +527,7 @@ export default function App() {
       terminal.loadAddon(fitAddon);
 
       terminal.onData((data) => {
+        captureTerminalCommand(sessionId, data, 'ssh', connection.name);
         window.connectty.ssh.write(sessionId, data);
       });
 
@@ -622,6 +665,7 @@ export default function App() {
 
       // Handle terminal input
       terminal.onData((data) => {
+        captureTerminalCommand(sessionId, data, 'local', shell.name);
         window.connectty.localShell.write(sessionId, data);
       });
 
@@ -894,11 +938,11 @@ export default function App() {
         </div>
 
         <div className="sidebar-actions sidebar-actions-grid">
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkActionsModal(true)}>
-            Bulk Actions
-          </button>
           <button className="btn btn-secondary btn-sm" onClick={handleImport}>Import</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
+            Repeated Actions
+          </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowSettingsModal(true)}>
             Settings
           </button>
@@ -1325,12 +1369,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Bulk Actions Modal */}
-      {showBulkActionsModal && (
-        <BulkActionsModal
+      {/* Repeated Actions Modal */}
+      {showRepeatedActionsModal && (
+        <RepeatedActionsModal
           connections={connections}
           groups={groups}
-          onClose={() => setShowBulkActionsModal(false)}
+          terminalCommands={terminalCommands}
+          onClose={() => setShowRepeatedActionsModal(false)}
           onNotification={showNotification}
         />
       )}
@@ -2112,6 +2157,8 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
   const [showForm, setShowForm] = useState(!!provider);
   const [name, setName] = useState(provider?.name || '');
   const [type, setType] = useState<ProviderType>(provider?.type || 'esxi');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<'success' | 'failed' | null>(null);
   // ESXi/Proxmox fields
   const [host, setHost] = useState((provider?.config as any)?.host || '');
   const [port, setPort] = useState((provider?.config as any)?.port || (type === 'esxi' ? 443 : type === 'proxmox' ? 8006 : 443));
@@ -2269,6 +2316,37 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     await onSave(data);
     resetForm();
     setShowForm(false);
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      let testConfig: any;
+
+      if (type === 'esxi') {
+        testConfig = { type: 'esxi', host, port, username, password, ignoreCertErrors };
+      } else if (type === 'proxmox') {
+        testConfig = { type: 'proxmox', host, port, username, password, realm, ignoreCertErrors };
+      } else if (type === 'aws') {
+        testConfig = { type: 'aws', accessKeyId, secretAccessKey, region };
+      } else if (type === 'gcp') {
+        testConfig = { type: 'gcp', projectId, serviceAccountKey };
+      } else if (type === 'azure') {
+        testConfig = { type: 'azure', tenantId, clientId, clientSecret, subscriptionId };
+      } else if (type === 'bigfix') {
+        testConfig = { type: 'bigfix', host, port, username, password, ignoreCertErrors };
+      }
+
+      const success = await window.connectty.providers.testConfig({ name, type, config: testConfig });
+      setTestResult(success ? 'success' : 'failed');
+    } catch (error) {
+      console.error('Test connection failed:', error);
+      setTestResult('failed');
+    } finally {
+      setTesting(false);
+    }
   };
 
   if (!showForm) {
@@ -2605,13 +2683,25 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
             )}
           </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={() => { resetForm(); setShowForm(false); }}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary">
-              {provider ? 'Save Changes' : 'Add Provider'}
-            </button>
+          <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+            <div>
+              <button
+                type="button"
+                className={`btn ${testResult === 'success' ? 'btn-success' : testResult === 'failed' ? 'btn-danger' : 'btn-secondary'}`}
+                onClick={handleTestConnection}
+                disabled={testing || !host || !username || (!password && !provider)}
+              >
+                {testing ? 'Testing...' : testResult === 'success' ? 'Connected!' : testResult === 'failed' ? 'Failed' : 'Test Connection'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => { resetForm(); setShowForm(false); }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                {provider ? 'Save Changes' : 'Add Provider'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -2789,15 +2879,23 @@ function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupM
   );
 }
 
-// Bulk Actions Modal Component
-interface BulkActionsModalProps {
+// Repeated Actions Modal Component
+interface TerminalCommandEntry {
+  command: string;
+  sessionType: 'ssh' | 'local' | 'serial';
+  sessionName: string;
+  timestamp: Date;
+}
+
+interface RepeatedActionsModalProps {
   connections: ServerConnection[];
   groups: ConnectionGroup[];
+  terminalCommands: TerminalCommandEntry[];
   onClose: () => void;
   onNotification: (type: 'success' | 'error', message: string) => void;
 }
 
-function BulkActionsModal({ connections, groups, onClose, onNotification }: BulkActionsModalProps) {
+function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, onNotification }: RepeatedActionsModalProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<'execute' | 'saved' | 'history'>('execute');
 
@@ -3027,7 +3125,7 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Bulk Actions</h3>
+          <h3>Repeated Actions</h3>
           <button className="btn btn-icon" onClick={onClose}>×</button>
         </div>
 
@@ -3053,7 +3151,7 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
           </button>
         </div>
 
-        <div className="modal-body" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+        <div className="modal-body">
           {/* Execute Tab */}
           {activeTab === 'execute' && (
             <div className="bulk-execute-content">
@@ -3418,43 +3516,98 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
           {/* History Tab */}
           {activeTab === 'history' && (
             <div className="history-content">
-              {commandHistory.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#a0aec0' }}>
-                  No command history yet.
-                </p>
-              ) : (
-                <div className="history-list">
-                  {commandHistory.map(exec => (
-                    <div key={exec.id} className={`history-item ${exec.status}`}>
-                      <div className="history-header">
-                        <span className="history-name">{exec.commandName}</span>
-                        <span className={`history-status ${exec.status}`}>{exec.status}</span>
-                        <span className="history-time">
-                          {new Date(exec.startedAt).toLocaleString()}
+              {/* Terminal Command History */}
+              {terminalCommands.length > 0 && (
+                <div className="bulk-section">
+                  <h4>Recent Terminal Commands</h4>
+                  <div className="terminal-history-list" style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '16px' }}>
+                    {terminalCommands.map((cmd, idx) => (
+                      <div key={idx} className="terminal-history-item" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '8px 12px',
+                        background: 'var(--bg-tertiary)',
+                        borderRadius: '6px',
+                        marginBottom: '4px',
+                        fontFamily: 'monospace',
+                        fontSize: '13px',
+                      }}>
+                        <span className={`os-badge ${cmd.sessionType}`} style={{
+                          fontSize: '10px',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: cmd.sessionType === 'ssh' ? '#3b82f6' : cmd.sessionType === 'local' ? '#22c55e' : '#a855f7',
+                          color: 'white',
+                          textTransform: 'uppercase',
+                        }}>
+                          {cmd.sessionType}
                         </span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '11px', minWidth: '80px' }}>
+                          {cmd.sessionName}
+                        </span>
+                        <code style={{ flex: 1, color: 'var(--text-primary)' }}>{cmd.command}</code>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                          {cmd.timestamp.toLocaleTimeString()}
+                        </span>
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          style={{ padding: '2px 8px', fontSize: '11px' }}
+                          onClick={() => {
+                            setInlineCommand(cmd.command);
+                            setActiveTab('execute');
+                          }}
+                          title="Use this command"
+                        >
+                          Use
+                        </button>
                       </div>
-                      <div className="history-details">
-                        <span>{exec.connectionIds.length} hosts</span>
-                        <span className={`os-badge ${exec.targetOS}`}>{exec.targetOS}</span>
-                      </div>
-                      <pre className="history-command">{exec.command}</pre>
-                      {exec.results && exec.results.length > 0 && (
-                        <div className="history-results-summary">
-                          <span className="success">
-                            {exec.results.filter(r => r.status === 'success').length} success
-                          </span>
-                          <span className="error">
-                            {exec.results.filter(r => r.status === 'error').length} failed
-                          </span>
-                          <span className="skipped">
-                            {exec.results.filter(r => r.status === 'skipped').length} skipped
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Bulk Execution History */}
+              <div className="bulk-section">
+                <h4>Bulk Execution History</h4>
+                {commandHistory.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#a0aec0' }}>
+                    No bulk command history yet.
+                  </p>
+                ) : (
+                  <div className="history-list">
+                    {commandHistory.map(exec => (
+                      <div key={exec.id} className={`history-item ${exec.status}`}>
+                        <div className="history-header">
+                          <span className="history-name">{exec.commandName}</span>
+                          <span className={`history-status ${exec.status}`}>{exec.status}</span>
+                          <span className="history-time">
+                            {new Date(exec.startedAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="history-details">
+                          <span>{exec.connectionIds.length} hosts</span>
+                          <span className={`os-badge ${exec.targetOS}`}>{exec.targetOS}</span>
+                        </div>
+                        <pre className="history-command">{exec.command}</pre>
+                        {exec.results && exec.results.length > 0 && (
+                          <div className="history-results-summary">
+                            <span className="success">
+                              {exec.results.filter(r => r.status === 'success').length} success
+                            </span>
+                            <span className="error">
+                              {exec.results.filter(r => r.status === 'error').length} failed
+                            </span>
+                            <span className="skipped">
+                              {exec.results.filter(r => r.status === 'skipped').length} skipped
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
