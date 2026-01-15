@@ -458,15 +458,29 @@ function setupIpcHandlers(): void {
 
     // Try embedded RDP if requested and available
     if (embedded && rdpSessionService.isAvailable()) {
-      const sessionId = await rdpSessionService.connect(connection, credential);
-      db.updateConnection(connectionId, { lastConnectedAt: new Date() });
-      return sessionId;
+      try {
+        const sessionId = await rdpSessionService.connect(connection, credential);
+        db.updateConnection(connectionId, { lastConnectedAt: new Date() });
+        return { sessionId, embedded: true };
+      } catch (err: any) {
+        // Check for NLA/CredSSP errors (code 5) or other auth failures
+        // These require native client with proper Windows auth support
+        const errorMsg = err?.message || '';
+        if (errorMsg.includes('code:5') || errorMsg.includes('code:1') ||
+            errorMsg.includes('SSL') || errorMsg.includes('NLA') ||
+            errorMsg.includes('CredSSP') || errorMsg.includes('authentication')) {
+          console.log('Embedded RDP failed due to NLA/SSL, falling back to native client');
+          // Fall through to native client
+        } else {
+          throw err;
+        }
+      }
     }
 
     // Fall back to external RDP client
     await rdpService.connect(connection, credential);
     db.updateConnection(connectionId, { lastConnectedAt: new Date() });
-    return null; // No session ID for external RDP
+    return { sessionId: null, embedded: false, reason: 'native' }; // No session ID for external RDP
   });
 
   ipcMain.handle('rdp:disconnect', async (_event, sessionId: string) => {
