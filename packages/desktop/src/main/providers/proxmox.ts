@@ -29,14 +29,29 @@ export class ProxmoxProvider implements IProviderService {
     const hosts: DiscoveredHost[] = [];
 
     try {
+      console.log(`[Proxmox] Starting discovery for ${config.host}:${config.port}`);
       const { ticket, csrfToken } = await this.login(config);
+      console.log('[Proxmox] Login successful');
 
       // Get all nodes
       const nodes = await this.getNodes(config, ticket);
+      console.log(`[Proxmox] Found ${nodes?.length || 0} nodes:`, nodes?.map((n: any) => n.node));
+
+      if (!Array.isArray(nodes) || nodes.length === 0) {
+        console.log('[Proxmox] No nodes found or invalid response');
+        return {
+          providerId: provider.id,
+          providerName: provider.name,
+          success: true,
+          hosts: [],
+          discoveredAt: new Date(),
+        };
+      }
 
       for (const node of nodes) {
         // Get VMs on this node
         const vms = await this.getVMs(config, ticket, node.node);
+        console.log(`[Proxmox] Node ${node.node}: Found ${vms.length} VMs`);
         for (const vm of vms) {
           const vmConfig = await this.getVMConfig(config, ticket, node.node, vm.vmid);
           const osType = detectOSType(vmConfig.ostype, vm.name);
@@ -68,6 +83,7 @@ export class ProxmoxProvider implements IProviderService {
 
         // Get LXC containers on this node
         const containers = await this.getContainers(config, ticket, node.node);
+        console.log(`[Proxmox] Node ${node.node}: Found ${containers.length} containers`);
         for (const ct of containers) {
           const ctConfig = await this.getContainerConfig(config, ticket, node.node, ct.vmid);
 
@@ -96,6 +112,7 @@ export class ProxmoxProvider implements IProviderService {
         }
       }
 
+      console.log(`[Proxmox] Discovery complete: Found ${hosts.length} total hosts`);
       return {
         providerId: provider.id,
         providerName: provider.name,
@@ -104,6 +121,7 @@ export class ProxmoxProvider implements IProviderService {
         discoveredAt: new Date(),
       };
     } catch (error) {
+      console.error('[Proxmox] Discovery failed:', error);
       return {
         providerId: provider.id,
         providerName: provider.name,
@@ -197,7 +215,13 @@ export class ProxmoxProvider implements IProviderService {
   }
 
   private async getVMs(config: ProxmoxConfig, ticket: string, node: string): Promise<any[]> {
-    return this.apiGet(config, ticket, `/nodes/${node}/qemu`);
+    try {
+      const result = await this.apiGet(config, ticket, `/nodes/${node}/qemu`);
+      return Array.isArray(result) ? result : [];
+    } catch (error) {
+      console.error(`Failed to get VMs for node ${node}:`, error);
+      return [];
+    }
   }
 
   private async getVMConfig(config: ProxmoxConfig, ticket: string, node: string, vmid: number): Promise<any> {
@@ -209,7 +233,13 @@ export class ProxmoxProvider implements IProviderService {
   }
 
   private async getContainers(config: ProxmoxConfig, ticket: string, node: string): Promise<any[]> {
-    return this.apiGet(config, ticket, `/nodes/${node}/lxc`);
+    try {
+      const result = await this.apiGet(config, ticket, `/nodes/${node}/lxc`);
+      return Array.isArray(result) ? result : [];
+    } catch (error) {
+      console.error(`Failed to get containers for node ${node}:`, error);
+      return [];
+    }
   }
 
   private async getContainerConfig(config: ProxmoxConfig, ticket: string, node: string, vmid: number): Promise<any> {
