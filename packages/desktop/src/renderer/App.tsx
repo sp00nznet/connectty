@@ -1255,7 +1255,7 @@ export default function App() {
                 <div className="welcome-shells">
                   <span className="welcome-shells-label">or open a local shell:</span>
                   <div className="welcome-shells-list">
-                    {availableShells.slice(0, 4).map(shell => (
+                    {availableShells.filter(s => !s.elevated).map(shell => (
                       <button
                         key={shell.id}
                         className="btn btn-secondary"
