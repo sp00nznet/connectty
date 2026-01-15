@@ -4,11 +4,11 @@
 
 **The Modern Connection Manager for DevOps & SysAdmins**
 
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Web-0078D4?style=for-the-badge)](../../releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Web-0078D4?style=for-the-badge)](../../releases)
 [![License](https://img.shields.io/badge/license-MIT-00C853?style=for-the-badge)](LICENSE)
 [![Node](https://img.shields.io/badge/node-≥18-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Screenshots](#-screenshots)
+[Features](#-features) • [Comparison](#-comparison-with-other-clients) • [Quick Start](#-quick-start) • [Documentation](#-documentation)
 
 </div>
 
@@ -18,142 +18,284 @@
 
 Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RDP files, and spreadsheets. Connectty brings everything together in one powerful interface with cloud provider integration, bulk command execution, and secure credential management.
 
+**Key Differentiators:**
+- **Cloud-native discovery** - Auto-import servers from VMware, Proxmox, AWS, Azure, GCP, BigFix
+- **Bulk command execution** - Run commands across hundreds of servers simultaneously
+- **Unified interface** - SSH, RDP, Serial, SFTP, and local shells in tabbed sessions
+- **Free & open source** - No subscriptions, no seat licenses, no feature gates
+
+---
+
+## Comparison with Other Clients
+
+### Feature Matrix
+
+| Feature | Connectty | Termius | SecureCRT | PuTTY | MobaXterm | Royal TSX | Xpipe |
+|:--------|:---------:|:-------:|:---------:|:-----:|:---------:|:---------:|:-----:|
+| **Pricing** | Free | $10/mo+ | $119+ | Free | Free/$70 | Free/$40 | Free |
+| **Open Source** | Yes | No | No | Yes | No | No | Yes |
+| **Cross-Platform** | Win/Linux/Mac/Web | All | Win/Mac | Win | Win | Mac | All |
+| | | | | | | | |
+| **SSH Terminal** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **RDP Sessions** | Embedded + Native | No | No | No | Yes | Yes | No |
+| **Serial/COM** | Yes | No | Yes | Yes | Yes | Yes | No |
+| **SFTP Browser** | Dual-pane | Yes | Yes | No (PSFTP) | Yes | Yes | Yes |
+| **Local Shells** | Yes (incl. WSL) | No | No | No | Yes | No | Yes |
+| | | | | | | | |
+| **Cloud Discovery** | 6 providers | No | No | No | No | No | Limited |
+| **VMware vSphere** | Yes | No | No | No | No | No | No |
+| **Proxmox VE** | Yes | No | No | No | No | No | No |
+| **AWS EC2** | Yes | No | No | No | No | No | Yes |
+| **Azure VMs** | Yes | No | No | No | No | No | Yes |
+| **GCP Compute** | Yes | No | No | No | No | No | Yes |
+| **IBM BigFix** | Yes | No | No | No | No | No | No |
+| | | | | | | | |
+| **Bulk Commands** | Yes | No | No | No | No | No | No |
+| **Parallel Execution** | Yes | No | No | No | No | No | No |
+| **Saved Scripts** | Yes | No | Yes | No | Yes | No | No |
+| **Command Variables** | Yes | No | Yes | No | Yes | No | No |
+| | | | | | | | |
+| **Credential Vault** | Encrypted | Encrypted | Yes | No | Yes | Yes | Yes |
+| **Auto-Assign Creds** | Yes | No | No | No | No | No | No |
+| **SSH Key Support** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **SSH Agent** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| | | | | | | | |
+| **Connection Groups** | Nested | Folders | Folders | No | Folders | Folders | Yes |
+| **Import/Export** | JSON/CSV/SSH Config | Proprietary | Proprietary | Registry | Proprietary | Proprietary | Yes |
+| **System Tray** | Yes | Yes | Yes | No | Yes | Yes | Yes |
+| **Themes** | 18 | 8 | Limited | No | Limited | Yes | Yes |
+
+### Detailed Comparison
+
+<details>
+<summary><b>vs. Termius</b> — Popular cross-platform SSH client</summary>
+
+| Aspect | Connectty | Termius |
+|:-------|:----------|:--------|
+| **Price** | Free forever | Free tier limited, $10/mo for teams |
+| **Cloud Discovery** | 6 providers built-in | None |
+| **Bulk Commands** | Yes, parallel execution | No |
+| **RDP Support** | Embedded + native | No |
+| **Serial Ports** | Full configuration | No |
+| **Local Shells** | Windows, Linux, macOS, WSL | No |
+| **Data Ownership** | Local SQLite, self-hosted | Cloud-synced to Termius servers |
+| **Open Source** | Yes (MIT) | No |
+
+**Bottom line:** Termius excels at mobile access and cloud sync. Connectty wins on server discovery, bulk operations, and protocol variety.
+
+</details>
+
+<details>
+<summary><b>vs. SecureCRT</b> — Enterprise terminal emulator</summary>
+
+| Aspect | Connectty | SecureCRT |
+|:-------|:----------|:----------|
+| **Price** | Free | $119 per seat |
+| **Cloud Discovery** | 6 providers | None |
+| **Bulk Commands** | GUI-based, parallel | Script-based |
+| **RDP Support** | Embedded + native | No |
+| **Scripting** | Saved commands/scripts | VBScript, Python, JScript |
+| **Serial Config** | Full | Full |
+| **Enterprise Features** | Self-hostable | Single-user focus |
+| **Open Source** | Yes | No |
+
+**Bottom line:** SecureCRT has deeper scripting capabilities. Connectty offers better cloud integration and is free.
+
+</details>
+
+<details>
+<summary><b>vs. PuTTY</b> — Classic open-source SSH client</summary>
+
+| Aspect | Connectty | PuTTY |
+|:-------|:----------|:------|
+| **Price** | Free | Free |
+| **Interface** | Modern tabbed UI | Single window per session |
+| **Cloud Discovery** | 6 providers | None |
+| **Bulk Commands** | Yes | No |
+| **Credential Storage** | Encrypted vault | Registry (unencrypted) |
+| **SFTP** | Integrated dual-pane | Separate PSFTP tool |
+| **Themes** | 18 themes | Manual color config |
+| **Cross-Platform** | Yes | Windows-focused |
+
+**Bottom line:** PuTTY is lightweight and reliable. Connectty modernizes the experience with tabs, themes, and infrastructure integration.
+
+</details>
+
+<details>
+<summary><b>vs. MobaXterm</b> — Windows-focused terminal</summary>
+
+| Aspect | Connectty | MobaXterm |
+|:-------|:----------|:----------|
+| **Price** | Free | Free (Home) / $70 (Pro) |
+| **Platform** | Win/Linux/Mac/Web | Windows only |
+| **Cloud Discovery** | 6 providers | None |
+| **Bulk Commands** | Yes, with GUI | MultiExec (Pro only) |
+| **X11 Forwarding** | No | Yes |
+| **Built-in Tools** | Local shells | Unix tools, X server |
+| **Open Source** | Yes | No |
+
+**Bottom line:** MobaXterm packs more Unix tools for Windows. Connectty offers cross-platform support and cloud provider discovery.
+
+</details>
+
+<details>
+<summary><b>vs. Royal TSX</b> — macOS connection manager</summary>
+
+| Aspect | Connectty | Royal TSX |
+|:-------|:----------|:----------|
+| **Price** | Free | Free (10 connections) / $40 |
+| **Platform** | All | macOS, Windows (Royal TS) |
+| **Cloud Discovery** | 6 providers | Dynamic folders via scripting |
+| **Bulk Commands** | Built-in GUI | Tasks (scripted) |
+| **Protocol Support** | SSH, RDP, Serial, SFTP | SSH, RDP, VNC, many more |
+| **Team Features** | Self-hosted server | Royal Server ($$$) |
+| **Open Source** | Yes | No |
+
+**Bottom line:** Royal TSX supports more protocols (VNC, Hyper-V, etc.). Connectty wins on price and built-in cloud discovery.
+
+</details>
+
+<details>
+<summary><b>vs. Xpipe</b> — Open-source connection hub</summary>
+
+| Aspect | Connectty | Xpipe |
+|:-------|:----------|:------|
+| **Price** | Free | Free |
+| **Cloud Discovery** | 6 providers | AWS, Azure, GCP |
+| **VMware/Proxmox** | Yes | No |
+| **Bulk Commands** | Full GUI with parallel exec | No |
+| **RDP Support** | Embedded + native | No |
+| **Serial Ports** | Yes | No |
+| **Terminal** | Embedded xterm.js | Launches external terminal |
+| **Open Source** | Yes | Yes |
+
+**Bottom line:** Xpipe focuses on shell connections and file browsing. Connectty offers more protocols and bulk execution.
+
+</details>
+
 ---
 
 ## Features
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
 ### Connection Types
 
-| Type | Description |
-|:-----|:------------|
-| **SSH** | Full terminal with xterm.js, 256 colors, tabs |
-| **RDP** | Embedded tabbed sessions + native client fallback |
-| **Serial** | COM/TTY device support with full settings |
-| **SFTP** | Dual-pane file browser with FXP transfers |
+| Type | Description | Features |
+|:-----|:------------|:---------|
+| **SSH** | Full terminal emulation | 256-color, mouse support, agent forwarding, key auth |
+| **RDP** | Remote Desktop Protocol | Embedded canvas sessions + native client fallback |
+| **Serial** | COM/TTY ports | Baud 300-921600, all parity/flow options |
+| **SFTP** | File transfer | Dual-pane browser, drag-drop, chmod, FXP |
+| **Local Shell** | Native terminals | cmd, PowerShell, bash, zsh, fish, WSL distros |
 
-</td>
-<td width="50%" valign="top">
+### Cloud Provider Integration
 
-### Cloud Providers
+Auto-discover and import servers from your infrastructure:
 
-| Provider | Features |
-|:---------|:---------|
-| **VMware vSphere** | ESXi, vCenter discovery |
-| **Proxmox VE** | QEMU/LXC containers |
-| **AWS EC2** | Multi-region support |
-| **Google Cloud** | Compute Engine |
-| **Microsoft Azure** | Virtual Machines |
-| **IBM BigFix** | Endpoint management |
-
-</td>
-</tr>
-</table>
-
-### Core Capabilities
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  DISCOVER          CONNECT           MANAGE            AUTOMATE            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  • Auto-discover   • SSH terminals   • Credential      • Bulk commands     │
-│    from providers  • Embedded RDP      vault           • Parallel exec     │
-│  • Smart import    • Serial consoles • Groups &        • Saved scripts     │
-│  • OS detection    • SFTP browser      folders         • Command history   │
-│  • IP resolution   • Tabbed UI       • Auto-assign     • WinRM support     │
-│  • Selective import• System tray     • Tags & search   • Variable subst    │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Smart Provider Import
-
-When importing from cloud providers, Connectty automatically:
-
-- **Resolves hostnames to IPs** for reliable connections
-- **Detects duplicate names** across providers and labels them:
-  ```
-  web-server-01 (AWS)
-  web-server-01 (vCenter)
-  web-server-01 (Proxmox)
-  ```
-- **Assigns credentials** based on OS type or hostname patterns
-- **Allows selective import** with checkbox selection
-
-### Serial Connection Support
-
-Full serial/COM port support for network equipment, embedded devices, and console servers:
-
-| Setting | Options |
-|:--------|:--------|
-| **Baud Rate** | 300 - 921600 |
-| **Data Bits** | 5, 6, 7, 8 |
-| **Stop Bits** | 1, 1.5, 2 |
-| **Parity** | None, Odd, Even, Mark, Space |
-| **Flow Control** | None, Hardware (RTS/CTS), Software (XON/XOFF) |
-
-### SFTP File Browser
-
-Built-in file transfer with dual-pane interface:
-
-- **Navigate** local and remote filesystems side-by-side
-- **Transfer** files with progress tracking
-- **Manage** remote files (rename, delete, chmod, mkdir)
-- **Drag & drop** between local and remote
-- **FXP transfers** between two remote servers
-
-### Embedded RDP Sessions
-
-Full graphical RDP sessions in tabbed interface:
-
-- **Canvas-based** bitmap rendering for low latency
-- **Keyboard/mouse** input with proper scan codes
-- **Fallback** to native client (mstsc/xfreerdp) if needed
-- **Multi-session** support like SSH tabs
-
-### System Tray Support
-
-Minimize to system tray with configurable behavior:
-
-| Setting | Description |
-|:--------|:------------|
-| **Minimize to Tray** | Window minimizes to tray instead of taskbar |
-| **Close to Tray** | X button hides to tray instead of quitting |
-| **Start Minimized** | Launch app hidden in system tray |
-
-### Credential Auto-Assignment
-
-Automatically assign credentials to imported hosts:
-
-- **By OS Type** - Assign Linux credentials to Linux hosts
-- **By Pattern** - Match hostnames like `web-*` or `*-prod-*`
-- **Manual Override** - Select credential during import
+| Provider | Discovery Features |
+|:---------|:-------------------|
+| **VMware vSphere** | VMs from vCenter/ESXi, VMware Tools IP resolution, tags |
+| **Proxmox VE** | QEMU VMs + LXC containers, guest agent IP, live status |
+| **AWS EC2** | Multi-region, public/private IPs, instance tags |
+| **Google Cloud** | Compute Engine, zones, labels, service account auth |
+| **Microsoft Azure** | VMs, resource groups, service principal auth |
+| **IBM BigFix** | Managed endpoints, AD auth, online/offline status |
 
 ### Bulk Command Execution
 
-Run commands across multiple hosts simultaneously:
+Run commands across your entire fleet:
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Target: [✓] All Linux   [ ] Windows   [ ] Group: Production │
-│  ────────────────────────────────────────────────────────────│
-│  Command: df -h | head -10                                   │
-│  ────────────────────────────────────────────────────────────│
-│  Progress:                                                   │
-│    web-01 ████████████████████ 100% ✓                       │
-│    web-02 ████████████████████ 100% ✓                       │
-│    db-01  ████████████░░░░░░░░  60%                         │
-│    db-02  ░░░░░░░░░░░░░░░░░░░░   0% pending                 │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Repeated Actions                                                │
+├─────────────────────────────────────────────────────────────────┤
+│  Target: [Group: Production ▼]    Protocol: [SSH ▼]             │
+│                                                                  │
+│  ┌─ Saved Commands ─┬─ Scripts ─┐                               │
+│  │ • Check Disk Space           │                               │
+│  │ • Restart Service            │                               │
+│  │ • Update Packages            │                               │
+│  └──────────────────────────────┘                               │
+│                                                                  │
+│  Command: df -h | grep -E '^/dev'                               │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ web-01    ████████████████████ 100%  ✓  0.8s               ││
+│  │ web-02    ████████████████████ 100%  ✓  0.9s               ││
+│  │ db-01     ████████████████░░░░  80%     running...         ││
+│  │ db-02     ░░░░░░░░░░░░░░░░░░░░   0%     pending            ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                    [Execute All] │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+**Features:**
+- **Parallel execution** across up to 10 hosts simultaneously
+- **Target by group, pattern, or manual selection**
+- **Saved commands** with categories and variables
+- **Multi-line scripts** (Bash, PowerShell, Python)
+- **Real-time output** streaming per host
+- **Full history** with stdout/stderr capture
+
+### Credential Management
+
+Secure, organized credential storage:
+
+| Feature | Description |
+|:--------|:------------|
+| **Encryption** | AES-256-GCM with per-installation master key |
+| **Types** | Password, SSH private key, SSH agent, domain creds |
+| **Auto-assign** | Assign by OS type (Linux/Windows) or hostname pattern (`web-*`) |
+| **Organization** | Tags, descriptions, usage tracking |
+
+### Session Management
+
+Modern tabbed interface for all connection types:
+
+- **Multiple tabs** - SSH, RDP, Serial, SFTP, local shells
+- **Tab actions** - Rename, duplicate, reorder, close
+- **Terminal features** - 256-color, true color, Unicode, mouse support
+- **Keyboard shortcuts** - `Ctrl+T` new tab, `Ctrl+W` close, `Ctrl+Tab` switch
+
+### Themes
+
+18 built-in themes for terminal and UI:
+
+| Light | Dark | Popular |
+|:------|:-----|:--------|
+| Light | Midnight (default) | Dracula |
+| Solarized Light | Solarized Dark | Nord |
+| GitHub Light | GitHub Dark | Tokyo Night |
+| | One Dark | Catppuccin Mocha |
+| | Monokai | Gruvbox Dark |
+| | Ayu Dark | Everforest |
+| | Material Dark | Rosé Pine |
+| | High Contrast | |
+
+### System Tray
+
+Background operation with full tray integration:
+
+- **Minimize to tray** - Keep running while hidden
+- **Close to tray** - X button hides instead of quitting
+- **Start minimized** - Launch directly to tray
+- **Quick connect** - Access recent connections from tray menu
+
+### Import & Export
+
+Migrate from other tools or backup your data:
+
+| Format | Import | Export | Notes |
+|:-------|:------:|:------:|:------|
+| **JSON** | Yes | Yes | Full data including credentials (encrypted) |
+| **CSV** | Yes | Yes | Connections only, spreadsheet compatible |
+| **SSH Config** | Yes | - | `~/.ssh/config` format |
+| **PuTTY Sessions** | Yes | - | Registry export as JSON |
 
 ---
 
 ## Quick Start
 
-### Desktop App (Standalone)
+### Desktop App
 
 ```bash
 # Clone and install
@@ -161,17 +303,19 @@ git clone https://github.com/your-org/connectty.git
 cd connectty
 npm install
 
-# Build and run
+# Build shared package first
 npm run build -w @connectty/shared
+
+# Run desktop app
 npm run start -w @connectty/desktop
 ```
 
-### Server + Web Client (Docker)
+### Docker (Server + Web)
 
 ```bash
 # Configure environment
 cp .env.example .env
-nano .env  # Set your secrets
+nano .env  # Set JWT_SECRET and DB_PASSWORD
 
 # Launch
 docker-compose up -d
@@ -192,6 +336,7 @@ Download from [Releases](../../releases):
 | **Windows** | `Connectty-Setup-x.x.x.exe` | Installer with auto-updates |
 | **Debian/Ubuntu** | `connectty_x.x.x_amd64.deb` | `sudo dpkg -i connectty.deb` |
 | **Other Linux** | `connectty-x.x.x.AppImage` | Portable, no install needed |
+| **macOS** | `Connectty-x.x.x.dmg` | Universal binary (Intel + Apple Silicon) |
 
 ### Build from Source
 
@@ -201,6 +346,9 @@ npm run dist:win -w @connectty/desktop
 
 # Linux packages (deb, AppImage, rpm)
 npm run dist:linux -w @connectty/desktop
+
+# macOS (dmg)
+npm run dist:mac -w @connectty/desktop
 ```
 
 ---
@@ -211,8 +359,8 @@ npm run dist:linux -w @connectty/desktop
 connectty/
 ├── packages/
 │   ├── shared/          # TypeScript types & utilities
-│   ├── desktop/         # Electron app (Windows/Linux)
-│   │   ├── main/        # Node.js backend (SSH, Serial, DB)
+│   ├── desktop/         # Electron app (Windows/Linux/macOS)
+│   │   ├── main/        # Node.js backend (SSH, RDP, Serial, DB)
 │   │   └── renderer/    # React frontend
 │   ├── server/          # Node.js API server
 │   └── web/             # React web client
@@ -226,33 +374,17 @@ connectty/
 
 ---
 
-## Themes
-
-8 built-in themes for the terminal and UI:
-
-| | | | |
-|:---:|:---:|:---:|:---:|
-| **Midnight** | **Light** | **Dracula** | **Nord** |
-| Dark blue | Clean white | Purple/pink | Arctic blue |
-| **Solarized** | **Monokai** | **GitHub Dark** | **High Contrast** |
-| Warm yellow | Vibrant | GitHub style | Accessibility |
-
----
-
 ## Security
 
 | Feature | Implementation |
 |:--------|:---------------|
 | **Credential Encryption** | AES-256-GCM with per-installation key |
-| **Password Verification** | Constant-time comparison (timing-attack resistant) |
-| **Command Execution** | Encoded PowerShell commands (injection-safe) |
-| **Authentication** | JWT tokens, configurable expiry |
-| **Enterprise SSO** | Active Directory / LDAP |
-| **SSH Security** | Private keys, agent forwarding, keyboard-interactive |
+| **Key Storage** | Private keys stored encrypted, never in plaintext |
+| **SSH Security** | Key auth, agent forwarding, keyboard-interactive |
+| **Command Execution** | Input validation, encoded PowerShell (injection-safe) |
+| **Provider Auth** | API tokens, service accounts (no password storage) |
 | **Transport** | TLS for all API communications |
-| **Input Validation** | Hostname validation, regex escaping |
-
-> **Important**: Always set strong `JWT_SECRET` and `DB_PASSWORD` values in production.
+| **Local Storage** | SQLite with encrypted secrets column |
 
 ---
 
@@ -314,5 +446,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 <div align="center">
 
 **[Report Bug](../../issues) · [Request Feature](../../issues) · [Discussions](../../discussions)**
+
+Built with Electron, React, and xterm.js
 
 </div>
