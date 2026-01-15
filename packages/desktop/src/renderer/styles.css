@@ -152,6 +152,42 @@
   --modal-bg: #0a0a0a;
 }
 
+/* Theme: Everforest */
+[data-theme="everforest"] {
+  --bg-primary: #2d353b;
+  --bg-secondary: #343f44;
+  --bg-tertiary: #3d484d;
+  --text-primary: #d3c6aa;
+  --text-secondary: #9da9a0;
+  --text-muted: #7a8478;
+  --accent: #a7c080;
+  --accent-hover: #8fb070;
+  --success: #a7c080;
+  --warning: #dbbc7f;
+  --error: #e67e80;
+  --border: #4f585e;
+  --input-bg: #343f44;
+  --modal-bg: #343f44;
+}
+
+/* Theme: Rosé Pine */
+[data-theme="rose-pine"] {
+  --bg-primary: #191724;
+  --bg-secondary: #1f1d2e;
+  --bg-tertiary: #26233a;
+  --text-primary: #e0def4;
+  --text-secondary: #908caa;
+  --text-muted: #6e6a86;
+  --accent: #c4a7e7;
+  --accent-hover: #b393db;
+  --success: #9ccfd8;
+  --warning: #f6c177;
+  --error: #eb6f92;
+  --border: #403d52;
+  --input-bg: #1f1d2e;
+  --modal-bg: #1f1d2e;
+}
+
 /* Theme: Solarized Light */
 [data-theme="solarized-light"] {
   --bg-primary: #fdf6e3;
@@ -2427,6 +2463,12 @@ body {
 
 .theme-preview[data-theme="high-contrast"]::before { background: #0a0a0a; }
 .theme-preview[data-theme="high-contrast"]::after { background: #000000; }
+
+.theme-preview[data-theme="everforest"]::before { background: #2d353b; }
+.theme-preview[data-theme="everforest"]::after { background: #343f44; }
+
+.theme-preview[data-theme="rose-pine"]::before { background: #191724; }
+.theme-preview[data-theme="rose-pine"]::after { background: #1f1d2e; }
 
 .theme-name {
   font-size: 0.8rem;

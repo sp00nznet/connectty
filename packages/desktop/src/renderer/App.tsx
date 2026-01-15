@@ -157,6 +157,8 @@ export default function App() {
     { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
     { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
     { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
+    { id: 'everforest', name: 'Everforest', description: 'Nature-inspired green theme' },
+    { id: 'rose-pine', name: 'Rosé Pine', description: 'Elegant, dark soho vibes' },
     { id: 'high-contrast', name: 'High Contrast', description: 'Maximum visibility' },
   ];
 
@@ -3957,7 +3959,7 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
 
   // Get the left panel SFTP session if in FXP mode
   const leftSession = leftPanelSource !== 'local'
-    ? otherSftpSessions.find(s => s.id === leftPanelSource)
+    ? otherSftpSessions.find(s => s.sessionId === leftPanelSource)
     : null;
 
   // Load initial data
@@ -4165,7 +4167,7 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
   const handleFxpTransfer = async () => {
     if (!fxpTargetSession || selectedRemoteFiles.size === 0) return;
 
-    const targetSession = otherSftpSessions.find(s => s.id === fxpTargetSession);
+    const targetSession = otherSftpSessions.find(s => s.sessionId === fxpTargetSession);
     if (!targetSession) return;
 
     // For FXP, we download from source then upload to target
@@ -4319,7 +4321,7 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
           >
             <option value="">Select target session...</option>
             {otherSftpSessions.map(s => (
-              <option key={s.id} value={s.id}>{s.connectionName} ({s.hostname})</option>
+              <option key={s.id} value={s.sessionId}>{s.connectionName} ({s.hostname})</option>
             ))}
           </select>
           <button
@@ -4345,7 +4347,7 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
               >
                 <option value="local">Local</option>
                 {otherSftpSessions.map(s => (
-                  <option key={s.id} value={s.id}>
+                  <option key={s.id} value={s.sessionId}>
                     {s.connectionName} ({s.hostname})
                   </option>
                 ))}
