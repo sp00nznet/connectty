@@ -18,7 +18,7 @@ export interface RDPSessionEvent {
     width: number;
     height: number;
     bitsPerPixel: number;
-    data: Buffer;
+    data: number[]; // Plain array for IPC serialization
   };
   // For screen info
   screenWidth?: number;
@@ -74,6 +74,7 @@ export class RDPSessionService {
           password: credential?.secret || '',
           enablePerf: true,
           autoLogin: true,
+          decompress: true, // Decompress RLE-compressed bitmaps
           screen: {
             width: screenWidth,
             height: screenHeight,
@@ -102,6 +103,11 @@ export class RDPSessionService {
         });
 
         client.on('bitmap', (bitmap: any) => {
+          // Convert Buffer to Uint8Array for proper IPC serialization
+          const dataArray = bitmap.data instanceof Buffer
+            ? new Uint8Array(bitmap.data)
+            : bitmap.data;
+
           this.onEvent(sessionId, {
             type: 'bitmap',
             bitmap: {
@@ -112,7 +118,7 @@ export class RDPSessionService {
               width: bitmap.width,
               height: bitmap.height,
               bitsPerPixel: bitmap.bitsPerPixel,
-              data: bitmap.data,
+              data: Array.from(dataArray), // Convert to plain array for reliable IPC
             },
           });
         });
