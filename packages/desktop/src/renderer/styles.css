@@ -2275,9 +2275,12 @@ body {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  padding: 8px 0;
+  padding: 8px 12px;
   color: var(--text-primary);
   font-size: 0.95rem;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  margin-bottom: 4px;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -2294,7 +2297,7 @@ body {
 .checkbox-help {
   color: var(--text-muted);
   font-size: 0.8rem;
-  margin-left: 28px;
+  margin-left: 12px;
   margin-bottom: 12px;
 }
 
