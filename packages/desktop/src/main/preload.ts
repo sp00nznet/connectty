@@ -62,6 +62,22 @@ export interface AppSettings {
   startMinimized: boolean;
 }
 
+// Local shell types
+export interface LocalShellInfo {
+  id: string;
+  name: string;
+  path: string;
+  args?: string[];
+  icon?: string;
+}
+
+export interface LocalShellSessionEvent {
+  type: 'data' | 'close' | 'error';
+  data?: string;
+  message?: string;
+  exitCode?: number;
+}
+
 const api = {
   // Connection operations
   connections: {
@@ -291,6 +307,23 @@ const api = {
   app: {
     version: (): Promise<string> => ipcRenderer.invoke('app:version'),
     platform: (): Promise<string> => ipcRenderer.invoke('app:platform'),
+  },
+
+  // Local shell operations
+  localShell: {
+    getAvailable: (): Promise<LocalShellInfo[]> => ipcRenderer.invoke('localShell:getAvailable'),
+    spawn: (shellId: string): Promise<string> => ipcRenderer.invoke('localShell:spawn', shellId),
+    write: (sessionId: string, data: string): Promise<void> => ipcRenderer.invoke('localShell:write', sessionId, data),
+    resize: (sessionId: string, cols: number, rows: number): Promise<void> =>
+      ipcRenderer.invoke('localShell:resize', sessionId, cols, rows),
+    kill: (sessionId: string): Promise<void> => ipcRenderer.invoke('localShell:kill', sessionId),
+    onEvent: (callback: (sessionId: string, event: LocalShellSessionEvent) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, sessionId: string, shellEvent: LocalShellSessionEvent) => {
+        callback(sessionId, shellEvent);
+      };
+      ipcRenderer.on('localShell:event', handler);
+      return () => ipcRenderer.removeListener('localShell:event', handler);
+    },
   },
 };
 
