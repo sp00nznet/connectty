@@ -30,40 +30,40 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 
 ### Feature Matrix
 
-| Feature | Connectty | Termius | SecureCRT | PuTTY | MobaXterm | Royal TSX | Xpipe |
-|:--------|:---------:|:-------:|:---------:|:-----:|:---------:|:---------:|:-----:|
-| **Pricing** | Free | $10/mo+ | $119+ | Free | Free/$70 | Free/$40 | Free |
-| **Open Source** | Yes | No | No | Yes | No | No | Yes |
-| **Cross-Platform** | Win/Linux/Mac/Web | All | Win/Mac | Win | Win | Mac | All |
-| | | | | | | | |
-| **SSH Terminal** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| **RDP Sessions** | Embedded + Native | No | No | No | Yes | Yes | No |
-| **Serial/COM** | Yes | No | Yes | Yes | Yes | Yes | No |
-| **SFTP Browser** | Dual-pane | Yes | Yes | No (PSFTP) | Yes | Yes | Yes |
-| **Local Shells** | Yes (incl. WSL) | No | No | No | Yes | No | Yes |
-| | | | | | | | |
-| **Cloud Discovery** | 6 providers | No | No | No | No | No | Limited |
-| **VMware vSphere** | Yes | No | No | No | No | No | No |
-| **Proxmox VE** | Yes | No | No | No | No | No | No |
-| **AWS EC2** | Yes | No | No | No | No | No | Yes |
-| **Azure VMs** | Yes | No | No | No | No | No | Yes |
-| **GCP Compute** | Yes | No | No | No | No | No | Yes |
-| **IBM BigFix** | Yes | No | No | No | No | No | No |
-| | | | | | | | |
-| **Bulk Commands** | Yes | No | No | No | No | No | No |
-| **Parallel Execution** | Yes | No | No | No | No | No | No |
-| **Saved Scripts** | Yes | No | Yes | No | Yes | No | No |
-| **Command Variables** | Yes | No | Yes | No | Yes | No | No |
-| | | | | | | | |
-| **Credential Vault** | Encrypted | Encrypted | Yes | No | Yes | Yes | Yes |
-| **Auto-Assign Creds** | Yes | No | No | No | No | No | No |
-| **SSH Key Support** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| **SSH Agent** | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| | | | | | | | |
-| **Connection Groups** | Nested | Folders | Folders | No | Folders | Folders | Yes |
-| **Import/Export** | JSON/CSV/SSH Config | Proprietary | Proprietary | Registry | Proprietary | Proprietary | Yes |
-| **System Tray** | Yes | Yes | Yes | No | Yes | Yes | Yes |
-| **Themes** | 18 | 8 | Limited | No | Limited | Yes | Yes |
+| Feature | Connectty | Termius | SecureCRT | PuTTY | MobaXterm | Xpipe |
+|:--------|:---------:|:-------:|:---------:|:-----:|:---------:|:-----:|
+| **Pricing** | Free | $10/mo+ | $119+ | Free | Free/$70 | Free |
+| **Open Source** | Yes | No | No | Yes | No | Yes |
+| **Cross-Platform** | Win/Linux/Mac/Web | All | Win/Mac | Win | Win | All |
+| | | | | | | |
+| **SSH Terminal** | Yes | Yes | Yes | Yes | Yes | Yes |
+| **RDP Sessions** | Embedded + Native | No | No | No | Yes | No |
+| **Serial/COM** | Yes | No | Yes | Yes | Yes | No |
+| **SFTP Browser** | Dual-pane | Yes | Yes | No (PSFTP) | Yes | Yes |
+| **Local Shells** | Yes (incl. WSL) | No | No | No | Yes | Yes |
+| | | | | | | |
+| **Cloud Discovery** | 6 providers | No | No | No | No | Limited |
+| **VMware vSphere** | Yes | No | No | No | No | No |
+| **Proxmox VE** | Yes | No | No | No | No | No |
+| **AWS EC2** | Yes | No | No | No | No | Yes |
+| **Azure VMs** | Yes | No | No | No | No | Yes |
+| **GCP Compute** | Yes | No | No | No | No | Yes |
+| **IBM BigFix** | Yes | No | No | No | No | No |
+| | | | | | | |
+| **Bulk Commands** | Yes | No | No | No | No | No |
+| **Parallel Execution** | Yes | No | No | No | No | No |
+| **Saved Scripts** | Yes | No | Yes | No | Yes | No |
+| **Command Variables** | Yes | No | Yes | No | Yes | No |
+| | | | | | | |
+| **Credential Vault** | Encrypted | Encrypted | Yes | No | Yes | Yes |
+| **Auto-Assign Creds** | Yes | No | No | No | No | No |
+| **SSH Key Support** | Yes | Yes | Yes | Yes | Yes | Yes |
+| **SSH Agent** | Yes | Yes | Yes | Yes | Yes | Yes |
+| | | | | | | |
+| **Connection Groups** | Nested | Folders | Folders | No | Folders | Yes |
+| **Import/Export** | JSON/CSV/SSH Config | Proprietary | Proprietary | Registry | Proprietary | Yes |
+| **System Tray** | Yes | Yes | Yes | No | Yes | Yes |
+| **Themes** | 18 | 8 | Limited | No | Limited | Yes |
 
 ### Detailed Comparison
 
@@ -135,23 +135,6 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 | **Open Source** | Yes | No |
 
 **Bottom line:** MobaXterm packs more Unix tools for Windows. Connectty offers cross-platform support and cloud provider discovery.
-
-</details>
-
-<details>
-<summary><b>vs. Royal TSX</b> — macOS connection manager</summary>
-
-| Aspect | Connectty | Royal TSX |
-|:-------|:----------|:----------|
-| **Price** | Free | Free (10 connections) / $40 |
-| **Platform** | All | macOS, Windows (Royal TS) |
-| **Cloud Discovery** | 6 providers | Dynamic folders via scripting |
-| **Bulk Commands** | Built-in GUI | Tasks (scripted) |
-| **Protocol Support** | SSH, RDP, Serial, SFTP | SSH, RDP, VNC, many more |
-| **Team Features** | Self-hosted server | Royal Server ($$$) |
-| **Open Source** | Yes | No |
-
-**Bottom line:** Royal TSX supports more protocols (VNC, Hyper-V, etc.). Connectty wins on price and built-in cloud discovery.
 
 </details>
 
