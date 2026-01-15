@@ -137,8 +137,16 @@ export default function App() {
     { id: 'dracula', name: 'Dracula', description: 'Popular dark purple theme' },
     { id: 'nord', name: 'Nord', description: 'Arctic, north-bluish palette' },
     { id: 'solarized', name: 'Solarized Dark', description: 'Precision colors for machines and people' },
+    { id: 'solarized-light', name: 'Solarized Light', description: 'Solarized light variant' },
     { id: 'monokai', name: 'Monokai', description: 'Sublime Text inspired' },
     { id: 'github', name: 'GitHub Dark', description: 'GitHub\'s dark mode' },
+    { id: 'github-light', name: 'GitHub Light', description: 'GitHub\'s light mode' },
+    { id: 'one-dark', name: 'One Dark', description: 'Atom\'s iconic dark theme' },
+    { id: 'tokyo-night', name: 'Tokyo Night', description: 'Clean dark theme inspired by Tokyo lights' },
+    { id: 'catppuccin', name: 'Catppuccin Mocha', description: 'Soothing pastel dark theme' },
+    { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
+    { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
+    { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
     { id: 'high-contrast', name: 'High Contrast', description: 'Maximum visibility' },
   ];
 
@@ -866,23 +874,8 @@ export default function App() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <div className="header-row">
-            <div>
-              <h1>Connectty</h1>
-              <p className="subtitle">SSH &amp; RDP Connection Manager</p>
-            </div>
-            <div className="theme-selector">
-              <select
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-                title="Change theme"
-              >
-                {themes.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <h1>Connectty</h1>
+          <p className="subtitle">SSH &amp; RDP Connection Manager</p>
         </div>
 
         <div className="sidebar-actions sidebar-actions-grid">
@@ -1345,6 +1338,9 @@ export default function App() {
       {showSettingsModal && (
         <SettingsModal
           settings={appSettings}
+          themes={themes}
+          currentTheme={theme}
+          onThemeChange={setTheme}
           onClose={() => setShowSettingsModal(false)}
           onSave={handleSaveSettings}
         />
@@ -4515,11 +4511,14 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
 // Settings Modal Component
 interface SettingsModalProps {
   settings: AppSettings;
+  themes: { id: string; name: string; description: string }[];
+  currentTheme: string;
+  onThemeChange: (theme: string) => void;
   onClose: () => void;
   onSave: (settings: Partial<AppSettings>) => Promise<void>;
 }
 
-function SettingsModal({ settings, onClose, onSave }: SettingsModalProps) {
+function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave }: SettingsModalProps) {
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
@@ -4549,6 +4548,31 @@ function SettingsModal({ settings, onClose, onSave }: SettingsModalProps) {
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            <div className="settings-section">
+              <h4>Appearance</h4>
+              <p className="settings-description">
+                Customize the look and feel of the application.
+              </p>
+
+              <div className="form-group">
+                <label className="form-label">Theme</label>
+                <div className="theme-grid">
+                  {themes.map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`theme-option ${currentTheme === t.id ? 'active' : ''}`}
+                      onClick={() => onThemeChange(t.id)}
+                      title={t.description}
+                    >
+                      <span className="theme-preview" data-theme={t.id}></span>
+                      <span className="theme-name">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div className="settings-section">
               <h4>System Tray</h4>
               <p className="settings-description">
