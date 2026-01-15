@@ -2174,6 +2174,31 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     }
   }, [type]);
 
+  // Populate form when editing a provider
+  useEffect(() => {
+    if (provider) {
+      setName(provider.name || '');
+      setType(provider.type || 'esxi');
+      setHost((provider.config as any)?.host || '');
+      setPort((provider.config as any)?.port || 8006);
+      setUsername((provider.config as any)?.username || '');
+      setPassword(''); // Don't populate password for security
+      setRealm((provider.config as any)?.realm || 'pam');
+      setIgnoreCertErrors((provider.config as any)?.ignoreCertErrors ?? true);
+      setAccessKeyId((provider.config as any)?.accessKeyId || '');
+      setSecretAccessKey('');
+      setRegion((provider.config as any)?.region || 'us-east-1');
+      setProjectId((provider.config as any)?.projectId || '');
+      setServiceAccountKey('');
+      setTenantId((provider.config as any)?.tenantId || '');
+      setClientId((provider.config as any)?.clientId || '');
+      setClientSecret('');
+      setSubscriptionId((provider.config as any)?.subscriptionId || '');
+      setEnabled(provider.enabled ?? true);
+      setShowForm(true);
+    }
+  }, [provider]);
+
   const resetForm = () => {
     setName('');
     setType('esxi');
