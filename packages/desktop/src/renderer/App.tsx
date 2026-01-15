@@ -935,9 +935,6 @@ export default function App() {
           <button className="btn btn-secondary btn-sm" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }}>
             Providers
           </button>
-        </div>
-
-        <div className="sidebar-actions sidebar-actions-grid">
           <button className="btn btn-secondary btn-sm" onClick={handleImport}>Import</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
