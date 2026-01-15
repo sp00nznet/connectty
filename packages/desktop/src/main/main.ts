@@ -297,9 +297,12 @@ function setupIpcHandlers(): void {
       finalCredentialId = findMatchingCredential(db, host);
     }
 
+    // Get unique name (adds provider suffix if duplicates exist)
+    const uniqueName = getUniqueConnectionName(db, host.name, host.providerId);
+
     // Create the connection
     const connection = db.createConnection({
-      name: host.name,
+      name: uniqueName,
       hostname: host.publicIp || host.privateIp || host.hostname || host.name,
       port,
       connectionType,
@@ -326,8 +329,11 @@ function setupIpcHandlers(): void {
       const port = connectionType === 'rdp' ? 3389 : 22;
       const credentialId = findMatchingCredential(db, host);
 
+      // Get unique name (adds provider suffix if duplicates exist)
+      const uniqueName = getUniqueConnectionName(db, host.name, host.providerId);
+
       const connection = db.createConnection({
-        name: host.name,
+        name: uniqueName,
         hostname: host.publicIp || host.privateIp || host.hostname || host.name,
         port,
         connectionType,
@@ -358,8 +364,11 @@ function setupIpcHandlers(): void {
       // Use assigned credential if provided, otherwise try to find a matching one
       const credentialId = assignedCredentialId || findMatchingCredential(db, host);
 
+      // Get unique name (adds provider suffix if duplicates exist)
+      const uniqueName = getUniqueConnectionName(db, host.name, host.providerId);
+
       const connection = db.createConnection({
-        name: host.name,
+        name: uniqueName,
         hostname: host.publicIp || host.privateIp || host.hostname || host.name,
         port,
         connectionType,
@@ -855,6 +864,56 @@ function findMatchingCredential(database: DatabaseService, host: DiscoveredHost)
   }
 
   return undefined;
+}
+
+/**
+ * Generate a unique connection name, adding provider suffix if there are duplicates.
+ * Also updates existing connections with the same name to include their provider suffix.
+ */
+function getUniqueConnectionName(
+  database: DatabaseService,
+  hostName: string,
+  hostProviderId: string
+): string {
+  const allConnections = database.getConnections();
+  const provider = database.getProvider(hostProviderId);
+  const providerName = provider?.name || 'Unknown';
+
+  // Find connections with the same base name (ignoring any existing provider suffix)
+  const duplicates = allConnections.filter(conn => {
+    // Extract base name by removing any existing " (provider)" suffix
+    const baseConnName = conn.name.replace(/\s*\([^)]+\)\s*$/, '');
+    return baseConnName === hostName && conn.providerId !== hostProviderId;
+  });
+
+  if (duplicates.length > 0) {
+    // Update existing connections to include their provider suffix if they don't have one
+    for (const dup of duplicates) {
+      // Check if this connection already has a provider suffix
+      if (!dup.name.match(/\s*\([^)]+\)\s*$/)) {
+        const dupProvider = dup.providerId ? database.getProvider(dup.providerId) : null;
+        const dupProviderName = dupProvider?.name || 'Manual';
+        const newName = `${dup.name} (${dupProviderName})`;
+        database.updateConnection(dup.id, { name: newName });
+      }
+    }
+
+    // Return name with provider suffix for the new import
+    return `${hostName} (${providerName})`;
+  }
+
+  // Check if there's an existing connection with exactly this name from the same provider
+  const sameProviderDup = allConnections.find(conn =>
+    conn.name === hostName && conn.providerId === hostProviderId
+  );
+
+  if (sameProviderDup) {
+    // Same provider, same name - add provider suffix anyway for clarity
+    return `${hostName} (${providerName})`;
+  }
+
+  // No duplicates, return original name
+  return hostName;
 }
 
 app.whenReady().then(async () => {
