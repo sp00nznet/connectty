@@ -4086,12 +4086,13 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
 
     // FXP mode: transfer from left remote to right remote
     if (leftPanelSource !== 'local' && leftSession) {
+      const tempDir = await window.connectty.sftp.getTempDir();
       for (const filePath of selectedLocalFiles) {
         const file = leftRemoteFiles.find(f => f.path === filePath);
         if (file && !file.isDirectory) {
           try {
-            // Create temp path for intermediate transfer
-            const tempPath = `/tmp/fxp-${Date.now()}-${file.name}`;
+            // Create temp path for intermediate transfer (use OS-appropriate path separator)
+            const tempPath = `${tempDir}${tempDir.includes('\\') ? '\\' : '/'}fxp-${Date.now()}-${file.name}`;
             // Download from left (source) session
             await window.connectty.sftp.download(leftPanelSource, file.path, tempPath);
             // Upload to right (target) session
@@ -4127,12 +4128,13 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
 
     // FXP mode: transfer from right remote to left remote
     if (leftPanelSource !== 'local' && leftSession) {
+      const tempDir = await window.connectty.sftp.getTempDir();
       for (const filePath of selectedRemoteFiles) {
         const file = remoteFiles.find(f => f.path === filePath);
         if (file && !file.isDirectory) {
           try {
-            // Create temp path for intermediate transfer
-            const tempPath = `/tmp/fxp-${Date.now()}-${file.name}`;
+            // Create temp path for intermediate transfer (use OS-appropriate path separator)
+            const tempPath = `${tempDir}${tempDir.includes('\\') ? '\\' : '/'}fxp-${Date.now()}-${file.name}`;
             // Download from right (source) session
             await window.connectty.sftp.download(session.sessionId, file.path, tempPath);
             // Upload to left (target) session
@@ -4170,14 +4172,15 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
     const targetSession = otherSftpSessions.find(s => s.sessionId === fxpTargetSession);
     if (!targetSession) return;
 
+    const tempDir = await window.connectty.sftp.getTempDir();
     // For FXP, we download from source then upload to target
     // (true FXP would be server-to-server, but that requires FXP protocol support)
     for (const filePath of selectedRemoteFiles) {
       const file = remoteFiles.find(f => f.path === filePath);
       if (file && !file.isDirectory) {
         try {
-          // Create temp path for intermediate transfer
-          const tempPath = `/tmp/fxp-${Date.now()}-${file.name}`;
+          // Create temp path for intermediate transfer (use OS-appropriate path separator)
+          const tempPath = `${tempDir}${tempDir.includes('\\') ? '\\' : '/'}fxp-${Date.now()}-${file.name}`;
           // Download from source
           await window.connectty.sftp.download(session.sessionId, file.path, tempPath);
           // Upload to target (using remotePath as destination - user should navigate there first)

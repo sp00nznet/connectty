@@ -857,6 +857,10 @@ function setupIpcHandlers(): void {
     return sftpService.getActiveSessions();
   });
 
+  ipcMain.handle('sftp:getTempDir', async () => {
+    return os.tmpdir();
+  });
+
   ipcMain.handle('sftp:selectLocalFolder', async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
       properties: ['openDirectory'],
