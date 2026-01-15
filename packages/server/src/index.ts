@@ -18,7 +18,11 @@ import { createConnectionRoutes } from './routes/connections';
 import { createCredentialRoutes } from './routes/credentials';
 import { createGroupRoutes } from './routes/groups';
 import { createSyncRoutes } from './routes/sync';
+import { createProviderRoutes } from './routes/providers';
+import { createCommandRoutes } from './routes/commands';
 import { setupWebSocket } from './services/websocket';
+import { ProviderDiscoveryService } from './services/provider-discovery';
+import { BulkCommandService } from './services/bulk-commands';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -46,6 +50,8 @@ async function main() {
   });
 
   const sshService = new SSHService(db);
+  const providerService = new ProviderDiscoveryService();
+  const commandService = new BulkCommandService(db);
 
   // Create Express app
   const app = express();
@@ -70,6 +76,8 @@ async function main() {
   app.use('/api/credentials', authMiddleware(authService), createCredentialRoutes(db));
   app.use('/api/groups', authMiddleware(authService), createGroupRoutes(db));
   app.use('/api/sync', authMiddleware(authService), createSyncRoutes(db));
+  app.use('/api/providers', authMiddleware(authService), createProviderRoutes(db, providerService));
+  app.use('/api/commands', authMiddleware(authService), createCommandRoutes(db, commandService));
 
   // Create HTTP server
   const server = createServer(app);

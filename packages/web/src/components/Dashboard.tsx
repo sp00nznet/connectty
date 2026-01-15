@@ -7,6 +7,10 @@ import type { ServerConnection, Credential, ConnectionGroup, User, SSHSessionEve
 import { api } from '../services/api';
 import { wsService } from '../services/websocket';
 import ConnectionModal from './ConnectionModal';
+import ProviderPanel from './ProviderPanel';
+import BulkCommandPanel from './BulkCommandPanel';
+
+type MainView = 'terminal' | 'providers' | 'commands';
 
 interface DashboardProps {
   user: User;
@@ -32,6 +36,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [editingConnection, setEditingConnection] = useState<ServerConnection | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [mainView, setMainView] = useState<MainView>('terminal');
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const sessionsRef = useRef<SSHSession[]>([]);
@@ -244,6 +249,40 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           </svg>
           <h1>Connectty</h1>
         </div>
+
+        <nav className="main-nav">
+          <button
+            className={`nav-btn ${mainView === 'terminal' ? 'active' : ''}`}
+            onClick={() => setMainView('terminal')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+            Terminal
+          </button>
+          <button
+            className={`nav-btn ${mainView === 'providers' ? 'active' : ''}`}
+            onClick={() => setMainView('providers')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            Providers
+          </button>
+          <button
+            className={`nav-btn ${mainView === 'commands' ? 'active' : ''}`}
+            onClick={() => setMainView('commands')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            Commands
+          </button>
+        </nav>
+
         <div className="user-info">
           <span className="user-name">{user.displayName}</span>
           <button className="btn btn-secondary btn-sm" onClick={onLogout}>
@@ -322,55 +361,75 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
         {/* Content */}
         <div className="main-content">
-          {sessions.length > 0 ? (
+          {mainView === 'terminal' && (
             <>
-              {/* Session Tabs */}
-              <div className="session-tabs">
-                {sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    className={`session-tab ${activeSessionId === session.id ? 'active' : ''}`}
-                    onClick={() => setActiveSessionId(session.id)}
-                  >
-                    <span className="status-dot connected" />
-                    {session.connectionName}
-                    <span
-                      className="close-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDisconnect(session.id);
-                      }}
+              {sessions.length > 0 ? (
+                <>
+                  {/* Session Tabs */}
+                  <div className="session-tabs">
+                    {sessions.map((session) => (
+                      <button
+                        key={session.id}
+                        className={`session-tab ${activeSessionId === session.id ? 'active' : ''}`}
+                        onClick={() => setActiveSessionId(session.id)}
+                      >
+                        <span className="status-dot connected" />
+                        {session.connectionName}
+                        <span
+                          className="close-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDisconnect(session.id);
+                          }}
+                        >
+                          ×
+                        </span>
+                      </button>
+                    ))}
+
+                    {/* New Tab Button */}
+                    <button
+                      className="new-tab-btn"
+                      onClick={() => setShowConnectionModal(true)}
+                      title="New Connection"
                     >
-                      ×
-                    </span>
+                      +
+                    </button>
+                  </div>
+
+                  {/* Terminal */}
+                  <div className="terminal-container" ref={terminalContainerRef} />
+                </>
+              ) : (
+                <div className="welcome-screen">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#e94560" strokeWidth="1.5">
+                    <polyline points="4 17 10 11 4 5" />
+                    <line x1="12" y1="19" x2="20" y2="19" />
+                  </svg>
+                  <h2>Welcome to Connectty</h2>
+                  <p>Select a connection from the sidebar or create a new one to get started.</p>
+                  <button className="btn btn-primary" onClick={() => setShowConnectionModal(true)}>
+                    Create Connection
                   </button>
-                ))}
-
-                {/* New Tab Button */}
-                <button
-                  className="new-tab-btn"
-                  onClick={() => setShowConnectionModal(true)}
-                  title="New Connection"
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Terminal */}
-              <div className="terminal-container" ref={terminalContainerRef} />
+                </div>
+              )}
             </>
-          ) : (
-            <div className="welcome-screen">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#e94560" strokeWidth="1.5">
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" y1="19" x2="20" y2="19" />
-              </svg>
-              <h2>Welcome to Connectty</h2>
-              <p>Select a connection from the sidebar or create a new one to get started.</p>
-              <button className="btn btn-primary" onClick={() => setShowConnectionModal(true)}>
-                Create Connection
-              </button>
-            </div>
+          )}
+
+          {mainView === 'providers' && (
+            <ProviderPanel
+              credentials={credentials}
+              groups={groups}
+              onHostsImported={loadData}
+              onNotification={showNotification}
+            />
+          )}
+
+          {mainView === 'commands' && (
+            <BulkCommandPanel
+              connections={connections}
+              onNotification={showNotification}
+            />
           )}
         </div>
       </main>
