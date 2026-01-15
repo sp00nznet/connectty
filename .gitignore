@@ -43,3 +43,10 @@ temp/
 
 # Electron builder output
 packages/desktop/release/
+
+# Downloaded external tools (gsudo for admin shells)
+packages/desktop/resources/gsudo/*.exe
+packages/desktop/resources/gsudo/*.dll
+packages/desktop/resources/gsudo/x64/
+packages/desktop/resources/gsudo/x86/
+packages/desktop/resources/gsudo/arm64/

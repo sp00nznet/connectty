@@ -304,6 +304,43 @@ export class LocalShellService {
   }
 
   /**
+   * Find gsudo executable - checks bundled location first, then PATH
+   */
+  private findGsudo(): string | null {
+    if (this.platform !== 'win32') return null;
+
+    // Check for bundled gsudo in app resources
+    // In production: resources/gsudo/gsudo.exe
+    // In development: packages/desktop/resources/gsudo/gsudo.exe
+    const possiblePaths = [
+      // Production path (packaged app)
+      path.join(process.resourcesPath || '', 'gsudo', 'gsudo.exe'),
+      // Development paths
+      path.join(__dirname, '..', '..', 'resources', 'gsudo', 'gsudo.exe'),
+      path.join(__dirname, '..', 'resources', 'gsudo', 'gsudo.exe'),
+    ];
+
+    for (const gsudoPath of possiblePaths) {
+      if (fs.existsSync(gsudoPath)) {
+        return gsudoPath;
+      }
+    }
+
+    // Check if gsudo is in PATH
+    try {
+      const result = execSync('where gsudo', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const gsudoPath = result.trim().split('\n')[0];
+      if (gsudoPath && fs.existsSync(gsudoPath)) {
+        return gsudoPath;
+      }
+    } catch {
+      // gsudo not in PATH
+    }
+
+    return null;
+  }
+
+  /**
    * Spawn a new local shell session
    */
   spawn(shellInfo: LocalShellInfo): string {
@@ -312,31 +349,29 @@ export class LocalShellService {
     let shell = shellInfo.path;
     let args = shellInfo.args || [];
 
-    // For elevated shells on Windows, wrap with PowerShell elevation attempt
+    // For elevated shells on Windows, use gsudo if available
     if (shellInfo.elevated && this.platform === 'win32') {
-      // Try using gsudo if available, otherwise use PowerShell Start-Process
-      // gsudo allows running elevated commands in the same console
+      const gsudoPath = this.findGsudo();
       const targetShell = shellInfo.path;
       const isCmd = targetShell.toLowerCase().includes('cmd');
-      const isPowerShell = targetShell.toLowerCase().includes('powershell') || targetShell.toLowerCase().includes('pwsh');
 
-      // Use PowerShell to attempt elevation
-      shell = 'powershell.exe';
-      args = [
-        '-NoProfile',
-        '-Command',
-        // Check for gsudo first, fall back to Start-Process
-        `$gsudo = Get-Command gsudo -ErrorAction SilentlyContinue; ` +
-        `if ($gsudo) { ` +
-        `  Write-Host 'Using gsudo for elevation...' -ForegroundColor Cyan; ` +
-        `  gsudo "${targetShell}" ${isCmd ? '/k' : ''}` +
-        `} else { ` +
-        `  Write-Host 'gsudo not found. Launching elevated window via UAC...' -ForegroundColor Yellow; ` +
-        `  Write-Host 'Install gsudo (winget install gsudo) to run admin shells in this tab.' -ForegroundColor Gray; ` +
-        `  Start-Process "${targetShell}" -Verb RunAs; ` +
-        `  Start-Sleep -Seconds 2 ` +
-        `}`
-      ];
+      if (gsudoPath) {
+        // Use gsudo to run elevated in-tab
+        shell = gsudoPath;
+        args = isCmd ? [targetShell, '/k'] : [targetShell];
+      } else {
+        // Fall back to PowerShell Start-Process (opens external window)
+        shell = 'powershell.exe';
+        args = [
+          '-NoProfile',
+          '-Command',
+          `Write-Host 'gsudo not found. Launching elevated window via UAC...' -ForegroundColor Yellow; ` +
+          `Write-Host 'To run admin shells in this tab, install gsudo: winget install gsudo' -ForegroundColor Gray; ` +
+          `Write-Host ''; ` +
+          `Start-Process "${targetShell}" -Verb RunAs; ` +
+          `Start-Sleep -Seconds 2`
+        ];
+      }
     }
 
     // Get environment variables
