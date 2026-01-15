@@ -1,108 +1,149 @@
-# 🔌 Connectty
+# Connectty
 
-<p align="center">
-  <strong>A powerful SSH & RDP connection manager for teams and individuals</strong>
-</p>
+<div align="center">
 
-<p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Web-blue" alt="Platform">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node">
-</p>
+**The Modern Connection Manager for DevOps & SysAdmins**
+
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Web-0078D4?style=for-the-badge)](../../releases)
+[![License](https://img.shields.io/badge/license-MIT-00C853?style=for-the-badge)](LICENSE)
+[![Node](https://img.shields.io/badge/node-≥18-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Screenshots](#-screenshots)
+
+</div>
 
 ---
 
-## ✨ Features
+## Why Connectty?
+
+Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RDP files, and spreadsheets. Connectty brings everything together in one powerful interface with cloud provider integration, bulk command execution, and secure credential management.
+
+---
+
+## Features
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-### 🖥️ Desktop App
-- Native Windows & Linux clients
-- Tabbed SSH terminal sessions
-- RDP connection support
-- Offline-first with local SQLite
+### Connection Types
 
-</td>
-<td width="50%">
-
-### 🌐 Web Client
-- Browser-based SSH terminal
-- No installation required
-- Works from any device
-- Real-time collaboration ready
+| Type | Description |
+|:-----|:------------|
+| **SSH** | Full terminal with xterm.js, 256 colors, tabs |
+| **RDP** | Native client integration (mstsc/xfreerdp) |
+| **Serial** | COM/TTY device support with full settings |
+| **SFTP** | Built-in file browser with drag & drop |
 
 </td>
-</tr>
-<tr>
-<td>
+<td width="50%" valign="top">
 
-### ☁️ Provider Discovery
-- VMware ESXi / vSphere
-- Proxmox VE
-- AWS EC2
-- Google Cloud Platform
-- Microsoft Azure
+### Cloud Providers
 
-</td>
-<td>
-
-### ⚡ Bulk Actions
-- Execute commands across hosts
-- Pattern-based host selection
-- Save & reuse commands
-- SSH & WinRM support
-
-</td>
-</tr>
-<tr>
-<td>
-
-### 🔐 Security
-- AES-256 credential encryption
-- Active Directory integration
-- SSH key & agent support
-- Domain authentication
-
-</td>
-<td>
-
-### 🎨 Customization
-- 8 built-in themes
-- Connection groups
-- Tags & filtering
-- Import/Export support
+| Provider | Features |
+|:---------|:---------|
+| **VMware vSphere** | ESXi, vCenter discovery |
+| **Proxmox VE** | QEMU/LXC containers |
+| **AWS EC2** | Multi-region support |
+| **Google Cloud** | Compute Engine |
+| **Microsoft Azure** | Virtual Machines |
 
 </td>
 </tr>
 </table>
 
+### Core Capabilities
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  DISCOVER          CONNECT           MANAGE            AUTOMATE            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  • Auto-discover   • SSH terminals   • Credential      • Bulk commands     │
+│    from providers  • RDP sessions      vault           • Parallel exec     │
+│  • Smart import    • Serial consoles • Groups &        • Saved scripts     │
+│  • OS detection    • SFTP browser      folders         • Command history   │
+│  • IP resolution   • Tabbed UI       • Tags & search   • WinRM support     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Smart Provider Import
+
+When importing from cloud providers, Connectty automatically:
+
+- **Resolves hostnames to IPs** for reliable connections
+- **Detects duplicate names** across providers and labels them:
+  ```
+  web-server-01 (AWS)
+  web-server-01 (vCenter)
+  web-server-01 (Proxmox)
+  ```
+- **Assigns credentials** based on OS type or hostname patterns
+- **Allows selective import** with checkbox selection
+
+### Serial Connection Support
+
+Full serial/COM port support for network equipment, embedded devices, and console servers:
+
+| Setting | Options |
+|:--------|:--------|
+| **Baud Rate** | 300 - 921600 |
+| **Data Bits** | 5, 6, 7, 8 |
+| **Stop Bits** | 1, 1.5, 2 |
+| **Parity** | None, Odd, Even, Mark, Space |
+| **Flow Control** | None, Hardware (RTS/CTS), Software (XON/XOFF) |
+
+### SFTP File Browser
+
+Built-in file transfer with dual-pane interface:
+
+- **Navigate** local and remote filesystems side-by-side
+- **Transfer** files with progress tracking
+- **Manage** remote files (rename, delete, chmod, mkdir)
+- **Drag & drop** between local and remote
+
+### Bulk Command Execution
+
+Run commands across multiple hosts simultaneously:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Target: [✓] All Linux   [ ] Windows   [ ] Group: Production │
+│  ────────────────────────────────────────────────────────────│
+│  Command: df -h | head -10                                   │
+│  ────────────────────────────────────────────────────────────│
+│  Progress:                                                   │
+│    web-01 ████████████████████ 100% ✓                       │
+│    web-02 ████████████████████ 100% ✓                       │
+│    db-01  ████████████░░░░░░░░  60%                         │
+│    db-02  ░░░░░░░░░░░░░░░░░░░░   0% pending                 │
+└──────────────────────────────────────────────────────────────┘
+```
+
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Desktop App (Standalone)
 
 ```bash
-# Install dependencies
+# Clone and install
+git clone https://github.com/your-org/connectty.git
+cd connectty
 npm install
 
-# Build shared package
+# Build and run
 npm run build -w @connectty/shared
-
-# Start desktop app
 npm run start -w @connectty/desktop
 ```
 
-### Server + Web (Docker)
+### Server + Web Client (Docker)
 
 ```bash
-# Clone and configure
+# Configure environment
 cp .env.example .env
-# Edit .env with your settings
+nano .env  # Set your secrets
 
-# Start everything
+# Launch
 docker-compose up -d
 
 # Access at http://localhost:8080
@@ -110,17 +151,17 @@ docker-compose up -d
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Pre-built Binaries
 
 Download from [Releases](../../releases):
 
-| Platform | Download |
-|----------|----------|
-| 🪟 Windows | `Connectty-Setup-x.x.x.exe` |
-| 🐧 Debian/Ubuntu | `connectty_x.x.x_amd64.deb` |
-| 🐧 Other Linux | `connectty-x.x.x.AppImage` |
+| Platform | Package | Notes |
+|:---------|:--------|:------|
+| **Windows** | `Connectty-Setup-x.x.x.exe` | Installer with auto-updates |
+| **Debian/Ubuntu** | `connectty_x.x.x_amd64.deb` | `sudo dpkg -i connectty.deb` |
+| **Other Linux** | `connectty-x.x.x.AppImage` | Portable, no install needed |
 
 ### Build from Source
 
@@ -128,72 +169,78 @@ Download from [Releases](../../releases):
 # Windows installer
 npm run dist:win -w @connectty/desktop
 
-# Linux packages
+# Linux packages (deb, AppImage, rpm)
 npm run dist:linux -w @connectty/desktop
 ```
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 connectty/
-├── 📁 packages/
-│   ├── 📦 shared/      # Shared types & utilities
-│   ├── 🖥️ desktop/     # Electron app (Win/Linux)
-│   ├── 🌐 server/      # Node.js API server
-│   └── 🔮 web/         # React web client
-├── 📁 docs/            # Documentation
-├── 🐳 docker-compose.yml
-└── 📄 package.json
+├── packages/
+│   ├── shared/          # TypeScript types & utilities
+│   ├── desktop/         # Electron app (Windows/Linux)
+│   │   ├── main/        # Node.js backend (SSH, Serial, DB)
+│   │   └── renderer/    # React frontend
+│   ├── server/          # Node.js API server
+│   └── web/             # React web client
+├── docs/                # Documentation
+│   ├── FEATURES.md      # Detailed feature guide
+│   ├── PROVIDERS.md     # Cloud provider setup
+│   ├── CONFIGURATION.md # Environment & settings
+│   └── API.md           # REST API reference
+└── docker-compose.yml   # Production deployment
 ```
 
 ---
 
-## 🎨 Themes
+## Themes
 
-| Theme | Style |
-|-------|-------|
-| 🌙 Midnight | Dark blue (default) |
-| ☀️ Light | Clean & bright |
-| 🧛 Dracula | Purple & pink |
-| 🏔️ Nord | Arctic blues |
-| 🌅 Solarized | Warm & precise |
-| 🎨 Monokai | Vibrant colors |
-| 🐙 GitHub Dark | GitHub style |
-| 🔲 High Contrast | Accessibility |
+8 built-in themes for the terminal and UI:
+
+| | | | |
+|:---:|:---:|:---:|:---:|
+| **Midnight** | **Light** | **Dracula** | **Nord** |
+| Dark blue | Clean white | Purple/pink | Arctic blue |
+| **Solarized** | **Monokai** | **GitHub Dark** | **High Contrast** |
+| Warm yellow | Vibrant | GitHub style | Accessibility |
 
 ---
 
-## 📚 Documentation
+## Security
+
+| Feature | Implementation |
+|:--------|:---------------|
+| **Credential Encryption** | AES-256-GCM with per-installation key |
+| **Authentication** | JWT tokens, configurable expiry |
+| **Enterprise SSO** | Active Directory / LDAP |
+| **SSH Security** | Private keys, agent forwarding, keyboard-interactive |
+| **Transport** | TLS for all API communications |
+
+> **Important**: Always set strong `JWT_SECRET` and `DB_PASSWORD` values in production.
+
+---
+
+## Documentation
 
 | Document | Description |
-|----------|-------------|
-| [⚙️ Configuration](docs/CONFIGURATION.md) | Environment variables, Docker, AD setup |
-| [📡 API Reference](docs/API.md) | REST API endpoints & WebSocket |
-| [✨ Features Guide](docs/FEATURES.md) | Detailed feature documentation |
+|:---------|:------------|
+| [Features Guide](docs/FEATURES.md) | Connection types, bulk actions, terminal |
+| [Provider Setup](docs/PROVIDERS.md) | Cloud provider configuration |
+| [Configuration](docs/CONFIGURATION.md) | Environment variables, Docker, AD |
+| [API Reference](docs/API.md) | REST endpoints, WebSocket events |
 
 ---
 
-## 🔒 Security
-
-- 🔐 **Encryption**: AES-256-GCM for all credentials
-- 🎫 **Authentication**: JWT tokens with configurable expiry
-- 🏢 **Enterprise**: Active Directory / LDAP support
-- 🔑 **SSH**: Private keys, agents, keyboard-interactive
-- 🛡️ **Transport**: TLS for all API communications
-
-> ⚠️ Always use strong `JWT_SECRET` and `DB_PASSWORD` in production!
-
----
-
-## 🛠️ Development
+## Development
 
 ```bash
-# Install all dependencies
+# Install dependencies
 npm install
 
-# Development mode (all packages)
+# Development mode (hot reload)
 npm run dev
 
 # Run tests
@@ -203,37 +250,36 @@ npm test
 npm run typecheck
 ```
 
-### Package Scripts
+### Workspace Commands
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev:desktop` | Start desktop in dev mode |
-| `npm run dev:server` | Start server in dev mode |
-| `npm run dev:web` | Start web client in dev mode |
+| Command | Description |
+|:--------|:------------|
+| `npm run dev:desktop` | Desktop app with hot reload |
+| `npm run dev:server` | API server with nodemon |
+| `npm run dev:web` | Web client with Vite |
 | `npm run build` | Build all packages |
-| `npm run dist:win` | Create Windows installer |
-| `npm run dist:linux` | Create Linux packages |
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing`)
-5. Open a Pull Request
+2. Create a feature branch: `git checkout -b feature/amazing`
+3. Make your changes with tests
+4. Commit: `git commit -m 'Add amazing feature'`
+5. Push: `git push origin feature/amazing`
+6. Open a Pull Request
 
 ---
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-<p align="center">
-  Made with ❤️ for sysadmins everywhere
-</p>
+<div align="center">
+
+**[Report Bug](../../issues) · [Request Feature](../../issues) · [Discussions](../../discussions)**
+
+</div>

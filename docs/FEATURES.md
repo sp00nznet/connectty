@@ -1,272 +1,405 @@
-# ✨ Features Guide
+# Features Guide
 
-Detailed documentation for Connectty's key features.
+Comprehensive documentation for all Connectty features.
 
-## 📡 Connection Types
+---
+
+## Connection Types
 
 ### SSH Connections
 
-Connect to Linux, Unix, and ESXi hosts via SSH.
+Full-featured SSH terminal for Linux, Unix, macOS, and network devices.
 
-- **Authentication Methods:**
-  - Password
-  - SSH Private Key (with optional passphrase)
-  - SSH Agent forwarding
-  - Keyboard-interactive
+**Authentication Methods:**
 
-- **Terminal Features:**
-  - Full xterm-256color support
-  - Automatic terminal resizing
-  - Copy/paste support
-  - Customizable themes
+| Method | Description |
+|:-------|:------------|
+| **Password** | Username/password authentication |
+| **Private Key** | RSA, ECDSA, Ed25519 keys (with optional passphrase) |
+| **SSH Agent** | Forward keys from ssh-agent |
+| **Keyboard-Interactive** | Multi-factor and challenge-response |
+
+**Terminal Features:**
+
+- xterm-256color with full color support
+- Automatic terminal resize on window change
+- Copy/paste with keyboard shortcuts
+- Unicode and emoji support
+- Mouse support for terminal applications (vim, htop, etc.)
+
+---
 
 ### RDP Connections
 
 Connect to Windows hosts via Remote Desktop Protocol.
 
-- **Desktop Client:** Launches native RDP client (mstsc.exe on Windows, xfreerdp on Linux)
-- **Supports:** Domain authentication, custom port, NLA
+| Platform | Client Used |
+|:---------|:------------|
+| Windows | `mstsc.exe` (built-in) |
+| Linux | `xfreerdp` (FreeRDP) |
+
+**Features:**
+- Domain authentication support
+- Custom port configuration
+- Network Level Authentication (NLA)
+- Automatic credential passing
 
 ---
 
-## ☁️ Provider Discovery
+### Serial Connections
 
-Automatically discover and import hosts from hypervisors and cloud platforms.
+Connect to serial/COM port devices for console access to network equipment, embedded systems, and serial consoles.
+
+**Supported Settings:**
+
+| Setting | Available Options |
+|:--------|:------------------|
+| **Device** | Auto-detected COM/tty ports |
+| **Baud Rate** | 300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600 |
+| **Data Bits** | 5, 6, 7, 8 |
+| **Stop Bits** | 1, 1.5, 2 |
+| **Parity** | None, Odd, Even, Mark, Space |
+| **Flow Control** | None, Hardware (RTS/CTS), Software (XON/XOFF) |
+
+**Common Use Cases:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Network Switches    → 9600 baud, 8N1, no flow control     │
+│  Cisco Routers       → 9600 baud, 8N1, no flow control     │
+│  Embedded Linux      → 115200 baud, 8N1, no flow control   │
+│  Arduino/ESP32       → 115200 baud, 8N1, no flow control   │
+│  Legacy Equipment    → 2400-9600 baud, varies              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### SFTP File Browser
+
+Built-in secure file transfer with a dual-pane interface.
+
+**Interface:**
+
+```
+┌─────────────────────────────┬─────────────────────────────┐
+│  LOCAL                      │  REMOTE                     │
+│  /home/user/Downloads       │  /var/www/html              │
+├─────────────────────────────┼─────────────────────────────┤
+│  📁 ..                      │  📁 ..                      │
+│  📁 projects                │  📁 css                     │
+│  📄 report.pdf      2.1 MB  │  📁 js                      │
+│  📄 config.json     1.2 KB  │  📄 index.html      4.5 KB  │
+│  📄 backup.tar.gz   50 MB   │  📄 app.js         12.3 KB  │
+└─────────────────────────────┴─────────────────────────────┘
+         [Upload →]              [← Download]
+```
+
+**Operations:**
+
+| Action | Description |
+|:-------|:------------|
+| **Upload** | Transfer local files to remote server |
+| **Download** | Transfer remote files to local machine |
+| **Create Directory** | Make new folders on remote |
+| **Delete** | Remove files or empty directories |
+| **Rename** | Rename files or directories |
+| **Chmod** | Change file permissions |
+
+**Features:**
+- Progress tracking for large transfers
+- Automatic directory navigation
+- Home directory shortcuts
+- File size and permission display
+
+---
+
+## Cloud Provider Discovery
+
+Automatically discover and import servers from hypervisors and cloud platforms.
 
 ### Supported Providers
 
-| Provider | Auto-Discovery | OS Detection |
-|----------|---------------|--------------|
-| 🖥️ VMware ESXi/vSphere | ✅ | ✅ |
-| 🟠 Proxmox VE | ✅ | ✅ |
-| 🟡 AWS EC2 | ✅ | ✅ |
-| 🔵 Google Cloud | ✅ | ✅ |
-| 🟣 Microsoft Azure | ✅ | ✅ |
+| Provider | VM Types | OS Detection | IP Discovery |
+|:---------|:---------|:-------------|:-------------|
+| **VMware vSphere** | ESXi VMs | Guest tools | VMware Tools |
+| **Proxmox VE** | QEMU, LXC | Config-based | QEMU Agent |
+| **AWS EC2** | Instances | AMI metadata | Public/Private IP |
+| **Google Cloud** | Compute Engine | Metadata | External/Internal |
+| **Azure** | Virtual Machines | OS Disk | Public/Private |
 
-### How It Works
+### Smart Import Features
 
-1. **Add Provider** - Configure connection to your hypervisor/cloud
-2. **Discover** - Scan for running VMs/instances
-3. **Auto-Import** - Create SSH/RDP connections automatically
-4. **Credential Matching** - Auto-assign credentials based on OS type
+**Selective Import:**
+- View all discovered hosts before importing
+- Check/uncheck individual servers
+- Select all or filter by state (running/stopped)
 
-### Credential Auto-Assignment
+**Credential Assignment:**
+- Assign a credential to all selected hosts during import
+- Auto-detect credentials based on OS type
+- Pattern matching (e.g., `web-*` servers get web credential)
 
-Configure credentials to automatically apply to discovered hosts:
+**Duplicate Name Handling:**
+When servers from different providers have the same name, Connectty automatically appends the provider name:
 
 ```
-Credential: "Linux Root"
-├── Auto-assign OS Types: [linux, unix]
-└── Auto-assign Patterns: [web-*, *-prod-*]
+Before:                    After Import:
+├── web-01 (AWS)          ├── web-01 (AWS)
+└── web-01 (vCenter)      └── web-01 (vCenter)
+                          └── web-01 (Proxmox)
 ```
 
-When importing a Linux host named `web-server-01`, it automatically gets assigned this credential.
+**IP Resolution:**
+Hostnames are automatically resolved to IP addresses during import for reliable connections, even when DNS is unavailable.
+
+### Provider Management
+
+**Per-Provider Actions:**
+- **Discover** - Scan for new/changed VMs
+- **Import Hosts** - Selective import with credential assignment
+- **Remove Hosts** - Bulk delete all connections from a provider
+- **Test Connection** - Verify provider API access
 
 ---
 
-## ⚡ Bulk Actions
+## Bulk Command Execution
 
 Execute commands across multiple hosts simultaneously.
 
-### Host Selection
+### Target Selection
 
-| Method | Description | Example |
-|--------|-------------|---------|
-| 🌐 All | All connections | - |
-| 📁 Group | By group | "Production" |
-| 🔍 Pattern | Hostname wildcard | `web-*`, `192.168.1.*` |
-| ✅ Selection | Manual pick | Select checkboxes |
-| 💻 OS Type | By operating system | "Linux only" |
+| Method | Example | Description |
+|:-------|:--------|:------------|
+| **All Hosts** | - | Every connection |
+| **By Group** | "Production" | All hosts in group |
+| **By Pattern** | `web-*` | Wildcard hostname match |
+| **By OS** | Linux | Filter by operating system |
+| **Manual** | Select checkboxes | Pick individual hosts |
 
-### Command Modes
+### Command Types
 
-#### 1. Inline Command
-Quick one-liner execution:
+**1. Inline Command**
 ```bash
 uptime && df -h
 ```
 
-#### 2. Saved Commands
-Create reusable commands:
-- **Name:** Check Disk Space
-- **Category:** Monitoring
-- **Target OS:** Linux
-- **Command:** `df -h | head -20`
+**2. Saved Command**
+```yaml
+Name: Check Disk Space
+Category: Monitoring
+Target OS: Linux
+Command: df -h | grep -E '^/dev' | head -10
+```
 
-#### 3. Script Execution
-Run multi-line scripts:
+**3. Multi-line Script**
 ```bash
 #!/bin/bash
-echo "=== System Info ==="
-hostname
-uptime
+echo "=== System Report ==="
+echo "Hostname: $(hostname)"
+echo "Uptime: $(uptime -p)"
+echo "Memory:"
 free -h
+echo "Disk:"
 df -h /
 ```
 
-### Execution Features
+### Execution Engine
 
-- ⚡ **Parallel Execution** - Up to 10 concurrent connections
-- 📊 **Real-time Progress** - Live status updates per host
-- 🛑 **Cancellation** - Stop execution at any time
-- 📜 **History** - View past executions and results
-- 💾 **Save Results** - Export execution output
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Command Execution                        │
+├─────────────────────────────────────────────────────────────┤
+│  Parallelism:     Up to 10 concurrent connections          │
+│  Timeout:         Configurable per-command                 │
+│  Protocols:       SSH (Linux/Unix), WinRM (Windows)        │
+│  Output:          Real-time streaming per host             │
+│  History:         Full execution log with results          │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Protocol Support
-
-| OS | Protocol | Notes |
-|----|----------|-------|
-| Linux/Unix | SSH | Uses `ssh2` library |
-| Windows | WinRM | PowerShell Remoting |
-| ESXi | SSH | Direct shell access |
-
----
-
-## 🎨 Themes
-
-Customize the desktop app appearance with 8 built-in themes.
-
-### Available Themes
-
-| Theme | Preview Colors |
-|-------|---------------|
-| 🌙 **Midnight** | Dark blue, red accents |
-| ☀️ **Light** | Clean white, blue accents |
-| 🧛 **Dracula** | Purple, pink accents |
-| 🏔️ **Nord** | Arctic blues, frost |
-| 🌅 **Solarized** | Warm yellows, teals |
-| 🎨 **Monokai** | Dark with vibrant colors |
-| 🐙 **GitHub Dark** | GitHub's dark mode |
-| 🔲 **High Contrast** | Maximum visibility |
-
-### Theme Selection
-
-Click the dropdown in the sidebar header to switch themes. Your preference is saved automatically.
+**Progress Tracking:**
+- Live status updates per host
+- Success/failure indicators
+- Execution time tracking
+- Cancelable at any time
 
 ---
 
-## 🔑 Credential Management
+## Credential Management
 
-Secure storage and organization of authentication credentials.
+Secure storage and intelligent assignment of authentication credentials.
 
 ### Credential Types
 
-| Type | Use Case | Fields |
-|------|----------|--------|
-| 🔐 Password | Basic auth | Username, Password |
-| 🔑 Private Key | SSH key auth | Username, Key, Passphrase |
-| 🏢 Domain | Windows AD | Domain, Username, Password |
-| 🔗 Agent | SSH agent | Username only |
+| Type | Fields | Use Case |
+|:-----|:-------|:---------|
+| **Password** | Username, Password | Basic authentication |
+| **Private Key** | Username, Key file, Passphrase | SSH key authentication |
+| **Domain** | Domain, Username, Password | Windows AD/LDAP |
+| **SSH Agent** | Username only | Forward from ssh-agent |
 
 ### Auto-Assignment Rules
 
 Configure credentials to automatically match connections:
 
 **By OS Type:**
-- Linux/Unix servers → Linux Root credential
-- Windows servers → Domain Admin credential
+```yaml
+Credential: "Linux Root"
+Auto-assign OS Types: [linux, unix, esxi]
+# → Automatically assigned to all Linux/Unix hosts
+```
 
-**By Pattern:**
-- `web-*` → Web Server credential
-- `db-*` → Database credential
-- `192.168.1.*` → Internal Network credential
+**By Hostname Pattern:**
+```yaml
+Credential: "Web Servers"
+Auto-assign Patterns: ["web-*", "*-www-*"]
+# → Assigned to web-01, prod-www-server, etc.
+```
+
+**Priority:**
+1. Pattern match (most specific first)
+2. OS type match
+3. Manual assignment
 
 ### Security
 
-- 🔒 AES-256-GCM encryption at rest
-- 🙈 Secrets never displayed in UI
-- 🔐 Per-installation master key
+| Feature | Implementation |
+|:--------|:---------------|
+| **Encryption** | AES-256-GCM |
+| **Key Derivation** | Per-installation master key |
+| **Display** | Secrets never shown in UI |
+| **Storage** | Encrypted in SQLite database |
 
 ---
 
-## 📥 Import/Export
+## Groups & Organization
 
-Exchange connection data with other tools.
+Organize connections into hierarchical folders.
 
-### Import Formats
+### Group Features
 
-| Format | Source |
-|--------|--------|
-| 📄 JSON | Connectty export, custom |
-| 📊 CSV | Spreadsheets, databases |
-| 🔧 SSH Config | `~/.ssh/config` |
-| 🐿️ PuTTY | Windows registry export |
-
-### Export Options
-
-- **Include Credentials:** Export with or without secrets
-- **Format:** JSON or CSV
-- **Encryption:** Optional password protection
-
-### Sync with Server
-
-Push/pull data between desktop and server:
-
-```
-Desktop ──push──> Server ──pull──> Other Devices
-```
-
----
-
-## 🗂️ Groups
-
-Organize connections into hierarchical groups.
-
-### Features
-
-- 📁 Nested groups (parent/child)
-- 🎨 Custom colors
-- 📝 Descriptions
-- 🔍 Filter by group in bulk actions
+- **Nested Groups** - Unlimited depth
+- **Custom Colors** - Visual organization
+- **Descriptions** - Notes for each group
+- **Bulk Actions** - Target entire groups
 
 ### Example Structure
 
 ```
 📁 Production
-├── 📁 Web Servers
-│   ├── web-01
-│   └── web-02
-├── 📁 Database
-│   └── db-01
-└── 📁 Load Balancers
-    └── lb-01
-
-📁 Development
-└── 📁 Dev Servers
-    ├── dev-01
-    └── dev-02
+│   ├── 📁 Web Tier
+│   │   ├── web-01 (nginx)
+│   │   ├── web-02 (nginx)
+│   │   └── web-03 (nginx)
+│   ├── 📁 Application Tier
+│   │   ├── app-01 (nodejs)
+│   │   └── app-02 (nodejs)
+│   └── 📁 Database Tier
+│       ├── db-primary (postgres)
+│       └── db-replica (postgres)
+│
+📁 Staging
+│   └── 📁 All-in-One
+│       └── staging-01
+│
+📁 Network Equipment
+    ├── core-switch-01 (serial)
+    ├── core-switch-02 (serial)
+    └── edge-router-01 (ssh)
 ```
 
 ---
 
-## 🖥️ Terminal Features
+## Terminal Features
 
-Full-featured SSH terminal in the desktop app.
+Full-featured terminal emulator powered by xterm.js.
 
 ### Capabilities
 
-| Feature | Support |
-|---------|---------|
-| 🎨 256 colors | ✅ |
-| 📐 Auto-resize | ✅ |
-| 📋 Copy/paste | ✅ |
-| 🔤 Unicode | ✅ |
-| ⌨️ Special keys | ✅ |
-| 🖱️ Mouse support | ✅ |
+| Feature | Status | Notes |
+|:--------|:-------|:------|
+| 256 Colors | Supported | Full palette |
+| True Color | Supported | 24-bit RGB |
+| Unicode | Supported | Including emoji |
+| Mouse | Supported | Click, scroll, select |
+| Bracketed Paste | Supported | Safe pasting |
+| Auto-resize | Supported | Tracks window size |
 
 ### Keyboard Shortcuts
 
-| Action | Shortcut |
-|--------|----------|
+| Action | Windows/Linux |
+|:-------|:--------------|
 | Copy | `Ctrl+Shift+C` |
 | Paste | `Ctrl+Shift+V` |
 | New Tab | `Ctrl+T` |
 | Close Tab | `Ctrl+W` |
 | Next Tab | `Ctrl+Tab` |
 | Previous Tab | `Ctrl+Shift+Tab` |
+| Clear | `Ctrl+L` |
+| Search | `Ctrl+Shift+F` |
 
-### Multiple Sessions
+### Tab Management
 
-- Open multiple SSH sessions in tabs
-- Quick switching between connections
-- Visual connection status indicators
+- Multiple simultaneous sessions
+- Connection status indicator (connected/disconnected)
+- Quick tab switching
+- Reorder tabs by dragging
+- Duplicate session to new tab
+
+---
+
+## Import & Export
+
+Exchange data with other tools and backup your configuration.
+
+### Import Sources
+
+| Format | Source | Fields |
+|:-------|:-------|:-------|
+| **JSON** | Connectty export | Full data |
+| **CSV** | Spreadsheets | Connections |
+| **SSH Config** | `~/.ssh/config` | Host entries |
+| **PuTTY** | Registry export | Sessions |
+
+### Export Options
+
+```yaml
+Export Settings:
+  Format: JSON | CSV
+  Include:
+    - Connections: yes
+    - Credentials: yes/no (optional)
+    - Groups: yes
+    - Providers: yes
+  Encryption: Optional password protection
+```
+
+### Server Sync
+
+```
+┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+│   Desktop    │ ──push──│    Server    │──pull── │   Desktop    │
+│   Client A   │         │   Database   │         │   Client B   │
+└──────────────┘         └──────────────┘         └──────────────┘
+```
+
+---
+
+## System Tray
+
+Desktop app can minimize to system tray for quick access.
+
+### Settings
+
+| Option | Description |
+|:-------|:------------|
+| **Minimize to Tray** | Minimize button sends to tray |
+| **Close to Tray** | Close button sends to tray |
+| **Start Minimized** | Launch hidden in tray |
+
+### Tray Menu
+
+- **Show Connectty** - Restore window
+- **Quick Connect** - Recent connections
+- **Quit** - Exit application
