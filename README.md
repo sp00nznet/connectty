@@ -31,9 +31,9 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 | Type | Description |
 |:-----|:------------|
 | **SSH** | Full terminal with xterm.js, 256 colors, tabs |
-| **RDP** | Native client integration (mstsc/xfreerdp) |
+| **RDP** | Embedded tabbed sessions + native client fallback |
 | **Serial** | COM/TTY device support with full settings |
-| **SFTP** | Built-in file browser with drag & drop |
+| **SFTP** | Dual-pane file browser with FXP transfers |
 
 </td>
 <td width="50%" valign="top">
@@ -47,6 +47,7 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 | **AWS EC2** | Multi-region support |
 | **Google Cloud** | Compute Engine |
 | **Microsoft Azure** | Virtual Machines |
+| **IBM BigFix** | Endpoint management |
 
 </td>
 </tr>
@@ -59,10 +60,11 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 │  DISCOVER          CONNECT           MANAGE            AUTOMATE            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  • Auto-discover   • SSH terminals   • Credential      • Bulk commands     │
-│    from providers  • RDP sessions      vault           • Parallel exec     │
+│    from providers  • Embedded RDP      vault           • Parallel exec     │
 │  • Smart import    • Serial consoles • Groups &        • Saved scripts     │
 │  • OS detection    • SFTP browser      folders         • Command history   │
-│  • IP resolution   • Tabbed UI       • Tags & search   • WinRM support     │
+│  • IP resolution   • Tabbed UI       • Auto-assign     • WinRM support     │
+│  • Selective import• System tray     • Tags & search   • Variable subst    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -100,6 +102,34 @@ Built-in file transfer with dual-pane interface:
 - **Transfer** files with progress tracking
 - **Manage** remote files (rename, delete, chmod, mkdir)
 - **Drag & drop** between local and remote
+- **FXP transfers** between two remote servers
+
+### Embedded RDP Sessions
+
+Full graphical RDP sessions in tabbed interface:
+
+- **Canvas-based** bitmap rendering for low latency
+- **Keyboard/mouse** input with proper scan codes
+- **Fallback** to native client (mstsc/xfreerdp) if needed
+- **Multi-session** support like SSH tabs
+
+### System Tray Support
+
+Minimize to system tray with configurable behavior:
+
+| Setting | Description |
+|:--------|:------------|
+| **Minimize to Tray** | Window minimizes to tray instead of taskbar |
+| **Close to Tray** | X button hides to tray instead of quitting |
+| **Start Minimized** | Launch app hidden in system tray |
+
+### Credential Auto-Assignment
+
+Automatically assign credentials to imported hosts:
+
+- **By OS Type** - Assign Linux credentials to Linux hosts
+- **By Pattern** - Match hostnames like `web-*` or `*-prod-*`
+- **Manual Override** - Select credential during import
 
 ### Bulk Command Execution
 
@@ -214,10 +244,13 @@ connectty/
 | Feature | Implementation |
 |:--------|:---------------|
 | **Credential Encryption** | AES-256-GCM with per-installation key |
+| **Password Verification** | Constant-time comparison (timing-attack resistant) |
+| **Command Execution** | Encoded PowerShell commands (injection-safe) |
 | **Authentication** | JWT tokens, configurable expiry |
 | **Enterprise SSO** | Active Directory / LDAP |
 | **SSH Security** | Private keys, agent forwarding, keyboard-interactive |
 | **Transport** | TLS for all API communications |
+| **Input Validation** | Hostname validation, regex escaping |
 
 > **Important**: Always set strong `JWT_SECRET` and `DB_PASSWORD` values in production.
 

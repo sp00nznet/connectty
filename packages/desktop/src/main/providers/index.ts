@@ -14,6 +14,7 @@ import { ProxmoxProvider } from './proxmox';
 import { AWSProvider } from './aws';
 import { GCPProvider } from './gcp';
 import { AzureProvider } from './azure';
+import { BigFixProvider } from './bigfix';
 
 export interface IProviderService {
   testConnection(provider: Provider): Promise<boolean>;
@@ -32,6 +33,8 @@ export function getProviderService(type: ProviderType): IProviderService {
       return new GCPProvider();
     case 'azure':
       return new AzureProvider();
+    case 'bigfix':
+      return new BigFixProvider();
     default:
       throw new Error(`Unknown provider type: ${type}`);
   }
@@ -75,3 +78,4 @@ export { ProxmoxProvider } from './proxmox';
 export { AWSProvider } from './aws';
 export { GCPProvider } from './gcp';
 export { AzureProvider } from './azure';
+export { BigFixProvider } from './bigfix';

@@ -78,7 +78,7 @@ export interface Credential {
 // Provider Types (Cloud & Hypervisor)
 // ============================================================================
 
-export type ProviderType = 'esxi' | 'proxmox' | 'aws' | 'gcp' | 'azure';
+export type ProviderType = 'esxi' | 'proxmox' | 'aws' | 'gcp' | 'azure' | 'bigfix';
 
 export interface Provider {
   id: string;
@@ -100,7 +100,8 @@ export type ProviderConfig =
   | ProxmoxConfig
   | AWSConfig
   | GCPConfig
-  | AzureConfig;
+  | AzureConfig
+  | BigFixConfig;
 
 export interface ESXiConfig {
   type: 'esxi';
@@ -144,6 +145,15 @@ export interface AzureConfig {
   clientSecret?: string;
   subscriptionId: string;
   subscriptions?: string[]; // Additional subscriptions
+}
+
+export interface BigFixConfig {
+  type: 'bigfix';
+  host: string;
+  port: number;
+  username: string;        // AD username (e.g., DOMAIN\\user or user@domain.com)
+  password?: string;
+  ignoreCertErrors: boolean;
 }
 
 // ============================================================================

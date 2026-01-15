@@ -146,7 +146,23 @@ const api = {
 
   // RDP operations
   rdp: {
-    connect: (connectionId: string): Promise<void> => ipcRenderer.invoke('rdp:connect', connectionId),
+    connect: (connectionId: string, embedded?: boolean): Promise<string | null> =>
+      ipcRenderer.invoke('rdp:connect', connectionId, embedded ?? true),
+    disconnect: (sessionId: string): Promise<void> => ipcRenderer.invoke('rdp:disconnect', sessionId),
+    sendKey: (sessionId: string, scanCode: number, isPressed: boolean, isExtended?: boolean): Promise<void> =>
+      ipcRenderer.invoke('rdp:sendKey', sessionId, scanCode, isPressed, isExtended ?? false),
+    sendMouse: (sessionId: string, x: number, y: number, button: number, isPressed: boolean): Promise<void> =>
+      ipcRenderer.invoke('rdp:sendMouse', sessionId, x, y, button, isPressed),
+    sendWheel: (sessionId: string, x: number, y: number, delta: number, isHorizontal?: boolean): Promise<void> =>
+      ipcRenderer.invoke('rdp:sendWheel', sessionId, x, y, delta, isHorizontal ?? false),
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('rdp:isAvailable'),
+    onEvent: (callback: (sessionId: string, event: any) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, sessionId: string, rdpEvent: any) => {
+        callback(sessionId, rdpEvent);
+      };
+      ipcRenderer.on('rdp:event', handler);
+      return () => ipcRenderer.removeListener('rdp:event', handler);
+    },
   },
 
   // Serial operations

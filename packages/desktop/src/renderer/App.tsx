@@ -60,7 +60,17 @@ interface SFTPSession {
   sessionId: string; // The backend SFTP session ID
 }
 
-type Session = SSHSession | SerialSession | SFTPSession;
+interface RDPSession {
+  id: string;
+  type: 'rdp';
+  connectionId: string;
+  connectionName: string;
+  screenWidth: number;
+  screenHeight: number;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
+}
+
+type Session = SSHSession | SerialSession | SFTPSession | RDPSession;
 
 export default function App() {
   const [connections, setConnections] = useState<ServerConnection[]>([]);
@@ -118,12 +128,14 @@ export default function App() {
   useEffect(() => {
     loadData();
 
-    // Listen for SSH and serial events
+    // Listen for SSH, serial, and RDP events
     const unsubscribeSSH = window.connectty.ssh.onEvent(handleSSHEvent);
     const unsubscribeSerial = window.connectty.serial.onEvent(handleSerialEvent);
+    const unsubscribeRDP = window.connectty.rdp.onEvent(handleRDPEvent);
     return () => {
       unsubscribeSSH();
       unsubscribeSerial();
+      unsubscribeRDP();
     };
   }, []);
 
@@ -210,19 +222,96 @@ export default function App() {
     });
   }, []);
 
+  const handleRDPEvent = useCallback((sessionId: string, event: any) => {
+    setSessions(prev => {
+      const session = prev.find(s => s.id === sessionId);
+      if (!session || session.type !== 'rdp') return prev;
+
+      switch (event.type) {
+        case 'bitmap':
+          // Render bitmap to canvas
+          if (session.canvasRef.current && event.bitmap) {
+            const ctx = session.canvasRef.current.getContext('2d');
+            if (ctx) {
+              const bitmap = event.bitmap;
+              const imageData = ctx.createImageData(bitmap.width, bitmap.height);
+              // Convert RDP bitmap format to RGBA
+              const data = bitmap.data;
+              const bpp = bitmap.bitsPerPixel;
+              for (let i = 0, j = 0; i < data.length && j < imageData.data.length; ) {
+                if (bpp === 32) {
+                  imageData.data[j++] = data[i + 2]; // R
+                  imageData.data[j++] = data[i + 1]; // G
+                  imageData.data[j++] = data[i];     // B
+                  imageData.data[j++] = 255;         // A
+                  i += 4;
+                } else if (bpp === 24) {
+                  imageData.data[j++] = data[i + 2]; // R
+                  imageData.data[j++] = data[i + 1]; // G
+                  imageData.data[j++] = data[i];     // B
+                  imageData.data[j++] = 255;         // A
+                  i += 3;
+                } else if (bpp === 16) {
+                  const pixel = data[i] | (data[i + 1] << 8);
+                  imageData.data[j++] = ((pixel >> 11) & 0x1F) << 3; // R
+                  imageData.data[j++] = ((pixel >> 5) & 0x3F) << 2;  // G
+                  imageData.data[j++] = (pixel & 0x1F) << 3;         // B
+                  imageData.data[j++] = 255;                          // A
+                  i += 2;
+                } else {
+                  i++;
+                  j += 4;
+                }
+              }
+              ctx.putImageData(imageData, bitmap.destLeft, bitmap.destTop);
+            }
+          }
+          break;
+        case 'close':
+          showNotification('success', `Disconnected from ${session.connectionName}`);
+          return prev.filter(s => s.id !== sessionId);
+        case 'error':
+          showNotification('error', event.message || 'RDP connection error');
+          return prev.filter(s => s.id !== sessionId);
+      }
+      return prev;
+    });
+  }, []);
+
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
   };
 
   const handleConnect = async (connection: ServerConnection, password?: string) => {
-    // If RDP connection, launch external client
+    // If RDP connection, try embedded client first, fall back to external
     if (connection.connectionType === 'rdp') {
       try {
-        await window.connectty.rdp.connect(connection.id);
-        showNotification('success', `Launching RDP client for ${connection.name}`);
+        const sessionId = await window.connectty.rdp.connect(connection.id, true);
+
+        if (sessionId) {
+          // Embedded RDP - create canvas session
+          const canvasRef = React.createRef<HTMLCanvasElement>();
+
+          const newSession: RDPSession = {
+            id: sessionId,
+            type: 'rdp',
+            connectionId: connection.id,
+            connectionName: connection.name,
+            screenWidth: 1920,
+            screenHeight: 1080,
+            canvasRef,
+          };
+
+          setSessions(prev => [...prev, newSession]);
+          setActiveSessionId(sessionId);
+          showNotification('success', `Connected to ${connection.name}`);
+        } else {
+          // External RDP client was launched
+          showNotification('success', `Launching RDP client for ${connection.name}`);
+        }
       } catch (err) {
-        showNotification('error', `Failed to launch RDP: ${(err as Error).message}`);
+        showNotification('error', `Failed to connect: ${(err as Error).message}`);
       }
       return;
     }
@@ -334,6 +423,10 @@ export default function App() {
       await window.connectty.ssh.disconnect(sessionId);
     } else if (session.type === 'sftp') {
       await window.connectty.sftp.disconnect(session.sessionId);
+    } else if (session.type === 'rdp') {
+      await window.connectty.rdp.disconnect(sessionId);
+    } else if (session.type === 'serial') {
+      await window.connectty.serial.disconnect(sessionId);
     }
 
     setSessions(prev => {
@@ -708,7 +801,7 @@ export default function App() {
                 const activeSession = sessions.find(s => s.id === activeSessionId);
                 if (!activeSession) return null;
 
-                if (activeSession.type === 'ssh') {
+                if (activeSession.type === 'ssh' || activeSession.type === 'serial') {
                   return <div className="terminal-container" ref={terminalContainerRef} />;
                 } else if (activeSession.type === 'sftp') {
                   const otherSftpSessions = sessions.filter(
@@ -722,6 +815,51 @@ export default function App() {
                       fxpSourceSession={fxpSourceSession}
                       onFxpSourceChange={setFxpSourceSession}
                     />
+                  );
+                } else if (activeSession.type === 'rdp') {
+                  return (
+                    <div className="rdp-container" style={{ width: '100%', height: '100%', overflow: 'auto', background: '#000' }}>
+                      <canvas
+                        ref={activeSession.canvasRef}
+                        width={activeSession.screenWidth}
+                        height={activeSession.screenHeight}
+                        style={{ display: 'block', margin: '0 auto' }}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          e.preventDefault();
+                          window.connectty.rdp.sendKey(activeSession.id, e.keyCode, true, e.location === 2 || e.location === 3);
+                        }}
+                        onKeyUp={(e) => {
+                          e.preventDefault();
+                          window.connectty.rdp.sendKey(activeSession.id, e.keyCode, false, e.location === 2 || e.location === 3);
+                        }}
+                        onMouseMove={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = Math.round(e.clientX - rect.left);
+                          const y = Math.round(e.clientY - rect.top);
+                          window.connectty.rdp.sendMouse(activeSession.id, x, y, 0, false);
+                        }}
+                        onMouseDown={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = Math.round(e.clientX - rect.left);
+                          const y = Math.round(e.clientY - rect.top);
+                          window.connectty.rdp.sendMouse(activeSession.id, x, y, e.button + 1, true);
+                        }}
+                        onMouseUp={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = Math.round(e.clientX - rect.left);
+                          const y = Math.round(e.clientY - rect.top);
+                          window.connectty.rdp.sendMouse(activeSession.id, x, y, e.button + 1, false);
+                        }}
+                        onWheel={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = Math.round(e.clientX - rect.left);
+                          const y = Math.round(e.clientY - rect.top);
+                          window.connectty.rdp.sendWheel(activeSession.id, x, y, Math.sign(e.deltaY) * -120, e.shiftKey);
+                        }}
+                        onContextMenu={(e) => e.preventDefault()}
+                      />
+                    </div>
                   );
                 }
                 return null;
@@ -1605,6 +1743,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     { value: 'aws', label: 'Amazon Web Services (AWS)', defaultPort: 443 },
     { value: 'gcp', label: 'Google Cloud Platform (GCP)', defaultPort: 443 },
     { value: 'azure', label: 'Microsoft Azure', defaultPort: 443 },
+    { value: 'bigfix', label: 'IBM BigFix', defaultPort: 52311 },
   ];
 
   const awsRegions = [
@@ -1687,6 +1826,15 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
         subscriptionId,
       };
       if (clientSecret) config.clientSecret = clientSecret;
+    } else if (type === 'bigfix') {
+      config = {
+        type: 'bigfix',
+        host,
+        port,
+        username,
+        ignoreCertErrors,
+      };
+      if (password) config.password = password;
     }
 
     const data: Partial<Provider> = {
@@ -1813,8 +1961,8 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
               </select>
             </div>
 
-            {/* ESXi / Proxmox Fields */}
-            {(type === 'esxi' || type === 'proxmox') && (
+            {/* ESXi / Proxmox / BigFix Fields */}
+            {(type === 'esxi' || type === 'proxmox' || type === 'bigfix') && (
               <>
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 2 }}>
@@ -1846,7 +1994,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                     className="form-input"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={type === 'esxi' ? 'root' : 'root@pam'}
+                    placeholder={type === 'esxi' ? 'root' : type === 'proxmox' ? 'root@pam' : 'DOMAIN\\user or user@domain.com'}
                     required
                   />
                 </div>
@@ -2025,6 +2173,14 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                   Note: Requires @azure/arm-compute, @azure/arm-network, and @azure/identity packages
                 </p>
               </>
+            )}
+
+            {/* BigFix Note */}
+            {type === 'bigfix' && (
+              <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '8px' }}>
+                Uses Active Directory credentials to authenticate with BigFix REST API.
+                Default port is 52311. Computer state is determined by last report time (24 hours = running).
+              </p>
             )}
           </div>
 

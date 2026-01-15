@@ -13,6 +13,33 @@ import type {
   CommandTargetOS,
 } from '@connectty/shared';
 
+/**
+ * Escape a string for use in PowerShell single-quoted strings
+ * Single quotes in PowerShell are escaped by doubling them
+ */
+function escapePowerShellString(str: string): string {
+  return str.replace(/'/g, "''");
+}
+
+/**
+ * Encode a PowerShell script as base64 for safe execution via -EncodedCommand
+ * This prevents command injection by avoiding shell metacharacter interpretation
+ */
+function encodePowerShellCommand(script: string): string {
+  // PowerShell expects UTF-16LE encoded base64
+  const buffer = Buffer.from(script, 'utf16le');
+  return buffer.toString('base64');
+}
+
+/**
+ * Validate hostname to prevent injection via hostname parameter
+ */
+function isValidHostname(hostname: string): boolean {
+  // Allow alphanumeric, dots, hyphens, and IP addresses
+  return /^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$/.test(hostname) ||
+         /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname);
+}
+
 interface CommandExecutionCallbacks {
   onProgress: (connectionId: string, result: Partial<CommandResult>) => void;
   onComplete: (executionId: string) => void;
@@ -233,6 +260,7 @@ export class CommandService {
   /**
    * Execute command via WinRM (using PowerShell remoting)
    * Uses external winrs or PowerShell Invoke-Command
+   * Security: Uses -EncodedCommand to prevent shell metacharacter injection
    */
   private executeWinRMCommand(
     connection: ServerConnection,
@@ -244,6 +272,21 @@ export class CommandService {
 
       // Build PowerShell command for remote execution
       const hostname = connection.hostname;
+
+      // Validate hostname to prevent injection
+      if (!isValidHostname(hostname)) {
+        resolve({
+          connectionId: connection.id,
+          connectionName: connection.name,
+          hostname: connection.hostname,
+          status: 'error',
+          error: 'Invalid hostname format',
+          startedAt,
+          completedAt: new Date(),
+        });
+        return;
+      }
+
       const username = credential?.username || connection.username;
       const password = credential?.secret;
       const domain = credential?.domain;
@@ -256,37 +299,43 @@ export class CommandService {
 
       if (process.platform === 'win32') {
         // On Windows, use PowerShell Invoke-Command with credential
+        // Build script safely using proper escaping
+        let script: string;
         if (password) {
           // Create credential object and invoke command
-          psCommand = 'powershell.exe';
-          args = [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            `$secpasswd = ConvertTo-SecureString '${password.replace(/'/g, "''")}' -AsPlainText -Force; ` +
-            `$cred = New-Object System.Management.Automation.PSCredential ('${fullUsername}', $secpasswd); ` +
-            `Invoke-Command -ComputerName '${hostname}' -Credential $cred -ScriptBlock { ${command} }`
-          ];
+          // Use single-quoted strings with proper escaping to prevent injection
+          script =
+            `$secpasswd = ConvertTo-SecureString '${escapePowerShellString(password)}' -AsPlainText -Force; ` +
+            `$cred = New-Object System.Management.Automation.PSCredential ('${escapePowerShellString(fullUsername || '')}', $secpasswd); ` +
+            `Invoke-Command -ComputerName '${escapePowerShellString(hostname)}' -Credential $cred -ScriptBlock { ${command} }`;
         } else {
           // Use current credentials (integrated auth)
-          psCommand = 'powershell.exe';
-          args = [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            `Invoke-Command -ComputerName '${hostname}' -ScriptBlock { ${command} }`
-          ];
+          script = `Invoke-Command -ComputerName '${escapePowerShellString(hostname)}' -ScriptBlock { ${command} }`;
         }
+
+        // Use -EncodedCommand to safely pass the script without shell interpretation
+        psCommand = 'powershell.exe';
+        args = [
+          '-NoProfile',
+          '-NonInteractive',
+          '-EncodedCommand',
+          encodePowerShellCommand(script)
+        ];
       } else {
         // On Linux/macOS, try to use pwsh (PowerShell Core) if available
+        // Build script safely using proper escaping
+        const script =
+          `$secpasswd = ConvertTo-SecureString '${escapePowerShellString(password || '')}' -AsPlainText -Force; ` +
+          `$cred = New-Object System.Management.Automation.PSCredential ('${escapePowerShellString(fullUsername || '')}', $secpasswd); ` +
+          `Invoke-Command -ComputerName '${escapePowerShellString(hostname)}' -Credential $cred -Authentication Negotiate -ScriptBlock { ${command} }`;
+
+        // Use -EncodedCommand to safely pass the script without shell interpretation
         psCommand = 'pwsh';
         args = [
           '-NoProfile',
           '-NonInteractive',
-          '-Command',
-          `$secpasswd = ConvertTo-SecureString '${password?.replace(/'/g, "''") || ''}' -AsPlainText -Force; ` +
-          `$cred = New-Object System.Management.Automation.PSCredential ('${fullUsername}', $secpasswd); ` +
-          `Invoke-Command -ComputerName '${hostname}' -Credential $cred -Authentication Negotiate -ScriptBlock { ${command} }`
+          '-EncodedCommand',
+          encodePowerShellCommand(script)
         ];
       }
 
@@ -334,12 +383,22 @@ export class CommandService {
   }
 
   /**
+   * Escape special regex characters to prevent ReDoS attacks
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
    * Substitute variables in a command template
+   * Security: Escapes regex special characters in variable names to prevent ReDoS
    */
   substituteVariables(command: string, variables: Record<string, string>): string {
     let result = command;
     for (const [key, value] of Object.entries(variables)) {
-      result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
+      // Escape the key to prevent regex injection/ReDoS
+      const escapedKey = this.escapeRegex(key);
+      result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), value);
     }
     return result;
   }
