@@ -326,6 +326,116 @@ class ApiService {
     });
     return response.data!;
   }
+
+  // SFTP
+  async sftpConnect(connectionId: string): Promise<{ sessionId: string }> {
+    const response = await this.request<APIResponse<{ sessionId: string }>>('/sftp/connect', {
+      method: 'POST',
+      body: JSON.stringify({ connectionId }),
+    });
+    return response.data!;
+  }
+
+  async sftpDisconnect(sessionId: string): Promise<void> {
+    await this.request('/sftp/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    });
+  }
+
+  async sftpGetSessions(): Promise<SFTPSession[]> {
+    const response = await this.request<APIResponse<SFTPSession[]>>('/sftp/sessions');
+    return response.data || [];
+  }
+
+  async sftpList(sessionId: string, path: string): Promise<{ path: string; files: RemoteFileInfo[] }> {
+    const response = await this.request<APIResponse<{ path: string; files: RemoteFileInfo[] }>>(
+      `/sftp/list/${sessionId}?path=${encodeURIComponent(path)}`
+    );
+    return response.data!;
+  }
+
+  async sftpStat(sessionId: string, path: string): Promise<RemoteFileInfo> {
+    const response = await this.request<APIResponse<RemoteFileInfo>>(
+      `/sftp/stat/${sessionId}?path=${encodeURIComponent(path)}`
+    );
+    return response.data!;
+  }
+
+  async sftpDownload(sessionId: string, path: string): Promise<Blob> {
+    const token = this.getToken();
+    const response = await fetch(
+      `${API_BASE}/sftp/download/${sessionId}?path=${encodeURIComponent(path)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Download failed');
+    }
+
+    return response.blob();
+  }
+
+  async sftpUpload(sessionId: string, remotePath: string, file: File): Promise<{ path: string; size: number }> {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', remotePath);
+
+    const response = await fetch(`${API_BASE}/sftp/upload/${sessionId}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Upload failed');
+    }
+
+    return data.data;
+  }
+
+  async sftpMkdir(sessionId: string, path: string): Promise<void> {
+    await this.request(`/sftp/mkdir/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
+  }
+
+  async sftpRmdir(sessionId: string, path: string): Promise<void> {
+    await this.request(`/sftp/rmdir/${sessionId}?path=${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sftpUnlink(sessionId: string, path: string): Promise<void> {
+    await this.request(`/sftp/unlink/${sessionId}?path=${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sftpRename(sessionId: string, oldPath: string, newPath: string): Promise<void> {
+    await this.request(`/sftp/rename/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ oldPath, newPath }),
+    });
+  }
+
+  async sftpChmod(sessionId: string, path: string, mode: number): Promise<void> {
+    await this.request(`/sftp/chmod/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ path, mode }),
+    });
+  }
 }
 
 // Type definitions for new features
@@ -405,6 +515,27 @@ export interface CommandResult {
 
 export interface CommandExecutionWithResults extends CommandExecution {
   results: CommandResult[];
+}
+
+// SFTP Types
+export interface SFTPSession {
+  id: string;
+  connectionId: string;
+  connectionName: string;
+  currentPath: string;
+}
+
+export interface RemoteFileInfo {
+  name: string;
+  path: string;
+  size: number;
+  isDirectory: boolean;
+  isSymlink: boolean;
+  permissions: string;
+  owner: number;
+  group: number;
+  modifiedAt: string;
+  accessedAt: string;
 }
 
 export const api = new ApiService();

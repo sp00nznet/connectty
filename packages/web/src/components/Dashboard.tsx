@@ -10,8 +10,9 @@ import ConnectionModal from './ConnectionModal';
 import ProviderPanel from './ProviderPanel';
 import BulkCommandPanel from './BulkCommandPanel';
 import ImportExportModal from './ImportExportModal';
+import SFTPPanel from './SFTPPanel';
 
-type MainView = 'terminal' | 'providers' | 'commands';
+type MainView = 'terminal' | 'providers' | 'commands' | 'sftp';
 
 interface DashboardProps {
   user: User;
@@ -283,6 +284,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </svg>
             Commands
           </button>
+          <button
+            className={`nav-btn ${mainView === 'sftp' ? 'active' : ''}`}
+            onClick={() => setMainView('sftp')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+            </svg>
+            Files
+          </button>
         </nav>
 
         <div className="user-info">
@@ -436,6 +446,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
           {mainView === 'commands' && (
             <BulkCommandPanel
+              connections={connections}
+              onNotification={showNotification}
+            />
+          )}
+
+          {mainView === 'sftp' && (
+            <SFTPPanel
               connections={connections}
               onNotification={showNotification}
             />
