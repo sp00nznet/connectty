@@ -694,6 +694,44 @@ body {
   background-color: #9b59b6;
 }
 
+/* Shell Context Menu (right-click on + button) */
+.shell-context-menu {
+  position: fixed;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 180px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  z-index: 1100;
+}
+
+.shell-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.shell-context-menu-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.shell-context-menu-item .menu-icon {
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+}
+
 /* Tags */
 .tag {
   display: inline-flex;

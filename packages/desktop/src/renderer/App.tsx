@@ -118,6 +118,9 @@ export default function App() {
   const [platform, setPlatform] = useState<string>('');
   const [availableShells, setAvailableShells] = useState<LocalShellInfo[]>([]);
   const newTabMenuRef = useRef<HTMLDivElement>(null);
+  // Right-click shell context menu
+  const [shellContextMenu, setShellContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const shellContextMenuRef = useRef<HTMLDivElement>(null);
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -199,6 +202,20 @@ export default function App() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNewTabMenu]);
+
+  // Close shell context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (shellContextMenuRef.current && !shellContextMenuRef.current.contains(event.target as Node)) {
+        setShellContextMenu(null);
+      }
+    };
+
+    if (shellContextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [shellContextMenu]);
 
   const loadData = async () => {
     const [conns, creds, grps, provs, settings, plat, shells] = await Promise.all([
@@ -909,7 +926,14 @@ export default function App() {
                 <button
                   className="new-tab-btn"
                   onClick={() => setShowNewTabMenu(!showNewTabMenu)}
-                  title="New Tab"
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    if (availableShells.length > 0) {
+                      setShowNewTabMenu(false);
+                      setShellContextMenu({ x: e.clientX, y: e.clientY });
+                    }
+                  }}
+                  title="Left-click: New Tab menu | Right-click: Quick shell access"
                 >
                   +
                 </button>
@@ -948,6 +972,33 @@ export default function App() {
                 )}
               </div>
             </div>
+
+            {/* Shell Context Menu (right-click on + button) */}
+            {shellContextMenu && availableShells.length > 0 && (
+              <div
+                ref={shellContextMenuRef}
+                className="shell-context-menu"
+                style={{ left: shellContextMenu.x, top: shellContextMenu.y }}
+              >
+                {availableShells.map(shell => (
+                  <button
+                    key={shell.id}
+                    className="shell-context-menu-item"
+                    onClick={() => {
+                      setShellContextMenu(null);
+                      handleSpawnLocalShell(shell);
+                    }}
+                  >
+                    <span className="menu-icon">
+                      {shell.icon === 'cmd' ? '⌨' :
+                       shell.icon === 'powershell' ? '💠' :
+                       shell.icon === 'linux' ? '🐧' : '💻'}
+                    </span>
+                    {shell.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Content based on session type */}
             <div className="content-body">
