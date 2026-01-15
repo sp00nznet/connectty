@@ -436,6 +436,35 @@ class ApiService {
       body: JSON.stringify({ path, mode }),
     });
   }
+
+  // RDP
+  async rdpGetInfo(connectionId: string): Promise<RDPConnectionInfo> {
+    const response = await this.request<APIResponse<RDPConnectionInfo>>(`/rdp/info/${connectionId}`);
+    return response.data!;
+  }
+
+  async rdpDownloadFile(connectionId: string): Promise<void> {
+    const token = this.getToken();
+    const response = await fetch(`${API_BASE}/rdp/file/${connectionId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download RDP file');
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `connection.rdp`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 }
 
 // Type definitions for new features
@@ -536,6 +565,15 @@ export interface RemoteFileInfo {
   group: number;
   modifiedAt: string;
   accessedAt: string;
+}
+
+export interface RDPConnectionInfo {
+  name: string;
+  hostname: string;
+  port: number;
+  username?: string;
+  domain?: string;
+  hasCredentials: boolean;
 }
 
 export const api = new ApiService();

@@ -11,8 +11,9 @@ import ProviderPanel from './ProviderPanel';
 import BulkCommandPanel from './BulkCommandPanel';
 import ImportExportModal from './ImportExportModal';
 import SFTPPanel from './SFTPPanel';
+import RDPPanel from './RDPPanel';
 
-type MainView = 'terminal' | 'providers' | 'commands' | 'sftp';
+type MainView = 'terminal' | 'providers' | 'commands' | 'sftp' | 'rdp';
 
 interface DashboardProps {
   user: User;
@@ -357,6 +358,17 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </svg>
             Files
           </button>
+          <button
+            className={`nav-btn ${mainView === 'rdp' ? 'active' : ''}`}
+            onClick={() => setMainView('rdp')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            RDP
+          </button>
         </nav>
 
         <div className="user-info">
@@ -538,6 +550,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
           {mainView === 'sftp' && (
             <SFTPPanel
+              connections={connections}
+              onNotification={showNotification}
+            />
+          )}
+
+          {mainView === 'rdp' && (
+            <RDPPanel
               connections={connections}
               onNotification={showNotification}
             />

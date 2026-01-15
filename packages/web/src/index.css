@@ -1597,6 +1597,167 @@ body {
   flex-shrink: 0;
 }
 
+/* RDP Panel */
+.rdp-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+}
+
+.rdp-header {
+  margin-bottom: 24px;
+}
+
+.rdp-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.rdp-description {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  max-width: 600px;
+}
+
+.rdp-content {
+  flex: 1;
+  max-width: 800px;
+}
+
+.rdp-connection-select {
+  margin-bottom: 24px;
+}
+
+.rdp-connection-select label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.rdp-connection-select select {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px 14px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.rdp-connection-select select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.rdp-loading {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.rdp-info-card {
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.rdp-info-card h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.rdp-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.rdp-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rdp-info-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.rdp-info-value {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.rdp-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.rdp-help {
+  background-color: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.rdp-help h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.rdp-help ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.rdp-help ol li {
+  margin-bottom: 8px;
+}
+
+.rdp-help ol li:last-child {
+  margin-bottom: 0;
+}
+
+.rdp-help strong {
+  color: var(--text-primary);
+}
+
+.rdp-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.rdp-empty h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rdp-empty p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  max-width: 400px;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
   .command-execute,

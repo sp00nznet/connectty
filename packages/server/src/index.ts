@@ -21,6 +21,7 @@ import { createSyncRoutes } from './routes/sync';
 import { createProviderRoutes } from './routes/providers';
 import { createCommandRoutes } from './routes/commands';
 import { createSFTPRoutes } from './routes/sftp';
+import { createRDPRoutes } from './routes/rdp';
 import { setupWebSocket } from './services/websocket';
 import { ProviderDiscoveryService } from './services/provider-discovery';
 import { BulkCommandService } from './services/bulk-commands';
@@ -100,6 +101,7 @@ async function main() {
   app.use('/api/providers', authMiddleware(authService), createProviderRoutes(db, providerService));
   app.use('/api/commands', authMiddleware(authService), createCommandRoutes(db, commandService));
   app.use('/api/sftp', authMiddleware(authService), createSFTPRoutes(sftpService));
+  app.use('/api/rdp', authMiddleware(authService), createRDPRoutes(db));
 
   // Create HTTP server
   const server = createServer(app);
