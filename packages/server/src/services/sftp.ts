@@ -308,7 +308,7 @@ export class SFTPService {
       onEnd();
     });
 
-    readStream.on('error', (err) => {
+    readStream.on('error', (err: Error) => {
       this.onProgress(userId, {
         sessionId,
         transferId,
@@ -386,7 +386,7 @@ export class SFTPService {
       });
     });
 
-    writeStream.on('error', (err) => {
+    writeStream.on('error', (err: Error) => {
       this.onProgress(userId, {
         sessionId,
         transferId,

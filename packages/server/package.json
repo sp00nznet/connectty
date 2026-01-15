@@ -10,7 +10,9 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
     "@connectty/shared": "1.0.0",
+    "@smithy/signature-v4": "^4.2.4",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

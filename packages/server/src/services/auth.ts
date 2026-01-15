@@ -173,7 +173,7 @@ export class AuthService {
     const token = jwt.sign(
       { userId: user.id, username: user.username },
       this.config.jwtSecret,
-      { expiresIn: this.config.jwtExpiry as string }
+      { expiresIn: this.config.jwtExpiry } as jwt.SignOptions
     );
 
     return {
