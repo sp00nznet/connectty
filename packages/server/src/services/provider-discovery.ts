@@ -436,7 +436,7 @@ export class ProviderDiscoveryService {
       const signedRequest = await signer.sign(request);
       const response = await fetch(url, {
         method: 'GET',
-        headers: signedRequest.headers as HeadersInit,
+        headers: signedRequest.headers as Record<string, string>,
       });
 
       if (response.ok) {
@@ -489,7 +489,7 @@ export class ProviderDiscoveryService {
         const signedRequest = await signer.sign(request);
         const response = await fetch(url, {
           method: 'GET',
-          headers: signedRequest.headers as HeadersInit,
+          headers: signedRequest.headers as Record<string, string>,
         });
 
         if (response.ok) {
