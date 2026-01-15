@@ -171,15 +171,19 @@ export class LocalShellService {
       const output = execSync('wsl --list --quiet', { encoding: 'utf-8', timeout: 5000 });
       const distros = output
         .split('\n')
-        .map(line => line.trim().replace(/\0/g, '')) // Remove null characters from Windows output
-        .filter(line => line.length > 0);
+        .map(line => line.trim().replace(/\0/g, '').replace(/[\uFEFF\uFFFE]/g, '')) // Remove null chars and BOM
+        .filter(line => line.length > 0 && !line.includes('Windows Subsystem')); // Filter empty and header lines
 
       for (const distro of distros) {
+        // Clean the distro name thoroughly
+        const cleanDistro = distro.replace(/[^\x20-\x7E]/g, '').trim();
+        if (!cleanDistro) continue;
+
         shells.push({
-          id: `wsl-${distro.toLowerCase().replace(/\s+/g, '-')}`,
-          name: `WSL: ${distro}`,
+          id: `wsl-${cleanDistro.toLowerCase().replace(/\s+/g, '-')}`,
+          name: `WSL: ${cleanDistro}`,
           path: wslPath,
-          args: ['-d', distro],
+          args: ['-d', cleanDistro],
           icon: 'linux',
         });
       }
