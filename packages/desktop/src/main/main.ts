@@ -8,6 +8,7 @@ import Store from 'electron-store';
 import { DatabaseService } from './database';
 import { SSHService } from './ssh';
 import { RDPService } from './rdp';
+import { RDPSessionService } from './rdp-session';
 import { SerialService } from './serial';
 import { SyncService } from './sync';
 import { CommandService } from './command';
@@ -49,6 +50,7 @@ let isQuitting = false;
 let db: DatabaseService;
 let sshService: SSHService;
 let rdpService: RDPService;
+let rdpSessionService: RDPSessionService;
 let serialService: SerialService;
 let syncService: SyncService;
 let commandService: CommandService;
@@ -442,7 +444,8 @@ function setupIpcHandlers(): void {
   });
 
   // RDP handlers
-  ipcMain.handle('rdp:connect', async (_event, connectionId: string) => {
+  // Embedded RDP session handlers (tabbed)
+  ipcMain.handle('rdp:connect', async (_event, connectionId: string, embedded: boolean = true) => {
     const connection = db.getConnection(connectionId);
     if (!connection) {
       throw new Error('Connection not found');
@@ -453,10 +456,37 @@ function setupIpcHandlers(): void {
       credential = db.getCredential(connection.credentialId);
     }
 
-    await rdpService.connect(connection, credential);
+    // Try embedded RDP if requested and available
+    if (embedded && rdpSessionService.isAvailable()) {
+      const sessionId = await rdpSessionService.connect(connection, credential);
+      db.updateConnection(connectionId, { lastConnectedAt: new Date() });
+      return sessionId;
+    }
 
-    // Update last connected timestamp
+    // Fall back to external RDP client
+    await rdpService.connect(connection, credential);
     db.updateConnection(connectionId, { lastConnectedAt: new Date() });
+    return null; // No session ID for external RDP
+  });
+
+  ipcMain.handle('rdp:disconnect', async (_event, sessionId: string) => {
+    rdpSessionService.disconnect(sessionId);
+  });
+
+  ipcMain.handle('rdp:sendKey', async (_event, sessionId: string, scanCode: number, isPressed: boolean, isExtended: boolean) => {
+    rdpSessionService.sendKeyEvent(sessionId, scanCode, isPressed, isExtended);
+  });
+
+  ipcMain.handle('rdp:sendMouse', async (_event, sessionId: string, x: number, y: number, button: number, isPressed: boolean) => {
+    rdpSessionService.sendMouseEvent(sessionId, x, y, button, isPressed);
+  });
+
+  ipcMain.handle('rdp:sendWheel', async (_event, sessionId: string, x: number, y: number, delta: number, isHorizontal: boolean) => {
+    rdpSessionService.sendWheelEvent(sessionId, x, y, delta, isHorizontal);
+  });
+
+  ipcMain.handle('rdp:isAvailable', async () => {
+    return rdpSessionService.isAvailable();
   });
 
   // Serial handlers
@@ -925,6 +955,9 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('ssh:event', sessionId, event);
     });
     rdpService = new RDPService();
+    rdpSessionService = new RDPSessionService((sessionId, event) => {
+      mainWindow?.webContents.send('rdp:event', sessionId, event);
+    });
     serialService = new SerialService((sessionId, event) => {
       mainWindow?.webContents.send('serial:event', sessionId, event);
     });

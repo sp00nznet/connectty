@@ -31,18 +31,40 @@ Full-featured SSH terminal for Linux, Unix, macOS, and network devices.
 
 ### RDP Connections
 
-Connect to Windows hosts via Remote Desktop Protocol.
+Connect to Windows hosts via Remote Desktop Protocol with tabbed sessions.
 
-| Platform | Client Used |
-|:---------|:------------|
-| Windows | `mstsc.exe` (built-in) |
-| Linux | `xfreerdp` (FreeRDP) |
+**Connection Modes:**
 
-**Features:**
+| Mode | Description |
+|:-----|:------------|
+| **Embedded (Default)** | Canvas-based tabbed sessions using node-rdpjs-2 |
+| **Native Fallback** | `mstsc.exe` (Windows) or `xfreerdp` (Linux) |
+
+**Embedded RDP Features:**
+- Full graphical desktop in tabbed interface
+- Keyboard input with proper scan code mapping
+- Mouse click, drag, and scroll wheel support
+- Multi-monitor awareness
+- Automatic bitmap decompression
+
+**Native Client Features:**
 - Domain authentication support
 - Custom port configuration
 - Network Level Authentication (NLA)
 - Automatic credential passing
+
+**When to Use Each:**
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│  Use Embedded When:          Use Native When:                 │
+├───────────────────────────────────────────────────────────────┤
+│  • Multi-session tabbed UI   • Maximum performance needed     │
+│  • Quick switching needed    • Full clipboard support         │
+│  • Unified interface         • Audio/video streaming          │
+│  • node-rdpjs-2 installed    • Embedded unavailable           │
+└───────────────────────────────────────────────────────────────┘
+```
 
 ---
 

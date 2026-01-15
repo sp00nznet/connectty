@@ -66,7 +66,11 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, storedHash: string): boolean {
   const [saltHex, hashHex] = storedHash.split(':');
+  if (!saltHex || !hashHex) return false;
   const salt = Buffer.from(saltHex, 'hex');
+  const storedHashBuffer = Buffer.from(hashHex, 'hex');
   const hash = crypto.pbkdf2Sync(password, salt, ITERATIONS, 64, 'sha512');
-  return hash.toString('hex') === hashHex;
+  // Use constant-time comparison to prevent timing attacks
+  if (hash.length !== storedHashBuffer.length) return false;
+  return crypto.timingSafeEqual(hash, storedHashBuffer);
 }
