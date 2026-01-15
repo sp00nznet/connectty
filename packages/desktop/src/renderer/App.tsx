@@ -515,7 +515,8 @@ export default function App() {
   };
 
   const handleSpawnLocalShell = async (shell: LocalShellInfo) => {
-    setShowNewTabMenu(false);
+    setNewTabMenuPos(null);
+    setShellContextMenu(null);
     try {
       const sessionId = await window.connectty.localShell.spawn(shell.id);
 
