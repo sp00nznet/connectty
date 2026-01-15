@@ -128,6 +128,12 @@ export default function App() {
   const [customTabNames, setCustomTabNames] = useState<Map<string, string>>(new Map());
   const [renamingTab, setRenamingTab] = useState<{ sessionId: string; currentName: string } | null>(null);
 
+  // Collapsible sidebar groups
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('connectty-collapsed-groups');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+
   // Terminal command history (from SSH and local shells)
   interface TerminalCommand {
     command: string;
@@ -915,6 +921,20 @@ export default function App() {
 
   const ungroupedConnections = filteredConnections.filter(c => !c.group);
 
+  // Toggle group collapse state
+  const toggleGroupCollapse = (groupId: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      localStorage.setItem('connectty-collapsed-groups', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -965,12 +985,27 @@ export default function App() {
             {/* Grouped connections */}
             {groups.map(group => (
               groupedConnections[group.id]?.length > 0 && (
-                <li key={group.id} className="connection-group">
-                  <div className="connection-group-header">
-                    <span style={{ color: group.color }}></span>
+                <li key={group.id} className={`connection-group ${collapsedGroups.has(group.id) ? 'collapsed' : ''}`}>
+                  <div
+                    className="connection-group-header"
+                    onClick={() => toggleGroupCollapse(group.id)}
+                  >
+                    <svg
+                      className="collapse-chevron"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    <span className="group-color-dot" style={{ backgroundColor: group.color }}></span>
                     {group.name}
+                    <span className="connection-count">({groupedConnections[group.id].length})</span>
                   </div>
-                  {groupedConnections[group.id].map(conn => (
+                  {!collapsedGroups.has(group.id) && groupedConnections[group.id].map(conn => (
                     <ConnectionItem
                       key={conn.id}
                       connection={conn}
@@ -987,9 +1022,26 @@ export default function App() {
 
             {/* Ungrouped connections */}
             {ungroupedConnections.length > 0 && (
-              <li className="connection-group">
-                <div className="connection-group-header">Connections</div>
-                {ungroupedConnections.map(conn => (
+              <li className={`connection-group ${collapsedGroups.has('__ungrouped__') ? 'collapsed' : ''}`}>
+                <div
+                  className="connection-group-header"
+                  onClick={() => toggleGroupCollapse('__ungrouped__')}
+                >
+                  <svg
+                    className="collapse-chevron"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                  Connections
+                  <span className="connection-count">({ungroupedConnections.length})</span>
+                </div>
+                {!collapsedGroups.has('__ungrouped__') && ungroupedConnections.map(conn => (
                   <ConnectionItem
                     key={conn.id}
                     connection={conn}
