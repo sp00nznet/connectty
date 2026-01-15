@@ -287,14 +287,14 @@ export default function App() {
     // If RDP connection, try embedded client first, fall back to external
     if (connection.connectionType === 'rdp') {
       try {
-        const sessionId = await window.connectty.rdp.connect(connection.id, true);
+        const result = await window.connectty.rdp.connect(connection.id, true);
 
-        if (sessionId) {
+        if (result.embedded && result.sessionId) {
           // Embedded RDP - create canvas session
           const canvasRef = React.createRef<HTMLCanvasElement>();
 
           const newSession: RDPSession = {
-            id: sessionId,
+            id: result.sessionId,
             type: 'rdp',
             connectionId: connection.id,
             connectionName: connection.name,
@@ -304,11 +304,11 @@ export default function App() {
           };
 
           setSessions(prev => [...prev, newSession]);
-          setActiveSessionId(sessionId);
+          setActiveSessionId(result.sessionId);
           showNotification('success', `Connected to ${connection.name}`);
         } else {
-          // External RDP client was launched
-          showNotification('success', `Launching RDP client for ${connection.name}`);
+          // External RDP client was launched (NLA required or embedded unavailable)
+          showNotification('success', `Launching native RDP client for ${connection.name}`);
         }
       } catch (err) {
         showNotification('error', `Failed to connect: ${(err as Error).message}`);

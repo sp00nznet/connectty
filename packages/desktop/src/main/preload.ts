@@ -146,7 +146,7 @@ const api = {
 
   // RDP operations
   rdp: {
-    connect: (connectionId: string, embedded?: boolean): Promise<string | null> =>
+    connect: (connectionId: string, embedded?: boolean): Promise<{ sessionId: string | null; embedded: boolean; reason?: string }> =>
       ipcRenderer.invoke('rdp:connect', connectionId, embedded ?? true),
     disconnect: (sessionId: string): Promise<void> => ipcRenderer.invoke('rdp:disconnect', sessionId),
     sendKey: (sessionId: string, scanCode: number, isPressed: boolean, isExtended?: boolean): Promise<void> =>
