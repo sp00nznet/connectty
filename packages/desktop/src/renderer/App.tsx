@@ -1449,7 +1449,7 @@ interface CredentialModalProps {
   credentials: Credential[];
   onClose: () => void;
   onSave: (data: Partial<Credential>) => Promise<void>;
-  onEdit: (cred: Credential) => void;
+  onEdit: (cred: Credential | null) => void;
   onDelete: (id: string) => void;
 }
 
@@ -1477,6 +1477,18 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
         ? prev.filter(t => t !== osType)
         : [...prev, osType]
     );
+  };
+
+  const populateForm = (cred: Credential) => {
+    setName(cred.name);
+    setType(cred.type);
+    setUsername(cred.username);
+    setDomain(cred.domain || '');
+    setAutoAssignOSTypes(cred.autoAssignOSTypes || []);
+    setPrivateKey(cred.privateKey || '');
+    // Don't populate password/passphrase for security - user must re-enter
+    setPassword('');
+    setPassphrase('');
   };
 
   const resetForm = () => {
@@ -1541,7 +1553,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
                       )}
                     </div>
                     <div className="credential-actions">
-                      <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(cred); setShowForm(true); }}>
+                      <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(cred); populateForm(cred); setShowForm(true); }}>
                         Edit
                       </button>
                       <button className="btn btn-sm btn-danger" onClick={() => onDelete(cred.id)}>
@@ -1557,7 +1569,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
             <button className="btn btn-secondary" onClick={onClose}>
               Close
             </button>
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+            <button className="btn btn-primary" onClick={() => { resetForm(); onEdit(null); setShowForm(true); }}>
               + New Credential
             </button>
           </div>
