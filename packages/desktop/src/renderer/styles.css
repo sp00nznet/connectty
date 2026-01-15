@@ -620,7 +620,7 @@ body {
 .new-tab-menu {
   position: absolute;
   top: 100%;
-  left: 0;
+  right: 0;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 8px;
