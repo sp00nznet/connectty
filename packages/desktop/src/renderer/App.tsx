@@ -113,8 +113,8 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({ minimizeToTray: false, closeToTray: false, startMinimized: false });
 
-  // New tab menu
-  const [showNewTabMenu, setShowNewTabMenu] = useState(false);
+  // New tab menu (stores position for fixed positioning)
+  const [newTabMenuPos, setNewTabMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [platform, setPlatform] = useState<string>('');
   const [availableShells, setAvailableShells] = useState<LocalShellInfo[]>([]);
   const newTabMenuRef = useRef<HTMLDivElement>(null);
@@ -193,15 +193,15 @@ export default function App() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (newTabMenuRef.current && !newTabMenuRef.current.contains(event.target as Node)) {
-        setShowNewTabMenu(false);
+        setNewTabMenuPos(null);
       }
     };
 
-    if (showNewTabMenu) {
+    if (newTabMenuPos) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showNewTabMenu]);
+  }, [newTabMenuPos]);
 
   // Close shell context menu when clicking outside
   useEffect(() => {
@@ -922,14 +922,21 @@ export default function App() {
               ))}
 
               {/* New Tab Button */}
-              <div className="new-tab-container" ref={newTabMenuRef}>
+              <div className="new-tab-container">
                 <button
                   className="new-tab-btn"
-                  onClick={() => setShowNewTabMenu(!showNewTabMenu)}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    if (newTabMenuPos) {
+                      setNewTabMenuPos(null);
+                    } else {
+                      setNewTabMenuPos({ x: rect.right, y: rect.bottom });
+                    }
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     if (availableShells.length > 0) {
-                      setShowNewTabMenu(false);
+                      setNewTabMenuPos(null);
                       setShellContextMenu({ x: e.clientX, y: e.clientY });
                     }
                   }}
@@ -937,39 +944,6 @@ export default function App() {
                 >
                   +
                 </button>
-                {showNewTabMenu && (
-                  <div className="new-tab-menu">
-                    <button
-                      className="new-tab-menu-item"
-                      onClick={() => {
-                        setShowNewTabMenu(false);
-                        setShowConnectionModal(true);
-                      }}
-                    >
-                      <span className="menu-icon">🔗</span>
-                      New Connection
-                    </button>
-                    {availableShells.length > 0 && (
-                      <>
-                        <div className="new-tab-menu-divider" />
-                        {availableShells.map(shell => (
-                          <button
-                            key={shell.id}
-                            className="new-tab-menu-item"
-                            onClick={() => handleSpawnLocalShell(shell)}
-                          >
-                            <span className="menu-icon">
-                              {shell.icon === 'cmd' ? '⌨' :
-                               shell.icon === 'powershell' ? '💠' :
-                               shell.icon === 'linux' ? '🐧' : '💻'}
-                            </span>
-                            {shell.name}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -990,13 +964,57 @@ export default function App() {
                     }}
                   >
                     <span className="menu-icon">
-                      {shell.icon === 'cmd' ? '⌨' :
+                      {shell.elevated ? '🛡️' :
+                       shell.icon === 'cmd' ? '⌨' :
                        shell.icon === 'powershell' ? '💠' :
                        shell.icon === 'linux' ? '🐧' : '💻'}
                     </span>
                     {shell.name}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* New Tab Menu (left-click on + button) */}
+            {newTabMenuPos && (
+              <div
+                ref={newTabMenuRef}
+                className="new-tab-menu"
+                style={{ right: `calc(100% - ${newTabMenuPos.x}px)`, top: newTabMenuPos.y }}
+              >
+                <button
+                  className="new-tab-menu-item"
+                  onClick={() => {
+                    setNewTabMenuPos(null);
+                    setShowConnectionModal(true);
+                  }}
+                >
+                  <span className="menu-icon">🔗</span>
+                  New Connection
+                </button>
+                {availableShells.length > 0 && (
+                  <>
+                    <div className="new-tab-menu-divider" />
+                    {availableShells.map(shell => (
+                      <button
+                        key={shell.id}
+                        className="new-tab-menu-item"
+                        onClick={() => {
+                          setNewTabMenuPos(null);
+                          handleSpawnLocalShell(shell);
+                        }}
+                      >
+                        <span className="menu-icon">
+                          {shell.elevated ? '🛡️' :
+                           shell.icon === 'cmd' ? '⌨' :
+                           shell.icon === 'powershell' ? '💠' :
+                           shell.icon === 'linux' ? '🐧' : '💻'}
+                        </span>
+                        {shell.name}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
 
