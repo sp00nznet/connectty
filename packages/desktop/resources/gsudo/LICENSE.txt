@@ -1,0 +1,5 @@
+gsudo - MIT License
+https://github.com/gerardog/gsudo
+
+gsudo is included under the MIT License.
+See https://github.com/gerardog/gsudo/blob/master/LICENSE.txt for full license.
