@@ -8,10 +8,13 @@ import type { DatabaseService } from '../services/database';
 export function createCredentialRoutes(db: DatabaseService): Router {
   const router = Router();
 
-  // List credentials
+  // List credentials (optionally including shared)
   router.get('/', async (req, res) => {
     try {
-      const credentials = await db.getCredentials(req.userId!);
+      const includeShared = req.query.includeShared === 'true';
+      const credentials = includeShared
+        ? await db.getAllCredentialsWithShared(req.userId!)
+        : await db.getCredentials(req.userId!);
 
       // Don't expose secrets in list view
       const sanitized = credentials.map((cred) => ({

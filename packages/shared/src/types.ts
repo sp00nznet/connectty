@@ -42,6 +42,9 @@ export interface ServerConnection {
   // Provider info (if discovered)
   providerId?: string;
   providerHostId?: string;
+  // Sharing
+  isShared?: boolean;
+  ownerId?: string;
   createdAt: Date;
   updatedAt: Date;
   lastConnectedAt?: Date;
@@ -68,6 +71,9 @@ export interface Credential {
   // Auto-assign rules
   autoAssignPatterns?: string[]; // Hostname patterns to auto-assign this credential
   autoAssignGroup?: string;  // Group ID to auto-assign this credential to imported hosts
+  // Sharing
+  isShared?: boolean;
+  ownerId?: string;
   // Metadata
   createdAt: Date;
   updatedAt: Date;
@@ -90,6 +96,9 @@ export interface Provider {
   autoDiscover: boolean;
   discoverInterval?: number; // minutes
   lastDiscoveryAt?: Date;
+  // Sharing
+  isShared?: boolean;
+  ownerId?: string;
   // Metadata
   createdAt: Date;
   updatedAt: Date;
@@ -211,6 +220,7 @@ export interface User {
   adDomain?: string;
   adSid?: string;
   roles: UserRole[];
+  isAdmin: boolean;
   createdAt: Date;
   lastLoginAt?: Date;
 }
@@ -300,6 +310,9 @@ export interface SavedCommand {
   tags?: string[];
   // Variables that can be substituted (e.g., {{username}}, {{password}})
   variables?: CommandVariable[];
+  // Sharing
+  isShared?: boolean;
+  ownerId?: string;
   createdAt: Date;
   updatedAt: Date;
 }

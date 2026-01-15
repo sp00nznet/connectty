@@ -17,6 +17,7 @@ export interface Provider {
   autoDiscover: boolean;
   discoverInterval: number;
   lastDiscoveryAt?: Date;
+  isShared?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,6 +51,7 @@ export interface SavedCommand {
   targetOs: string;
   category?: string;
   tags: string[];
+  isShared?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -82,8 +84,21 @@ export interface CommandResult {
   completedAt?: Date;
 }
 
+export interface SessionLog {
+  id: string;
+  userId: string;
+  connectionId?: string;
+  sessionId: string;
+  sessionType: 'ssh' | 'pty' | 'rdp';
+  connectionName?: string;
+  hostname?: string;
+  data: string;
+  dataType: 'input' | 'output';
+  timestamp: Date;
+}
+
 export class DatabaseService {
-  private pool: Pool;
+  public pool: Pool;
   private masterKey: string;
 
   constructor(config: PoolConfig) {
@@ -104,9 +119,17 @@ export class DatabaseService {
           ad_domain VARCHAR(255),
           ad_sid VARCHAR(255),
           roles TEXT[] DEFAULT ARRAY['user'],
+          is_admin BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           last_login_at TIMESTAMP
         );
+
+        -- Add is_admin column if it doesn't exist (migration for existing databases)
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'is_admin') THEN
+            ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false;
+          END IF;
+        END $$;
 
         CREATE TABLE IF NOT EXISTS connection_groups (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -126,9 +149,17 @@ export class DatabaseService {
           type VARCHAR(50) NOT NULL,
           username VARCHAR(255) NOT NULL,
           encrypted_data TEXT,
+          is_shared BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- Add is_shared column to credentials if it doesn't exist
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'credentials' AND column_name = 'is_shared') THEN
+            ALTER TABLE credentials ADD COLUMN is_shared BOOLEAN DEFAULT false;
+          END IF;
+        END $$;
 
         CREATE TABLE IF NOT EXISTS connections (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -142,6 +173,7 @@ export class DatabaseService {
           tags TEXT[] DEFAULT ARRAY[]::TEXT[],
           group_id UUID REFERENCES connection_groups(id) ON DELETE SET NULL,
           description TEXT,
+          is_shared BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           last_connected_at TIMESTAMP
@@ -151,6 +183,13 @@ export class DatabaseService {
         DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'connection_type') THEN
             ALTER TABLE connections ADD COLUMN connection_type VARCHAR(20) DEFAULT 'ssh';
+          END IF;
+        END $$;
+
+        -- Add is_shared column to connections if it doesn't exist
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'is_shared') THEN
+            ALTER TABLE connections ADD COLUMN is_shared BOOLEAN DEFAULT false;
           END IF;
         END $$;
 
@@ -168,9 +207,17 @@ export class DatabaseService {
           auto_discover BOOLEAN DEFAULT false,
           discover_interval INTEGER DEFAULT 3600,
           last_discovery_at TIMESTAMP,
+          is_shared BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- Add is_shared column to providers if it doesn't exist
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'providers' AND column_name = 'is_shared') THEN
+            ALTER TABLE providers ADD COLUMN is_shared BOOLEAN DEFAULT false;
+          END IF;
+        END $$;
 
         CREATE TABLE IF NOT EXISTS discovered_hosts (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -203,9 +250,17 @@ export class DatabaseService {
           target_os VARCHAR(50) DEFAULT 'all',
           category VARCHAR(100),
           tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+          is_shared BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- Add is_shared column to saved_commands if it doesn't exist
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'saved_commands' AND column_name = 'is_shared') THEN
+            ALTER TABLE saved_commands ADD COLUMN is_shared BOOLEAN DEFAULT false;
+          END IF;
+        END $$;
 
         CREATE TABLE IF NOT EXISTS command_executions (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -235,6 +290,25 @@ export class DatabaseService {
           completed_at TIMESTAMP
         );
 
+        -- Session logs for SSH/terminal input/output auditing
+        CREATE TABLE IF NOT EXISTS session_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          connection_id UUID REFERENCES connections(id) ON DELETE SET NULL,
+          session_id VARCHAR(255) NOT NULL,
+          session_type VARCHAR(20) NOT NULL,
+          connection_name VARCHAR(255),
+          hostname VARCHAR(255),
+          data TEXT NOT NULL,
+          data_type VARCHAR(20) NOT NULL,
+          timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_logs_user ON session_logs(user_id);
+        CREATE INDEX IF NOT EXISTS idx_session_logs_session ON session_logs(session_id);
+        CREATE INDEX IF NOT EXISTS idx_session_logs_connection ON session_logs(connection_id);
+        CREATE INDEX IF NOT EXISTS idx_session_logs_timestamp ON session_logs(timestamp);
+
         CREATE INDEX IF NOT EXISTS idx_providers_user ON providers(user_id);
         CREATE INDEX IF NOT EXISTS idx_discovered_hosts_user ON discovered_hosts(user_id);
         CREATE INDEX IF NOT EXISTS idx_discovered_hosts_provider ON discovered_hosts(provider_id);
@@ -255,12 +329,13 @@ export class DatabaseService {
     adDomain?: string;
     adSid?: string;
     roles?: string[];
+    isAdmin?: boolean;
   }): Promise<User> {
     const result = await this.pool.query(
-      `INSERT INTO users (username, password_hash, display_name, email, ad_domain, ad_sid, roles)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO users (username, password_hash, display_name, email, ad_domain, ad_sid, roles, is_admin)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [data.username, data.passwordHash, data.displayName, data.email, data.adDomain, data.adSid, data.roles || ['user']]
+      [data.username, data.passwordHash, data.displayName, data.email, data.adDomain, data.adSid, data.roles || ['user'], data.isAdmin || false]
     );
     return this.rowToUser(result.rows[0]);
   }
@@ -959,6 +1034,230 @@ export class DatabaseService {
     };
   }
 
+  // Session logging methods
+  async createSessionLog(data: {
+    userId: string;
+    connectionId?: string;
+    sessionId: string;
+    sessionType: 'ssh' | 'pty' | 'rdp';
+    connectionName?: string;
+    hostname?: string;
+    data: string;
+    dataType: 'input' | 'output';
+  }): Promise<SessionLog> {
+    const result = await this.pool.query(
+      `INSERT INTO session_logs (user_id, connection_id, session_id, session_type, connection_name, hostname, data, data_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [data.userId, data.connectionId, data.sessionId, data.sessionType, data.connectionName, data.hostname, data.data, data.dataType]
+    );
+    return this.rowToSessionLog(result.rows[0]);
+  }
+
+  async getSessionLogs(filters: {
+    userId?: string;
+    connectionId?: string;
+    sessionId?: string;
+    sessionType?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+  }): Promise<SessionLog[]> {
+    let query = 'SELECT * FROM session_logs WHERE 1=1';
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(filters.userId);
+    }
+    if (filters.connectionId) {
+      query += ` AND connection_id = $${paramIndex++}`;
+      params.push(filters.connectionId);
+    }
+    if (filters.sessionId) {
+      query += ` AND session_id = $${paramIndex++}`;
+      params.push(filters.sessionId);
+    }
+    if (filters.sessionType) {
+      query += ` AND session_type = $${paramIndex++}`;
+      params.push(filters.sessionType);
+    }
+    if (filters.startDate) {
+      query += ` AND timestamp >= $${paramIndex++}`;
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      query += ` AND timestamp <= $${paramIndex++}`;
+      params.push(filters.endDate);
+    }
+
+    query += ' ORDER BY timestamp DESC';
+
+    if (filters.limit) {
+      query += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    }
+
+    const result = await this.pool.query(query, params);
+    return result.rows.map(this.rowToSessionLog.bind(this));
+  }
+
+  async deleteSessionLogs(filters: {
+    sessionId?: string;
+    olderThan?: Date;
+  }): Promise<number> {
+    let query = 'DELETE FROM session_logs WHERE 1=1';
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters.sessionId) {
+      query += ` AND session_id = $${paramIndex++}`;
+      params.push(filters.sessionId);
+    }
+    if (filters.olderThan) {
+      query += ` AND timestamp < $${paramIndex++}`;
+      params.push(filters.olderThan);
+    }
+
+    const result = await this.pool.query(query, params);
+    return result.rowCount ?? 0;
+  }
+
+  // Sharing methods
+  async toggleSharing(type: 'connection' | 'credential' | 'provider' | 'command', id: string, userId: string, isShared: boolean): Promise<boolean> {
+    const tableMap = {
+      connection: 'connections',
+      credential: 'credentials',
+      provider: 'providers',
+      command: 'saved_commands',
+    };
+    const table = tableMap[type];
+
+    const result = await this.pool.query(
+      `UPDATE ${table} SET is_shared = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3 RETURNING *`,
+      [isShared, id, userId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getSharedConnections(): Promise<ServerConnection[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM connections WHERE is_shared = true ORDER BY name'
+    );
+    return result.rows.map(this.rowToConnection);
+  }
+
+  async getSharedCredentials(): Promise<Credential[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM credentials WHERE is_shared = true ORDER BY name'
+    );
+    const creds: Credential[] = [];
+    for (const row of result.rows) {
+      creds.push(await this.rowToCredential(row, row.user_id as string));
+    }
+    return creds;
+  }
+
+  async getSharedProviders(): Promise<Provider[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM providers WHERE is_shared = true ORDER BY name'
+    );
+    return result.rows.map(this.rowToProvider.bind(this));
+  }
+
+  async getSharedCommands(): Promise<SavedCommand[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM saved_commands WHERE is_shared = true ORDER BY category, name'
+    );
+    return result.rows.map(this.rowToSavedCommand.bind(this));
+  }
+
+  async getAllConnectionsWithShared(userId: string): Promise<ServerConnection[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM connections WHERE user_id = $1 OR is_shared = true ORDER BY name',
+      [userId]
+    );
+    return result.rows.map(this.rowToConnection);
+  }
+
+  async getAllCredentialsWithShared(userId: string): Promise<Credential[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM credentials WHERE user_id = $1 OR is_shared = true ORDER BY name',
+      [userId]
+    );
+    const creds: Credential[] = [];
+    for (const row of result.rows) {
+      creds.push(await this.rowToCredential(row, userId));
+    }
+    return creds;
+  }
+
+  async getAllProvidersWithShared(userId: string): Promise<Provider[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM providers WHERE user_id = $1 OR is_shared = true ORDER BY name',
+      [userId]
+    );
+    return result.rows.map(this.rowToProvider.bind(this));
+  }
+
+  async getAllCommandsWithShared(userId: string): Promise<SavedCommand[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM saved_commands WHERE user_id = $1 OR is_shared = true ORDER BY category, name',
+      [userId]
+    );
+    return result.rows.map(this.rowToSavedCommand.bind(this));
+  }
+
+  // Admin methods
+  async getAllUsers(): Promise<User[]> {
+    const result = await this.pool.query('SELECT * FROM users ORDER BY created_at DESC');
+    return result.rows.map(this.rowToUser.bind(this));
+  }
+
+  async updateUserAdmin(userId: string, isAdmin: boolean): Promise<User | null> {
+    const result = await this.pool.query(
+      'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING *',
+      [isAdmin, userId]
+    );
+    return result.rows[0] ? this.rowToUser(result.rows[0]) : null;
+  }
+
+  async deleteUser(userId: string): Promise<boolean> {
+    const result = await this.pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getSystemStats(): Promise<{
+    totalUsers: number;
+    totalConnections: number;
+    totalCredentials: number;
+    totalProviders: number;
+    totalCommands: number;
+    totalSessions: number;
+    activeUsers24h: number;
+  }> {
+    const [users, connections, credentials, providers, commands, sessions, activeUsers] = await Promise.all([
+      this.pool.query('SELECT COUNT(*) FROM users'),
+      this.pool.query('SELECT COUNT(*) FROM connections'),
+      this.pool.query('SELECT COUNT(*) FROM credentials'),
+      this.pool.query('SELECT COUNT(*) FROM providers'),
+      this.pool.query('SELECT COUNT(*) FROM saved_commands'),
+      this.pool.query('SELECT COUNT(DISTINCT session_id) FROM session_logs'),
+      this.pool.query('SELECT COUNT(DISTINCT user_id) FROM session_logs WHERE timestamp > NOW() - INTERVAL \'24 hours\''),
+    ]);
+
+    return {
+      totalUsers: parseInt(users.rows[0].count),
+      totalConnections: parseInt(connections.rows[0].count),
+      totalCredentials: parseInt(credentials.rows[0].count),
+      totalProviders: parseInt(providers.rows[0].count),
+      totalCommands: parseInt(commands.rows[0].count),
+      totalSessions: parseInt(sessions.rows[0].count),
+      activeUsers24h: parseInt(activeUsers.rows[0].count),
+    };
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }
@@ -973,6 +1272,7 @@ export class DatabaseService {
       adDomain: row.ad_domain as string | undefined,
       adSid: row.ad_sid as string | undefined,
       roles: row.roles as User['roles'],
+      isAdmin: (row.is_admin as boolean) || false,
       createdAt: new Date(row.created_at as string),
       lastLoginAt: row.last_login_at ? new Date(row.last_login_at as string) : undefined,
     };
@@ -990,6 +1290,8 @@ export class DatabaseService {
       tags: row.tags as string[],
       group: row.group_id as string | undefined,
       description: row.description as string | undefined,
+      isShared: (row.is_shared as boolean) || false,
+      ownerId: row.user_id as string,
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),
       lastConnectedAt: row.last_connected_at ? new Date(row.last_connected_at as string) : undefined,
@@ -1023,6 +1325,8 @@ export class DatabaseService {
       secret: sensitiveData.secret,
       privateKey: sensitiveData.privateKey,
       passphrase: sensitiveData.passphrase,
+      isShared: (row.is_shared as boolean) || false,
+      ownerId: row.user_id as string,
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),
       usedBy: usedByResult.rows.map((r) => r.id as string),
@@ -1067,6 +1371,7 @@ export class DatabaseService {
       autoDiscover: row.auto_discover as boolean,
       discoverInterval: row.discover_interval as number,
       lastDiscoveryAt: row.last_discovery_at ? new Date(row.last_discovery_at as string) : undefined,
+      isShared: (row.is_shared as boolean) || false,
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),
     };
@@ -1113,6 +1418,7 @@ export class DatabaseService {
       targetOs: row.target_os as string,
       category: row.category as string | undefined,
       tags: (row.tags as string[]) || [],
+      isShared: (row.is_shared as boolean) || false,
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),
     };
@@ -1147,6 +1453,21 @@ export class DatabaseService {
       error: row.error as string | undefined,
       startedAt: row.started_at ? new Date(row.started_at as string) : undefined,
       completedAt: row.completed_at ? new Date(row.completed_at as string) : undefined,
+    };
+  }
+
+  private rowToSessionLog(row: Record<string, unknown>): SessionLog {
+    return {
+      id: row.id as string,
+      userId: row.user_id as string,
+      connectionId: row.connection_id as string | undefined,
+      sessionId: row.session_id as string,
+      sessionType: row.session_type as SessionLog['sessionType'],
+      connectionName: row.connection_name as string | undefined,
+      hostname: row.hostname as string | undefined,
+      data: row.data as string,
+      dataType: row.data_type as SessionLog['dataType'],
+      timestamp: new Date(row.timestamp as string),
     };
   }
 }

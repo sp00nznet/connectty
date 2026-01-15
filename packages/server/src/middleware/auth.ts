@@ -43,7 +43,7 @@ export function authMiddleware(authService: AuthService) {
 }
 
 export function adminMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || !req.user.roles.includes('admin')) {
+  if (!req.user || (!req.user.isAdmin && !req.user.roles.includes('admin'))) {
     res.status(403).json({ success: false, error: 'Admin access required' });
     return;
   }
