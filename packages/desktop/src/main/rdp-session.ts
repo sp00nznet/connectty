@@ -144,15 +144,12 @@ export class RDPSessionService {
     });
   }
 
-  sendKeyEvent(sessionId: string, scanCode: number, isPressed: boolean, isExtended: boolean = false): void {
+  sendKeyEvent(sessionId: string, scanCode: number, isPressed: boolean, _isExtended: boolean = false): void {
     const session = this.sessions.get(sessionId);
     if (session?.client) {
       try {
-        if (isPressed) {
-          session.client.sendKeyEventScancode(scanCode, isExtended);
-        } else {
-          session.client.sendKeyEventScancode(scanCode, isExtended, true);
-        }
+        // node-rdpjs-2 API: sendKeyEventScancode(code, isPressed)
+        session.client.sendKeyEventScancode(scanCode, isPressed);
       } catch (err) {
         console.error('Error sending key event:', err);
       }
@@ -180,7 +177,10 @@ export class RDPSessionService {
     const session = this.sessions.get(sessionId);
     if (session?.client) {
       try {
-        session.client.sendWheelEvent(x, y, delta, isHorizontal);
+        // node-rdpjs-2 API: sendWheelEvent(x, y, step, isNegative, isHorizontal)
+        const step = Math.abs(delta);
+        const isNegative = delta < 0;
+        session.client.sendWheelEvent(x, y, step, isNegative, isHorizontal);
       } catch (err) {
         console.error('Error sending wheel event:', err);
       }
