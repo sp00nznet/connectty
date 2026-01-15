@@ -23,7 +23,8 @@
     "docker:down": "docker-compose down",
     "clean": "rimraf packages/*/dist",
     "dist:win": "npm run build -w @connectty/shared && npm run dist:win -w @connectty/desktop",
-    "dist:linux": "npm run build -w @connectty/shared && npm run dist:linux -w @connectty/desktop"
+    "dist:linux": "npm run build -w @connectty/shared && npm run dist:linux -w @connectty/desktop",
+    "dist:web": "npm run build -w @connectty/shared && npm run build -w @connectty/server && npm run build -w @connectty/web"
   },
   "author": "",
   "license": "MIT",
