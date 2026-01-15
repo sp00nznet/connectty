@@ -1579,7 +1579,6 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
   const [hostname, setHostname] = useState(connection?.hostname || '');
   const [connectionType, setConnectionType] = useState<ConnectionType>(connection?.connectionType || 'ssh');
   const [port, setPort] = useState(connection?.port || 22);
-  const [username, setUsername] = useState(connection?.username || '');
   const [credentialId, setCredentialId] = useState(connection?.credentialId || '');
   const [groupId, setGroupId] = useState(connection?.group || '');
   const [description, setDescription] = useState(connection?.description || '');
@@ -1638,7 +1637,6 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
     } else {
       data.hostname = hostname;
       data.port = port;
-      data.username = username || undefined;
       data.credentialId = credentialId || undefined;
     }
 
@@ -1703,17 +1701,6 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
                     onChange={(e) => setPort(parseInt(e.target.value) || (connectionType === 'rdp' ? 3389 : 22))}
                     min="1"
                     max="65535"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Username</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder={connectionType === 'rdp' ? 'Administrator' : 'root'}
                   />
                 </div>
 
