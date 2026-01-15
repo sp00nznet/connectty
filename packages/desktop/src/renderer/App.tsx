@@ -515,9 +515,9 @@ export default function App() {
     setIsDiscovering(null);
   };
 
-  const handleImportSelectedHosts = async (hostIds: string[]) => {
+  const handleImportSelectedHosts = async (hostIds: string[], credentialId?: string) => {
     try {
-      const imported = await window.connectty.discovered.importSelected(hostIds);
+      const imported = await window.connectty.discovered.importSelected(hostIds, credentialId);
       await loadData();
       showNotification('success', `Imported ${imported.length} connections`);
       setShowHostSelectionModal(false);
@@ -795,6 +795,7 @@ export default function App() {
         <HostSelectionModal
           provider={hostSelectionProvider}
           hosts={discoveredHosts}
+          credentials={credentials}
           onClose={() => { setShowHostSelectionModal(false); setDiscoveredHosts([]); setHostSelectionProvider(null); }}
           onImport={handleImportSelectedHosts}
         />
@@ -4007,14 +4008,16 @@ function SettingsModal({ settings, onClose, onSave }: SettingsModalProps) {
 interface HostSelectionModalProps {
   provider: Provider;
   hosts: DiscoveredHost[];
+  credentials: Credential[];
   onClose: () => void;
-  onImport: (hostIds: string[]) => Promise<void>;
+  onImport: (hostIds: string[], credentialId?: string) => Promise<void>;
 }
 
-function HostSelectionModal({ provider, hosts, onClose, onImport }: HostSelectionModalProps) {
+function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }: HostSelectionModalProps) {
   const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
+  const [selectedCredential, setSelectedCredential] = useState<string>('');
 
   // Filter to show only non-imported hosts
   const availableHosts = hosts.filter(h => !h.imported);
@@ -4045,7 +4048,7 @@ function HostSelectionModal({ provider, hosts, onClose, onImport }: HostSelectio
     if (selectedHosts.size === 0) return;
     setImporting(true);
     try {
-      await onImport(Array.from(selectedHosts));
+      await onImport(Array.from(selectedHosts), selectedCredential || undefined);
     } finally {
       setImporting(false);
     }
@@ -4076,7 +4079,7 @@ function HostSelectionModal({ provider, hosts, onClose, onImport }: HostSelectio
             <>
               {availableHosts.length > 0 && (
                 <>
-                  <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                     <label className="checkbox-label" style={{ margin: 0 }}>
                       <input
                         type="checkbox"
@@ -4088,6 +4091,21 @@ function HostSelectionModal({ provider, hosts, onClose, onImport }: HostSelectio
                     <span style={{ color: '#a0aec0', fontSize: '0.875rem' }}>
                       {selectedHosts.size} selected
                     </span>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>Assign Credential to Imported Hosts</label>
+                    <select
+                      value={selectedCredential}
+                      onChange={(e) => setSelectedCredential(e.target.value)}
+                      className="form-select"
+                    >
+                      <option value="">Auto-detect / None</option>
+                      {credentials.map((cred) => (
+                        <option key={cred.id} value={cred.id}>
+                          {cred.name} ({cred.type === 'password' ? 'Password' : 'SSH Key'}{cred.username ? ` - ${cred.username}` : ''})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="host-list">
                     {availableHosts.map((host) => (
