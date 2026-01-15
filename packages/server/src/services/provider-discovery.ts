@@ -83,15 +83,16 @@ export class ProviderDiscoveryService {
     try {
       // Try to connect to vSphere API
       const url = `https://${host}:${port}/rest/com/vmware/cis/session`;
+      const https = await import('https');
+      const agent = ignoreCert ? new https.Agent({ rejectUnauthorized: false }) : undefined;
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64'),
         },
-        ...(ignoreCert ? {
-          // @ts-expect-error - Node.js specific option
-          agent: new (await import('https')).Agent({ rejectUnauthorized: false })
-        } : {}),
+        // @ts-ignore - Node.js specific option for fetch
+        agent,
       });
 
       if (response.ok) {

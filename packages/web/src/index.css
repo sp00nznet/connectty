@@ -160,6 +160,54 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Connection Groups */
+.connection-group {
+  margin-bottom: 8px;
+}
+
+.connection-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+  user-select: none;
+}
+
+.connection-group-header:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.connection-group-header .collapse-chevron {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.connection-group.collapsed .connection-group-header .collapse-chevron {
+  transform: rotate(-90deg);
+}
+
+.connection-group-header .group-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.connection-group-header .connection-count {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
 /* Session Tabs */
 .session-tabs {
   display: flex;

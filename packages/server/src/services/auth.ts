@@ -104,9 +104,16 @@ export class AuthService {
       let user = await this.db.getUserByUsername(request.username);
 
       if (!user) {
-        const displayName = searchResult?.ppiobject?.displayName?.toString() || request.username;
-        const email = searchResult?.ppiobject?.mail?.toString();
-        const adSid = searchResult?.ppiobject?.objectSid?.toString();
+        // Extract attributes from LDAP search result
+        const attrs = searchResult?.attributes || [];
+        const getAttr = (name: string): string | undefined => {
+          const attr = attrs.find((a: any) => a.type === name);
+          return attr?.values?.[0]?.toString();
+        };
+
+        const displayName = getAttr('displayName') || request.username;
+        const email = getAttr('mail');
+        const adSid = getAttr('objectSid');
 
         user = await this.db.createUser({
           username: request.username,
@@ -166,7 +173,7 @@ export class AuthService {
     const token = jwt.sign(
       { userId: user.id, username: user.username },
       this.config.jwtSecret,
-      { expiresIn: this.config.jwtExpiry }
+      { expiresIn: this.config.jwtExpiry as string }
     );
 
     return {

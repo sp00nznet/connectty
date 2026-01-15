@@ -52,7 +52,7 @@ export function createConnectionRoutes(db: DatabaseService): Router {
   // Create connection
   router.post('/', async (req, res) => {
     try {
-      const { name, hostname, port, username, credentialId, tags, group, description } = req.body;
+      const { name, hostname, port, username, credentialId, tags, group, description, connectionType } = req.body;
 
       if (!name || !hostname) {
         res.status(400).json({
@@ -66,6 +66,7 @@ export function createConnectionRoutes(db: DatabaseService): Router {
         name,
         hostname,
         port: port || 22,
+        connectionType: connectionType || 'ssh',
         username,
         credentialId,
         tags: tags || [],

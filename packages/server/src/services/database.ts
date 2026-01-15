@@ -136,6 +136,7 @@ export class DatabaseService {
           name VARCHAR(255) NOT NULL,
           hostname VARCHAR(255) NOT NULL,
           port INTEGER DEFAULT 22,
+          connection_type VARCHAR(20) DEFAULT 'ssh',
           username VARCHAR(255),
           credential_id UUID REFERENCES credentials(id) ON DELETE SET NULL,
           tags TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -145,6 +146,13 @@ export class DatabaseService {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           last_connected_at TIMESTAMP
         );
+
+        -- Add connection_type column if it doesn't exist (migration for existing databases)
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'connection_type') THEN
+            ALTER TABLE connections ADD COLUMN connection_type VARCHAR(20) DEFAULT 'ssh';
+          END IF;
+        END $$;
 
         CREATE INDEX IF NOT EXISTS idx_connections_user ON connections(user_id);
         CREATE INDEX IF NOT EXISTS idx_credentials_user ON credentials(user_id);
@@ -295,10 +303,10 @@ export class DatabaseService {
 
   async createConnection(userId: string, data: Omit<ServerConnection, 'id' | 'createdAt' | 'updatedAt'>): Promise<ServerConnection> {
     const result = await this.pool.query(
-      `INSERT INTO connections (user_id, name, hostname, port, username, credential_id, tags, group_id, description)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO connections (user_id, name, hostname, port, connection_type, username, credential_id, tags, group_id, description)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [userId, data.name, data.hostname, data.port || 22, data.username, data.credentialId, data.tags || [], data.group, data.description]
+      [userId, data.name, data.hostname, data.port || 22, data.connectionType || 'ssh', data.username, data.credentialId, data.tags || [], data.group, data.description]
     );
     return this.rowToConnection(result.rows[0]);
   }
@@ -319,6 +327,10 @@ export class DatabaseService {
     if (updates.port !== undefined) {
       fields.push(`port = $${paramIndex++}`);
       values.push(updates.port);
+    }
+    if (updates.connectionType !== undefined) {
+      fields.push(`connection_type = $${paramIndex++}`);
+      values.push(updates.connectionType);
     }
     if (updates.username !== undefined) {
       fields.push(`username = $${paramIndex++}`);
@@ -972,6 +984,7 @@ export class DatabaseService {
       name: row.name as string,
       hostname: row.hostname as string,
       port: row.port as number,
+      connectionType: (row.connection_type as ServerConnection['connectionType']) || 'ssh',
       username: row.username as string | undefined,
       credentialId: row.credential_id as string | undefined,
       tags: row.tags as string[],
