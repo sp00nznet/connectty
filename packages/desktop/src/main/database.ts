@@ -709,6 +709,12 @@ export class DatabaseService {
     stmt.run(providerId);
   }
 
+  // Clear only non-imported discovered hosts (for re-discovery)
+  clearNonImportedDiscoveredHosts(providerId: string): void {
+    const stmt = this.db.prepare('DELETE FROM discovered_hosts WHERE provider_id = ? AND imported = 0');
+    stmt.run(providerId);
+  }
+
   // Saved command methods
   getSavedCommands(category?: string): SavedCommand[] {
     const sql = category
