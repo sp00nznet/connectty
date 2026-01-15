@@ -9,6 +9,7 @@ import { wsService } from '../services/websocket';
 import ConnectionModal from './ConnectionModal';
 import ProviderPanel from './ProviderPanel';
 import BulkCommandPanel from './BulkCommandPanel';
+import ImportExportModal from './ImportExportModal';
 
 type MainView = 'terminal' | 'providers' | 'commands';
 
@@ -37,6 +38,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [mainView, setMainView] = useState<MainView>('terminal');
+  const [showImportExport, setShowImportExport] = useState(false);
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const sessionsRef = useRef<SSHSession[]>([]);
@@ -299,6 +301,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
               + New
             </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowImportExport(true)}
+              title="Import / Export"
+            >
+              ⇄
+            </button>
             <div className="search-input">
               <input
                 type="text"
@@ -446,6 +455,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           }}
           onSave={handleSaveConnection}
           onDelete={editingConnection ? () => handleDeleteConnection(editingConnection.id) : undefined}
+        />
+      )}
+
+      {/* Import/Export Modal */}
+      {showImportExport && (
+        <ImportExportModal
+          onClose={() => setShowImportExport(false)}
+          onImportComplete={loadData}
+          onNotification={showNotification}
         />
       )}
 

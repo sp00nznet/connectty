@@ -294,6 +294,38 @@ class ApiService {
     const response = await this.request<APIResponse<CommandExecutionWithResults>>(`/commands/executions/${id}`);
     return response.data || null;
   }
+
+  // Import/Export
+  async exportData(format: 'json' | 'csv' = 'json', includeCredentials = false): Promise<Blob> {
+    const token = this.getToken();
+    const response = await fetch(
+      `${API_BASE}/sync/export?format=${format}&includeCredentials=${includeCredentials}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Export failed');
+    }
+
+    return response.blob();
+  }
+
+  async importData(
+    format: 'json' | 'csv' | 'ssh-config',
+    data: string
+  ): Promise<{ connections: number; credentials: number; groups: number; errors: string[] }> {
+    const response = await this.request<
+      APIResponse<{ connections: number; credentials: number; groups: number; errors: string[] }>
+    >('/sync/import', {
+      method: 'POST',
+      body: JSON.stringify({ format, data }),
+    });
+    return response.data!;
+  }
 }
 
 // Type definitions for new features
