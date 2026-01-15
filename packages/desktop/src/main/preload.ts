@@ -115,8 +115,8 @@ const api = {
       ipcRenderer.invoke('discovered:import', hostId, credentialId),
     importAll: (providerId: string): Promise<ServerConnection[]> =>
       ipcRenderer.invoke('discovered:importAll', providerId),
-    importSelected: (hostIds: string[]): Promise<ServerConnection[]> =>
-      ipcRenderer.invoke('discovered:importSelected', hostIds),
+    importSelected: (hostIds: string[], credentialId?: string): Promise<ServerConnection[]> =>
+      ipcRenderer.invoke('discovered:importSelected', hostIds, credentialId),
   },
 
   // Connection bulk operations

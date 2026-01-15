@@ -346,7 +346,7 @@ function setupIpcHandlers(): void {
     return connections;
   });
 
-  ipcMain.handle('discovered:importSelected', async (_event, hostIds: string[]) => {
+  ipcMain.handle('discovered:importSelected', async (_event, hostIds: string[], assignedCredentialId?: string) => {
     const connections: ServerConnection[] = [];
 
     for (const hostId of hostIds) {
@@ -355,7 +355,8 @@ function setupIpcHandlers(): void {
 
       const connectionType = host.osType === 'windows' ? 'rdp' : 'ssh';
       const port = connectionType === 'rdp' ? 3389 : 22;
-      const credentialId = findMatchingCredential(db, host);
+      // Use assigned credential if provided, otherwise try to find a matching one
+      const credentialId = assignedCredentialId || findMatchingCredential(db, host);
 
       const connection = db.createConnection({
         name: host.name,
