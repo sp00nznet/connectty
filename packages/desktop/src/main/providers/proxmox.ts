@@ -56,13 +56,23 @@ export class ProxmoxProvider implements IProviderService {
           const vmConfig = await this.getVMConfig(config, ticket, node.node, vm.vmid);
           const osType = detectOSType(vmConfig.ostype, vm.name);
 
+          // Try to get actual IP from guest agent first (if VM is running)
+          let vmIp: string | undefined;
+          if (vm.status === 'running') {
+            vmIp = await this.getVMGuestAgentIP(config, ticket, node.node, vm.vmid);
+          }
+          // Fall back to config IP
+          if (!vmIp && vmConfig.ipconfig0) {
+            vmIp = this.parseIP(vmConfig.ipconfig0);
+          }
+
           hosts.push({
             id: generateId(),
             providerId: provider.id,
             providerHostId: `${node.node}/${vm.vmid}`,
             name: vm.name || `VM ${vm.vmid}`,
-            hostname: vmConfig.ipconfig0 ? this.parseIP(vmConfig.ipconfig0) : undefined,
-            privateIp: vmConfig.ipconfig0 ? this.parseIP(vmConfig.ipconfig0) : undefined,
+            hostname: vmIp,
+            privateIp: vmIp,
             osType,
             osName: vmConfig.ostype,
             state: vm.status === 'running' ? 'running' :
@@ -87,13 +97,23 @@ export class ProxmoxProvider implements IProviderService {
         for (const ct of containers) {
           const ctConfig = await this.getContainerConfig(config, ticket, node.node, ct.vmid);
 
+          // Try to get actual IP from container interfaces first (if running)
+          let ctIp: string | undefined;
+          if (ct.status === 'running') {
+            ctIp = await this.getContainerInterfaces(config, ticket, node.node, ct.vmid);
+          }
+          // Fall back to config IP
+          if (!ctIp && ctConfig.net0) {
+            ctIp = this.parseContainerIP(ctConfig.net0);
+          }
+
           hosts.push({
             id: generateId(),
             providerId: provider.id,
             providerHostId: `${node.node}/${ct.vmid}`,
             name: ct.name || `CT ${ct.vmid}`,
-            hostname: ctConfig.hostname,
-            privateIp: ctConfig.net0 ? this.parseContainerIP(ctConfig.net0) : undefined,
+            hostname: ctIp || ctConfig.hostname,
+            privateIp: ctIp,
             osType: 'linux',
             osName: ctConfig.ostype || 'Linux Container',
             state: ct.status === 'running' ? 'running' : 'stopped',
@@ -247,6 +267,53 @@ export class ProxmoxProvider implements IProviderService {
       return await this.apiGet(config, ticket, `/nodes/${node}/lxc/${vmid}/config`);
     } catch {
       return {};
+    }
+  }
+
+  // Get actual IP from running LXC container interfaces
+  private async getContainerInterfaces(config: ProxmoxConfig, ticket: string, node: string, vmid: number): Promise<string | undefined> {
+    try {
+      const interfaces = await this.apiGet(config, ticket, `/nodes/${node}/lxc/${vmid}/interfaces`);
+      if (Array.isArray(interfaces)) {
+        for (const iface of interfaces) {
+          // Skip loopback
+          if (iface.name === 'lo') continue;
+          // Look for IPv4 address
+          if (iface.inet) {
+            const ip = iface.inet.split('/')[0];
+            if (ip && ip !== '127.0.0.1') {
+              return ip;
+            }
+          }
+        }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Get actual IP from running QEMU VM via guest agent
+  private async getVMGuestAgentIP(config: ProxmoxConfig, ticket: string, node: string, vmid: number): Promise<string | undefined> {
+    try {
+      const result = await this.apiGet(config, ticket, `/nodes/${node}/qemu/${vmid}/agent/network-get-interfaces`);
+      if (result && Array.isArray(result.result)) {
+        for (const iface of result.result) {
+          // Skip loopback
+          if (iface.name === 'lo') continue;
+          if (iface['ip-addresses'] && Array.isArray(iface['ip-addresses'])) {
+            for (const addr of iface['ip-addresses']) {
+              if (addr['ip-address-type'] === 'ipv4' && addr['ip-address'] !== '127.0.0.1') {
+                return addr['ip-address'];
+              }
+            }
+          }
+        }
+      }
+      return undefined;
+    } catch {
+      // Guest agent might not be installed/running
+      return undefined;
     }
   }
 
