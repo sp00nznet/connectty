@@ -4,6 +4,138 @@ Comprehensive documentation for all Connectty features.
 
 ---
 
+## Comparison with Other Clients
+
+### Full Feature Matrix
+
+| Feature | Connectty | Termius | SecureCRT | PuTTY | MobaXterm | Xpipe |
+|:--------|:---------:|:-------:|:---------:|:-----:|:---------:|:-----:|
+| **Pricing** | Free | $10/mo+ | $119+ | Free | Free/$70 | Free |
+| **Open Source** | Yes | No | No | Yes | No | Yes |
+| **Cross-Platform** | Win/Linux/Mac/Web | All | Win/Mac | Win | Win | All |
+| | | | | | | |
+| **SSH Terminal** | Yes | Yes | Yes | Yes | Yes | Yes |
+| **RDP Sessions** | Embedded + Native | No | No | No | Yes | No |
+| **Serial/COM** | Yes | No | Yes | Yes | Yes | No |
+| **SFTP Browser** | Dual-pane | Yes | Yes | No (PSFTP) | Yes | Yes |
+| **Local Shells** | Yes (incl. WSL) | No | No | No | Yes | Yes |
+| | | | | | | |
+| **Cloud Discovery** | 6 providers | No | No | No | No | Limited |
+| **VMware vSphere** | Yes | No | No | No | No | No |
+| **Proxmox VE** | Yes | No | No | No | No | No |
+| **AWS EC2** | Yes | No | No | No | No | Yes |
+| **Azure VMs** | Yes | No | No | No | No | Yes |
+| **GCP Compute** | Yes | No | No | No | No | Yes |
+| **IBM BigFix** | Yes | No | No | No | No | No |
+| | | | | | | |
+| **Bulk Commands** | Yes | No | No | No | No | No |
+| **Parallel Execution** | Yes | No | No | No | No | No |
+| **Saved Scripts** | Yes | No | Yes | No | Yes | No |
+| **Command Variables** | Yes | No | Yes | No | Yes | No |
+| | | | | | | |
+| **Credential Vault** | Encrypted | Encrypted | Yes | No | Yes | Yes |
+| **Auto-Assign Creds** | Yes | No | No | No | No | No |
+| **SSH Key Support** | Yes | Yes | Yes | Yes | Yes | Yes |
+| **SSH Agent** | Yes | Yes | Yes | Yes | Yes | Yes |
+| | | | | | | |
+| **Connection Groups** | Nested | Folders | Folders | No | Folders | Yes |
+| **Import/Export** | JSON/CSV/SSH Config | Proprietary | Proprietary | Registry | Proprietary | Yes |
+| **System Tray** | Yes | Yes | Yes | No | Yes | Yes |
+| **Themes** | 18 | 8 | Limited | No | Limited | Yes |
+
+### Detailed Comparisons
+
+<details>
+<summary><b>vs. Termius</b> — Popular cross-platform SSH client</summary>
+
+| Aspect | Connectty | Termius |
+|:-------|:----------|:--------|
+| **Price** | Free forever | Free tier limited, $10/mo for teams |
+| **Cloud Discovery** | 6 providers built-in | None |
+| **Bulk Commands** | Yes, parallel execution | No |
+| **RDP Support** | Embedded + native | No |
+| **Serial Ports** | Full configuration | No |
+| **Local Shells** | Windows, Linux, macOS, WSL | No |
+| **Data Ownership** | Local SQLite, self-hosted | Cloud-synced to Termius servers |
+| **Open Source** | Yes (MIT) | No |
+
+**Bottom line:** Termius excels at mobile access and cloud sync. Connectty wins on server discovery, bulk operations, and protocol variety.
+
+</details>
+
+<details>
+<summary><b>vs. SecureCRT</b> — Enterprise terminal emulator</summary>
+
+| Aspect | Connectty | SecureCRT |
+|:-------|:----------|:----------|
+| **Price** | Free | $119 per seat |
+| **Cloud Discovery** | 6 providers | None |
+| **Bulk Commands** | GUI-based, parallel | Script-based |
+| **RDP Support** | Embedded + native | No |
+| **Scripting** | Saved commands/scripts | VBScript, Python, JScript |
+| **Serial Config** | Full | Full |
+| **Enterprise Features** | Self-hostable | Single-user focus |
+| **Open Source** | Yes | No |
+
+**Bottom line:** SecureCRT has deeper scripting capabilities. Connectty offers better cloud integration and is free.
+
+</details>
+
+<details>
+<summary><b>vs. PuTTY</b> — Classic open-source SSH client</summary>
+
+| Aspect | Connectty | PuTTY |
+|:-------|:----------|:------|
+| **Price** | Free | Free |
+| **Interface** | Modern tabbed UI | Single window per session |
+| **Cloud Discovery** | 6 providers | None |
+| **Bulk Commands** | Yes | No |
+| **Credential Storage** | Encrypted vault | Registry (unencrypted) |
+| **SFTP** | Integrated dual-pane | Separate PSFTP tool |
+| **Themes** | 18 themes | Manual color config |
+| **Cross-Platform** | Yes | Windows-focused |
+
+**Bottom line:** PuTTY is lightweight and reliable. Connectty modernizes the experience with tabs, themes, and infrastructure integration.
+
+</details>
+
+<details>
+<summary><b>vs. MobaXterm</b> — Windows-focused terminal</summary>
+
+| Aspect | Connectty | MobaXterm |
+|:-------|:----------|:----------|
+| **Price** | Free | Free (Home) / $70 (Pro) |
+| **Platform** | Win/Linux/Mac/Web | Windows only |
+| **Cloud Discovery** | 6 providers | None |
+| **Bulk Commands** | Yes, with GUI | MultiExec (Pro only) |
+| **X11 Forwarding** | No | Yes |
+| **Built-in Tools** | Local shells | Unix tools, X server |
+| **Open Source** | Yes | No |
+
+**Bottom line:** MobaXterm packs more Unix tools for Windows. Connectty offers cross-platform support and cloud provider discovery.
+
+</details>
+
+<details>
+<summary><b>vs. Xpipe</b> — Open-source connection hub</summary>
+
+| Aspect | Connectty | Xpipe |
+|:-------|:----------|:------|
+| **Price** | Free | Free |
+| **Cloud Discovery** | 6 providers | AWS, Azure, GCP |
+| **VMware/Proxmox** | Yes | No |
+| **Bulk Commands** | Full GUI with parallel exec | No |
+| **RDP Support** | Embedded + native | No |
+| **Serial Ports** | Yes | No |
+| **Terminal** | Embedded xterm.js | Launches external terminal |
+| **Open Source** | Yes | Yes |
+
+**Bottom line:** Xpipe focuses on shell connections and file browsing. Connectty offers more protocols and bulk execution.
+
+</details>
+
+---
+
 ## Connection Types
 
 ### SSH Connections
