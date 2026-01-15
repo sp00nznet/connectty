@@ -76,6 +76,8 @@ Auto-discover and import servers from your infrastructure.
 | **Microsoft Azure** | VMs, resource groups, service principal |
 | **IBM BigFix** | Managed endpoints, AD auth, online status |
 
+![Import Hosts](screen/Import.png)
+
 ---
 
 ### Bulk Command Execution
@@ -118,8 +120,6 @@ Dual-pane file browser with site-to-site transfer support.
 ### Import & Export
 
 Migrate from other tools or backup your data.
-
-![Import](screen/Import.png)
 
 | Format | Import | Export |
 |:-------|:------:|:------:|
