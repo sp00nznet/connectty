@@ -2895,9 +2895,20 @@ interface RepeatedActionsModalProps {
   onNotification: (type: 'success' | 'error', message: string) => void;
 }
 
+interface SavedScript {
+  id: string;
+  name: string;
+  description: string;
+  language: 'bash' | 'powershell' | 'python';
+  content: string;
+  targetOS: CommandTargetOS;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, onNotification }: RepeatedActionsModalProps) {
   // Tab state
-  const [activeTab, setActiveTab] = useState<'execute' | 'saved' | 'history'>('execute');
+  const [activeTab, setActiveTab] = useState<'execute' | 'saved' | 'scripts' | 'history'>('execute');
 
   // Host selection state
   const [filterType, setFilterType] = useState<HostFilter['type']>('all');
@@ -2915,6 +2926,10 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
   const [scriptContent, setScriptContent] = useState('');
   const [scriptLanguage, setScriptLanguage] = useState<'bash' | 'powershell' | 'python'>('bash');
 
+  // Saved scripts state
+  const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
+  const [selectedScriptId, setSelectedScriptId] = useState('');
+
   // Execution state
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentExecution, setCurrentExecution] = useState<CommandExecution | null>(null);
@@ -2929,6 +2944,15 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
   const [commandName, setCommandName] = useState('');
   const [commandDescription, setCommandDescription] = useState('');
   const [commandCategory, setCommandCategory] = useState('');
+
+  // Saved script form state
+  const [showScriptForm, setShowScriptForm] = useState(false);
+  const [editingScript, setEditingScript] = useState<SavedScript | null>(null);
+  const [scriptName, setScriptName] = useState('');
+  const [scriptDescription, setScriptDescription] = useState('');
+  const [scriptFormContent, setScriptFormContent] = useState('');
+  const [scriptFormLanguage, setScriptFormLanguage] = useState<'bash' | 'powershell' | 'python'>('bash');
+  const [scriptFormTargetOS, setScriptFormTargetOS] = useState<CommandTargetOS>('all');
 
   // Load saved commands and history
   useEffect(() => {
@@ -2965,6 +2989,113 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
     const history = await window.connectty.commands.history(20);
     setCommandHistory(history);
   };
+
+  // Load saved scripts from localStorage
+  const loadSavedScripts = () => {
+    const stored = localStorage.getItem('connectty-saved-scripts');
+    if (stored) {
+      try {
+        const scripts = JSON.parse(stored).map((s: any) => ({
+          ...s,
+          createdAt: new Date(s.createdAt),
+          updatedAt: new Date(s.updatedAt),
+        }));
+        setSavedScripts(scripts);
+      } catch (e) {
+        console.error('Failed to load saved scripts:', e);
+      }
+    }
+  };
+
+  // Save scripts to localStorage
+  const persistScripts = (scripts: SavedScript[]) => {
+    localStorage.setItem('connectty-saved-scripts', JSON.stringify(scripts));
+  };
+
+  // Create or update a script
+  const handleSaveScript = () => {
+    const now = new Date();
+    if (editingScript) {
+      // Update existing
+      const updated = savedScripts.map(s =>
+        s.id === editingScript.id
+          ? {
+              ...s,
+              name: scriptName,
+              description: scriptDescription,
+              language: scriptFormLanguage,
+              content: scriptFormContent,
+              targetOS: scriptFormTargetOS,
+              updatedAt: now,
+            }
+          : s
+      );
+      setSavedScripts(updated);
+      persistScripts(updated);
+      onNotification('success', 'Script updated');
+    } else {
+      // Create new
+      const newScript: SavedScript = {
+        id: `script-${Date.now()}`,
+        name: scriptName,
+        description: scriptDescription,
+        language: scriptFormLanguage,
+        content: scriptFormContent,
+        targetOS: scriptFormTargetOS,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const updated = [...savedScripts, newScript];
+      setSavedScripts(updated);
+      persistScripts(updated);
+      onNotification('success', 'Script saved');
+    }
+    resetScriptForm();
+    setShowScriptForm(false);
+  };
+
+  // Delete a script
+  const handleDeleteScript = (id: string) => {
+    const updated = savedScripts.filter(s => s.id !== id);
+    setSavedScripts(updated);
+    persistScripts(updated);
+    onNotification('success', 'Script deleted');
+  };
+
+  // Reset script form
+  const resetScriptForm = () => {
+    setScriptName('');
+    setScriptDescription('');
+    setScriptFormContent('');
+    setScriptFormLanguage('bash');
+    setScriptFormTargetOS('all');
+    setEditingScript(null);
+  };
+
+  // Edit a script
+  const handleEditScript = (script: SavedScript) => {
+    setEditingScript(script);
+    setScriptName(script.name);
+    setScriptDescription(script.description);
+    setScriptFormContent(script.content);
+    setScriptFormLanguage(script.language);
+    setScriptFormTargetOS(script.targetOS);
+    setShowScriptForm(true);
+  };
+
+  // Use a saved script in execute tab
+  const handleUseScript = (script: SavedScript) => {
+    setCommandMode('script');
+    setScriptContent(script.content);
+    setScriptLanguage(script.language);
+    setTargetOS(script.targetOS);
+    setActiveTab('execute');
+  };
+
+  // Load scripts on mount
+  useEffect(() => {
+    loadSavedScripts();
+  }, []);
 
   // Build filter from selections
   const buildFilter = (): HostFilter => {
@@ -3141,7 +3272,13 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
             className={`tab-btn ${activeTab === 'saved' ? 'active' : ''}`}
             onClick={() => setActiveTab('saved')}
           >
-            Saved Commands ({savedCommands.length})
+            Commands ({savedCommands.length})
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'scripts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('scripts')}
+          >
+            Scripts ({savedScripts.length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
@@ -3513,6 +3650,180 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
             </div>
           )}
 
+          {/* Scripts Tab */}
+          {activeTab === 'scripts' && (
+            <div className="saved-scripts-content">
+              {!showScriptForm ? (
+                <>
+                  {savedScripts.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#a0aec0' }}>
+                      No saved scripts. Create one to reuse multi-line scripts.
+                    </p>
+                  ) : (
+                    <div className="scripts-list">
+                      {savedScripts.map(script => (
+                        <div key={script.id} className="script-item" style={{
+                          background: 'var(--bg-tertiary)',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          marginBottom: '12px',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div>
+                              <h5 style={{ margin: 0, color: 'var(--text-primary)' }}>{script.name}</h5>
+                              {script.description && (
+                                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                  {script.description}
+                                </p>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <span className="os-badge" style={{
+                                fontSize: '10px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: script.language === 'bash' ? '#22c55e' : script.language === 'powershell' ? '#3b82f6' : '#f59e0b',
+                                color: 'white',
+                                textTransform: 'uppercase',
+                              }}>
+                                {script.language}
+                              </span>
+                              <span className="os-badge" style={{
+                                fontSize: '10px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: 'var(--bg-secondary)',
+                                color: 'var(--text-secondary)',
+                              }}>
+                                {script.targetOS}
+                              </span>
+                            </div>
+                          </div>
+                          <pre style={{
+                            background: 'var(--bg-secondary)',
+                            padding: '8px 12px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                            margin: '8px 0',
+                            maxHeight: '100px',
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                          }}>
+                            {script.content}
+                          </pre>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={() => handleUseScript(script)}
+                            >
+                              Use
+                            </button>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => handleEditScript(script)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => {
+                                if (window.confirm('Delete this script?')) {
+                                  handleDeleteScript(script.id);
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="script-form">
+                  <h4>{editingScript ? 'Edit Script' : 'New Script'}</h4>
+                  <div className="form-group">
+                    <label className="form-label">Name *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={scriptName}
+                      onChange={(e) => setScriptName(e.target.value)}
+                      placeholder="e.g., System Health Check"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={scriptDescription}
+                      onChange={(e) => setScriptDescription(e.target.value)}
+                      placeholder="What does this script do?"
+                    />
+                  </div>
+                  <div className="form-row" style={{ display: 'flex', gap: '16px' }}>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Language</label>
+                      <select
+                        className="form-select"
+                        value={scriptFormLanguage}
+                        onChange={(e) => setScriptFormLanguage(e.target.value as 'bash' | 'powershell' | 'python')}
+                      >
+                        <option value="bash">Bash</option>
+                        <option value="powershell">PowerShell</option>
+                        <option value="python">Python</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Target OS</label>
+                      <select
+                        className="form-select"
+                        value={scriptFormTargetOS}
+                        onChange={(e) => setScriptFormTargetOS(e.target.value as CommandTargetOS)}
+                      >
+                        <option value="all">All (Linux + Windows)</option>
+                        <option value="linux">Linux Only</option>
+                        <option value="windows">Windows Only</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Script Content *</label>
+                    <textarea
+                      className="form-input"
+                      value={scriptFormContent}
+                      onChange={(e) => setScriptFormContent(e.target.value)}
+                      placeholder={scriptFormLanguage === 'bash' ? '#!/bin/bash\n\necho "Hello World"' : scriptFormLanguage === 'powershell' ? 'Write-Host "Hello World"' : 'print("Hello World")'}
+                      rows={10}
+                      style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div className="form-row" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setShowScriptForm(false);
+                        resetScriptForm();
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleSaveScript}
+                      disabled={!scriptName || !scriptFormContent}
+                    >
+                      {editingScript ? 'Update' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* History Tab */}
           {activeTab === 'history' && (
             <div className="history-content">
@@ -3636,6 +3947,11 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
           {activeTab === 'saved' && !showCommandForm && (
             <button className="btn btn-primary" onClick={() => setShowCommandForm(true)}>
               + New Command
+            </button>
+          )}
+          {activeTab === 'scripts' && !showScriptForm && (
+            <button className="btn btn-primary" onClick={() => setShowScriptForm(true)}>
+              + New Script
             </button>
           )}
         </div>
