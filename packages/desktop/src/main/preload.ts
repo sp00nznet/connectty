@@ -69,6 +69,7 @@ export interface LocalShellInfo {
   path: string;
   args?: string[];
   icon?: string;
+  elevated?: boolean; // Run as administrator (Windows only)
 }
 
 export interface LocalShellSessionEvent {

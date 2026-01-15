@@ -15,6 +15,7 @@ export interface LocalShellInfo {
   path: string;
   args?: string[];
   icon?: string;
+  elevated?: boolean; // Run as administrator (Windows only)
 }
 
 export interface LocalShellSessionEvent {
@@ -80,6 +81,14 @@ export class LocalShellService {
         path: cmdPath,
         icon: 'cmd',
       });
+      // Admin version
+      shells.push({
+        id: 'cmd-admin',
+        name: 'Command Prompt (Administrator)',
+        path: cmdPath,
+        icon: 'cmd',
+        elevated: true,
+      });
     }
 
     // PowerShell (Windows PowerShell 5.x)
@@ -90,6 +99,14 @@ export class LocalShellService {
         name: 'Windows PowerShell',
         path: powershellPath,
         icon: 'powershell',
+      });
+      // Admin version
+      shells.push({
+        id: 'powershell-admin',
+        name: 'Windows PowerShell (Administrator)',
+        path: powershellPath,
+        icon: 'powershell',
+        elevated: true,
       });
     }
 
@@ -105,6 +122,14 @@ export class LocalShellService {
           name: 'PowerShell 7',
           path: pwshPath,
           icon: 'powershell',
+        });
+        // Admin version
+        shells.push({
+          id: 'pwsh-admin',
+          name: 'PowerShell 7 (Administrator)',
+          path: pwshPath,
+          icon: 'powershell',
+          elevated: true,
         });
         break;
       }
@@ -280,9 +305,15 @@ export class LocalShellService {
 
   /**
    * Spawn a new local shell session
+   * For elevated shells on Windows, opens an external elevated window
    */
   spawn(shellInfo: LocalShellInfo): string {
     const sessionId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Handle elevated shells on Windows - these open in external windows
+    if (shellInfo.elevated && this.platform === 'win32') {
+      return this.spawnElevated(shellInfo, sessionId);
+    }
 
     const shell = shellInfo.path;
     const args = shellInfo.args || [];
@@ -335,6 +366,51 @@ export class LocalShellService {
       this.eventCallback(sessionId, {
         type: 'error',
         message: err.message || 'Failed to spawn shell',
+      });
+      throw err;
+    }
+  }
+
+  /**
+   * Spawn an elevated shell on Windows (opens in external window)
+   * Uses PowerShell Start-Process with -Verb RunAs to trigger UAC
+   */
+  private spawnElevated(shellInfo: LocalShellInfo, sessionId: string): string {
+    const { spawn } = require('child_process');
+
+    try {
+      // Use PowerShell to launch the process elevated
+      // This will trigger the UAC prompt and open in a new window
+      const psCommand = `Start-Process -FilePath "${shellInfo.path}" -Verb RunAs`;
+
+      const child = spawn('powershell.exe', ['-Command', psCommand], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+
+      child.unref();
+
+      // Since it opens in external window, we notify immediately that it was launched
+      // We don't track this as a session since we can't control the external window
+      this.eventCallback(sessionId, {
+        type: 'data',
+        data: `\r\n[Launching ${shellInfo.name} in elevated window...]\r\n`,
+      });
+
+      // Close the "session" after a brief moment
+      setTimeout(() => {
+        this.eventCallback(sessionId, {
+          type: 'close',
+          exitCode: 0,
+        });
+      }, 1500);
+
+      return sessionId;
+    } catch (err: any) {
+      this.eventCallback(sessionId, {
+        type: 'error',
+        message: err.message || 'Failed to launch elevated shell',
       });
       throw err;
     }

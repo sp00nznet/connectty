@@ -964,7 +964,8 @@ export default function App() {
                     }}
                   >
                     <span className="menu-icon">
-                      {shell.icon === 'cmd' ? '⌨' :
+                      {shell.elevated ? '🛡️' :
+                       shell.icon === 'cmd' ? '⌨' :
                        shell.icon === 'powershell' ? '💠' :
                        shell.icon === 'linux' ? '🐧' : '💻'}
                     </span>
@@ -1004,7 +1005,8 @@ export default function App() {
                         }}
                       >
                         <span className="menu-icon">
-                          {shell.icon === 'cmd' ? '⌨' :
+                          {shell.elevated ? '🛡️' :
+                           shell.icon === 'cmd' ? '⌨' :
                            shell.icon === 'powershell' ? '💠' :
                            shell.icon === 'linux' ? '🐧' : '💻'}
                         </span>
