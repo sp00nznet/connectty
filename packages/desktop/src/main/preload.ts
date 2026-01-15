@@ -286,6 +286,7 @@ const api = {
       ipcRenderer.invoke('sftp:stat', sessionId, remotePath),
     homePath: (): Promise<string> => ipcRenderer.invoke('sftp:homePath'),
     sessions: (): Promise<string[]> => ipcRenderer.invoke('sftp:sessions'),
+    getTempDir: (): Promise<string> => ipcRenderer.invoke('sftp:getTempDir'),
     selectLocalFolder: (): Promise<string | null> => ipcRenderer.invoke('sftp:selectLocalFolder'),
     selectLocalFile: (): Promise<string[] | null> => ipcRenderer.invoke('sftp:selectLocalFile'),
     selectSaveLocation: (defaultName: string): Promise<string | null> =>
