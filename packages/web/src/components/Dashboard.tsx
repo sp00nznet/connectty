@@ -42,6 +42,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [mainView, setMainView] = useState<MainView>('terminal');
   const [showImportExport, setShowImportExport] = useState(false);
 
+  // Collapsible sidebar groups
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('connectty-collapsed-groups');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const sessionsRef = useRef<SSHSession[]>([]);
 
@@ -306,6 +312,28 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       conn.hostname.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Group connections by their group
+  const groupedConnections = groups.reduce((acc, group) => {
+    acc[group.id] = filteredConnections.filter(c => c.group === group.id);
+    return acc;
+  }, {} as Record<string, ServerConnection[]>);
+
+  const ungroupedConnections = filteredConnections.filter(c => !c.group);
+
+  // Toggle group collapse state
+  const toggleGroupCollapse = (groupId: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      localStorage.setItem('connectty-collapsed-groups', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
   return (
     <div className="app">
       {/* Header */}
@@ -406,44 +434,132 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
           <div className="sidebar-content">
             <ul className="connection-list">
-              {filteredConnections.map((conn) => (
-                <li
-                  key={conn.id}
-                  className={`connection-item ${sessions.some((s) => s.connectionId === conn.id) ? 'active' : ''}`}
-                  onDoubleClick={() => handleConnect(conn)}
-                >
-                  <span className={`status-dot ${sessions.some((s) => s.connectionId === conn.id) ? 'connected' : ''}`} />
-                  <div className="connection-info">
-                    <div className="connection-name">{conn.name}</div>
-                    <div className="connection-host">
-                      {conn.username ? `${conn.username}@` : ''}
-                      {conn.hostname}:{conn.port}
+              {/* Grouped connections */}
+              {groups.map(group => (
+                groupedConnections[group.id]?.length > 0 && (
+                  <li key={group.id} className={`connection-group ${collapsedGroups.has(group.id) ? 'collapsed' : ''}`}>
+                    <div
+                      className="connection-group-header"
+                      onClick={() => toggleGroupCollapse(group.id)}
+                    >
+                      <svg
+                        className="collapse-chevron"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                      <span className="group-color-dot" style={{ backgroundColor: group.color }}></span>
+                      {group.name}
+                      <span className="connection-count">({groupedConnections[group.id].length})</span>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleConnect(conn);
-                      }}
-                      disabled={connectingId === conn.id}
-                    >
-                      {connectingId === conn.id ? '...' : 'Connect'}
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingConnection(conn);
-                        setShowConnectionModal(true);
-                      }}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </li>
+                    {!collapsedGroups.has(group.id) && groupedConnections[group.id].map(conn => (
+                      <div
+                        key={conn.id}
+                        className={`connection-item ${sessions.some((s) => s.connectionId === conn.id) ? 'active' : ''}`}
+                        onDoubleClick={() => handleConnect(conn)}
+                      >
+                        <span className={`status-dot ${sessions.some((s) => s.connectionId === conn.id) ? 'connected' : ''}`} />
+                        <div className="connection-info">
+                          <div className="connection-name">{conn.name}</div>
+                          <div className="connection-host">
+                            {conn.username ? `${conn.username}@` : ''}
+                            {conn.hostname}:{conn.port}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConnect(conn);
+                            }}
+                            disabled={connectingId === conn.id}
+                          >
+                            {connectingId === conn.id ? '...' : 'Connect'}
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingConnection(conn);
+                              setShowConnectionModal(true);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </li>
+                )
               ))}
+
+              {/* Ungrouped connections */}
+              {ungroupedConnections.length > 0 && (
+                <li className={`connection-group ${collapsedGroups.has('__ungrouped__') ? 'collapsed' : ''}`}>
+                  <div
+                    className="connection-group-header"
+                    onClick={() => toggleGroupCollapse('__ungrouped__')}
+                  >
+                    <svg
+                      className="collapse-chevron"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    Connections
+                    <span className="connection-count">({ungroupedConnections.length})</span>
+                  </div>
+                  {!collapsedGroups.has('__ungrouped__') && ungroupedConnections.map(conn => (
+                    <div
+                      key={conn.id}
+                      className={`connection-item ${sessions.some((s) => s.connectionId === conn.id) ? 'active' : ''}`}
+                      onDoubleClick={() => handleConnect(conn)}
+                    >
+                      <span className={`status-dot ${sessions.some((s) => s.connectionId === conn.id) ? 'connected' : ''}`} />
+                      <div className="connection-info">
+                        <div className="connection-name">{conn.name}</div>
+                        <div className="connection-host">
+                          {conn.username ? `${conn.username}@` : ''}
+                          {conn.hostname}:{conn.port}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleConnect(conn);
+                          }}
+                          disabled={connectingId === conn.id}
+                        >
+                          {connectingId === conn.id ? '...' : 'Connect'}
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingConnection(conn);
+                            setShowConnectionModal(true);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </li>
+              )}
 
               {filteredConnections.length === 0 && (
                 <div className="empty-state">
