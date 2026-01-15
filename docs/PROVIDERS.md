@@ -256,6 +256,72 @@ az ad sp create-for-rbac \
 
 ---
 
+## IBM BigFix
+
+Connect to BigFix to discover managed computers from the BigFix console.
+
+### Requirements
+
+- BigFix server with REST API enabled
+- Active Directory account with BigFix console access
+- Network access to BigFix REST API (port 52311)
+
+### Configuration
+
+| Field | Description | Example |
+|:------|:------------|:--------|
+| **Name** | Display name for this provider | `BigFix Production` |
+| **Type** | Select BigFix | `bigfix` |
+| **Host** | BigFix server hostname or IP | `bigfix.example.com` |
+| **Port** | REST API port (default 52311) | `52311` |
+| **Username** | AD username | `DOMAIN\username` or `user@domain.com` |
+| **Password** | AD password | `********` |
+
+### Authentication
+
+BigFix uses Active Directory credentials for authentication:
+
+```
+# Windows domain format
+DOMAIN\username
+
+# UPN format
+username@domain.com
+```
+
+The user must have access to the BigFix console and REST API.
+
+### Discovered Data
+
+| Field | Source |
+|:------|:-------|
+| Computer Name | BigFix computer name |
+| DNS Name | Fully qualified domain name |
+| IP Address | Primary IP address |
+| OS Type | Operating system detection |
+| State | Based on last report time |
+| Agent Type | BigFix agent type |
+| Last User | Last logged-in user |
+
+### Computer State Detection
+
+Since BigFix tracks managed endpoints rather than running VMs, the state is determined by the last report time:
+
+| Last Report | State |
+|:------------|:------|
+| < 24 hours ago | `running` (online) |
+| > 24 hours ago | `stopped` (offline) |
+
+### Common Use Cases
+
+BigFix is ideal for discovering:
+- Corporate workstations and laptops
+- Physical servers
+- Endpoints not in cloud/hypervisor environments
+- Mixed environments with BigFix agents
+
+---
+
 ## Import Workflow
 
 ### Step 1: Add Provider

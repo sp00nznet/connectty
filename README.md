@@ -47,6 +47,7 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 | **AWS EC2** | Multi-region support |
 | **Google Cloud** | Compute Engine |
 | **Microsoft Azure** | Virtual Machines |
+| **IBM BigFix** | Endpoint management |
 
 </td>
 </tr>

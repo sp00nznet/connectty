@@ -1605,6 +1605,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     { value: 'aws', label: 'Amazon Web Services (AWS)', defaultPort: 443 },
     { value: 'gcp', label: 'Google Cloud Platform (GCP)', defaultPort: 443 },
     { value: 'azure', label: 'Microsoft Azure', defaultPort: 443 },
+    { value: 'bigfix', label: 'IBM BigFix', defaultPort: 52311 },
   ];
 
   const awsRegions = [
@@ -1687,6 +1688,15 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
         subscriptionId,
       };
       if (clientSecret) config.clientSecret = clientSecret;
+    } else if (type === 'bigfix') {
+      config = {
+        type: 'bigfix',
+        host,
+        port,
+        username,
+        ignoreCertErrors,
+      };
+      if (password) config.password = password;
     }
 
     const data: Partial<Provider> = {
@@ -1813,8 +1823,8 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
               </select>
             </div>
 
-            {/* ESXi / Proxmox Fields */}
-            {(type === 'esxi' || type === 'proxmox') && (
+            {/* ESXi / Proxmox / BigFix Fields */}
+            {(type === 'esxi' || type === 'proxmox' || type === 'bigfix') && (
               <>
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 2 }}>
@@ -1846,7 +1856,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                     className="form-input"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={type === 'esxi' ? 'root' : 'root@pam'}
+                    placeholder={type === 'esxi' ? 'root' : type === 'proxmox' ? 'root@pam' : 'DOMAIN\\user or user@domain.com'}
                     required
                   />
                 </div>
@@ -2025,6 +2035,14 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                   Note: Requires @azure/arm-compute, @azure/arm-network, and @azure/identity packages
                 </p>
               </>
+            )}
+
+            {/* BigFix Note */}
+            {type === 'bigfix' && (
+              <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '8px' }}>
+                Uses Active Directory credentials to authenticate with BigFix REST API.
+                Default port is 52311. Computer state is determined by last report time (24 hours = running).
+              </p>
             )}
           </div>
 
