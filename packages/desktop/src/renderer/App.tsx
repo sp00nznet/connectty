@@ -3970,13 +3970,21 @@ interface SFTPBrowserProps {
 }
 
 function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSession, onFxpSourceChange }: SFTPBrowserProps) {
+  // Left panel source: 'local' or another SFTP session ID
+  const [leftPanelSource, setLeftPanelSource] = useState<'local' | string>('local');
+
   // Local file browser state
   const [localPath, setLocalPath] = useState('');
   const [localFiles, setLocalFiles] = useState<LocalFileInfo[]>([]);
   const [localLoading, setLocalLoading] = useState(false);
   const [selectedLocalFiles, setSelectedLocalFiles] = useState<Set<string>>(new Set());
 
-  // Remote file browser state
+  // Left panel remote state (for FXP mode)
+  const [leftRemotePath, setLeftRemotePath] = useState('/');
+  const [leftRemoteFiles, setLeftRemoteFiles] = useState<RemoteFileInfo[]>([]);
+  const [leftRemoteLoading, setLeftRemoteLoading] = useState(false);
+
+  // Remote file browser state (right panel)
   const [remotePath, setRemotePath] = useState('/');
   const [remoteFiles, setRemoteFiles] = useState<RemoteFileInfo[]>([]);
   const [remoteLoading, setRemoteLoading] = useState(false);
@@ -3985,9 +3993,14 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
   // Transfer state
   const [transfers, setTransfers] = useState<TransferProgress[]>([]);
 
-  // FXP target selection
+  // FXP target selection (legacy - keeping for compatibility)
   const [showFxpPanel, setShowFxpPanel] = useState(false);
   const [fxpTargetSession, setFxpTargetSession] = useState<string | null>(null);
+
+  // Get the left panel SFTP session if in FXP mode
+  const leftSession = leftPanelSource !== 'local'
+    ? otherSftpSessions.find(s => s.id === leftPanelSource)
+    : null;
 
   // Load initial data
   useEffect(() => {
@@ -4056,6 +4069,34 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
     }
   };
 
+  // Load left panel remote directory (for FXP mode)
+  const loadLeftRemoteDirectory = async (sessionId: string, path: string) => {
+    try {
+      setLeftRemoteLoading(true);
+      const files = await window.connectty.sftp.listRemote(sessionId, path);
+      setLeftRemoteFiles(files);
+      setLeftRemotePath(path);
+      setSelectedLocalFiles(new Set());
+    } catch (err) {
+      onNotification('error', `Failed to read remote directory: ${(err as Error).message}`);
+    } finally {
+      setLeftRemoteLoading(false);
+    }
+  };
+
+  // Handle left panel source change
+  const handleLeftPanelSourceChange = (source: 'local' | string) => {
+    setLeftPanelSource(source);
+    setSelectedLocalFiles(new Set());
+    if (source === 'local') {
+      if (!localPath) {
+        loadLocalHomePath();
+      }
+    } else {
+      loadLeftRemoteDirectory(source, '/');
+    }
+  };
+
   const navigateLocal = (file: LocalFileInfo) => {
     if (file.isDirectory) {
       setLocalPath(file.path);
@@ -4083,6 +4124,30 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
   const handleUpload = async () => {
     if (selectedLocalFiles.size === 0) return;
 
+    // FXP mode: transfer from left remote to right remote
+    if (leftPanelSource !== 'local' && leftSession) {
+      for (const filePath of selectedLocalFiles) {
+        const file = leftRemoteFiles.find(f => f.path === filePath);
+        if (file && !file.isDirectory) {
+          try {
+            // Create temp path for intermediate transfer
+            const tempPath = `/tmp/fxp-${Date.now()}-${file.name}`;
+            // Download from left (source) session
+            await window.connectty.sftp.download(leftPanelSource, file.path, tempPath);
+            // Upload to right (target) session
+            const targetPath = `${remotePath}/${file.name}`.replace(/\/+/g, '/');
+            await window.connectty.sftp.upload(session.sessionId, tempPath, targetPath);
+            onNotification('success', `FXP: ${file.name} → ${session.connectionName}`);
+          } catch (err) {
+            onNotification('error', `FXP transfer failed: ${(err as Error).message}`);
+          }
+        }
+      }
+      loadRemoteDirectory(remotePath);
+      return;
+    }
+
+    // Normal upload from local
     for (const filePath of selectedLocalFiles) {
       const file = localFiles.find(f => f.path === filePath);
       if (file && !file.isDirectory) {
@@ -4100,6 +4165,30 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
   const handleDownload = async () => {
     if (selectedRemoteFiles.size === 0) return;
 
+    // FXP mode: transfer from right remote to left remote
+    if (leftPanelSource !== 'local' && leftSession) {
+      for (const filePath of selectedRemoteFiles) {
+        const file = remoteFiles.find(f => f.path === filePath);
+        if (file && !file.isDirectory) {
+          try {
+            // Create temp path for intermediate transfer
+            const tempPath = `/tmp/fxp-${Date.now()}-${file.name}`;
+            // Download from right (source) session
+            await window.connectty.sftp.download(session.sessionId, file.path, tempPath);
+            // Upload to left (target) session
+            const targetPath = `${leftRemotePath}/${file.name}`.replace(/\/+/g, '/');
+            await window.connectty.sftp.upload(leftPanelSource, tempPath, targetPath);
+            onNotification('success', `FXP: ${file.name} → ${leftSession.connectionName}`);
+          } catch (err) {
+            onNotification('error', `FXP transfer failed: ${(err as Error).message}`);
+          }
+        }
+      }
+      loadLeftRemoteDirectory(leftPanelSource, leftRemotePath);
+      return;
+    }
+
+    // Normal download to local
     for (const filePath of selectedRemoteFiles) {
       const file = remoteFiles.find(f => f.path === filePath);
       if (file && !file.isDirectory) {
@@ -4286,28 +4375,71 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
       )}
 
       <div className="sftp-panels">
-        {/* Local Panel */}
+        {/* Left Panel - Local or FXP Remote */}
         <div className="sftp-panel local-panel">
           <div className="sftp-panel-header">
-            <h4>Local</h4>
-            <button className="btn btn-sm btn-secondary" onClick={handleSelectLocalFolder}>
-              Browse...
-            </button>
+            {otherSftpSessions.length > 0 ? (
+              <select
+                className="form-select sftp-source-select"
+                value={leftPanelSource}
+                onChange={(e) => handleLeftPanelSourceChange(e.target.value)}
+                style={{ fontWeight: 600, fontSize: '14px', padding: '4px 8px', minWidth: '150px' }}
+              >
+                <option value="local">Local</option>
+                {otherSftpSessions.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.connectionName} ({s.hostname})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <h4>Local</h4>
+            )}
+            {leftPanelSource === 'local' && (
+              <button className="btn btn-sm btn-secondary" onClick={handleSelectLocalFolder}>
+                Browse...
+              </button>
+            )}
           </div>
           <div className="sftp-path-bar">
-            <button className="btn btn-sm btn-icon" onClick={navigateLocalUp} title="Go up">
+            <button
+              className="btn btn-sm btn-icon"
+              onClick={() => {
+                if (leftPanelSource === 'local') {
+                  navigateLocalUp();
+                } else {
+                  const parent = leftRemotePath.split('/').slice(0, -1).join('/') || '/';
+                  loadLeftRemoteDirectory(leftPanelSource, parent);
+                }
+              }}
+              title="Go up"
+            >
               ↑
             </button>
             <input
               type="text"
               className="form-input sftp-path-input"
-              value={localPath}
-              onChange={(e) => setLocalPath(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadLocalDirectory(localPath)}
+              value={leftPanelSource === 'local' ? localPath : leftRemotePath}
+              onChange={(e) => {
+                if (leftPanelSource === 'local') {
+                  setLocalPath(e.target.value);
+                } else {
+                  setLeftRemotePath(e.target.value);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (leftPanelSource === 'local') {
+                    loadLocalDirectory(localPath);
+                  } else {
+                    loadLeftRemoteDirectory(leftPanelSource, leftRemotePath);
+                  }
+                }
+              }}
             />
           </div>
           <div className="sftp-file-list">
-            {localLoading ? (
+            {(leftPanelSource === 'local' ? localLoading : leftRemoteLoading) ? (
               <div className="sftp-loading-inline">Loading...</div>
             ) : (
               <table className="sftp-table">
@@ -4316,16 +4448,25 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
                     <th></th>
                     <th>Name</th>
                     <th>Size</th>
-                    <th>Modified</th>
+                    <th>{leftPanelSource === 'local' ? 'Modified' : 'Permissions'}</th>
+                    {leftPanelSource !== 'local' && <th>Modified</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {localFiles.map(file => (
+                  {(leftPanelSource === 'local' ? localFiles : leftRemoteFiles).map((file: any) => (
                     <tr
                       key={file.path}
                       className={`sftp-file-row ${selectedLocalFiles.has(file.path) ? 'selected' : ''}`}
                       onClick={() => toggleLocalSelection(file.path)}
-                      onDoubleClick={() => navigateLocal(file)}
+                      onDoubleClick={() => {
+                        if (file.isDirectory) {
+                          if (leftPanelSource === 'local') {
+                            navigateLocal(file);
+                          } else {
+                            loadLeftRemoteDirectory(leftPanelSource, file.path);
+                          }
+                        }
+                      }}
                     >
                       <td className="sftp-checkbox">
                         <input
