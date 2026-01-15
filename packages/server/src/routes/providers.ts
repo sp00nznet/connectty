@@ -287,6 +287,7 @@ export function createProviderRoutes(db: DatabaseService, providerService: Provi
             name: host.name,
             hostname,
             port: 22,
+            connectionType: 'ssh',
             credentialId,
             tags: host.tags,
             group,
