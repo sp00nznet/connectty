@@ -289,6 +289,10 @@ function setupIpcHandlers(): void {
     const service = getProviderService(provider.type);
     const result = await service.discoverHosts(provider);
 
+    // Clear non-imported hosts before storing new ones
+    // This removes hosts that no longer exist in the provider
+    db.clearNonImportedDiscoveredHosts(id);
+
     // Store discovered hosts
     for (const host of result.hosts) {
       db.upsertDiscoveredHost(host);
