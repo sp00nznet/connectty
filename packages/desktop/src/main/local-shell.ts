@@ -305,18 +305,39 @@ export class LocalShellService {
 
   /**
    * Spawn a new local shell session
-   * For elevated shells on Windows, opens an external elevated window
    */
   spawn(shellInfo: LocalShellInfo): string {
     const sessionId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Handle elevated shells on Windows - these open in external windows
-    if (shellInfo.elevated && this.platform === 'win32') {
-      return this.spawnElevated(shellInfo, sessionId);
-    }
+    let shell = shellInfo.path;
+    let args = shellInfo.args || [];
 
-    const shell = shellInfo.path;
-    const args = shellInfo.args || [];
+    // For elevated shells on Windows, wrap with PowerShell elevation attempt
+    if (shellInfo.elevated && this.platform === 'win32') {
+      // Try using gsudo if available, otherwise use PowerShell Start-Process
+      // gsudo allows running elevated commands in the same console
+      const targetShell = shellInfo.path;
+      const isCmd = targetShell.toLowerCase().includes('cmd');
+      const isPowerShell = targetShell.toLowerCase().includes('powershell') || targetShell.toLowerCase().includes('pwsh');
+
+      // Use PowerShell to attempt elevation
+      shell = 'powershell.exe';
+      args = [
+        '-NoProfile',
+        '-Command',
+        // Check for gsudo first, fall back to Start-Process
+        `$gsudo = Get-Command gsudo -ErrorAction SilentlyContinue; ` +
+        `if ($gsudo) { ` +
+        `  Write-Host 'Using gsudo for elevation...' -ForegroundColor Cyan; ` +
+        `  gsudo "${targetShell}" ${isCmd ? '/k' : ''}` +
+        `} else { ` +
+        `  Write-Host 'gsudo not found. Launching elevated window via UAC...' -ForegroundColor Yellow; ` +
+        `  Write-Host 'Install gsudo (winget install gsudo) to run admin shells in this tab.' -ForegroundColor Gray; ` +
+        `  Start-Process "${targetShell}" -Verb RunAs; ` +
+        `  Start-Sleep -Seconds 2 ` +
+        `}`
+      ];
+    }
 
     // Get environment variables
     const env = { ...process.env };
@@ -366,51 +387,6 @@ export class LocalShellService {
       this.eventCallback(sessionId, {
         type: 'error',
         message: err.message || 'Failed to spawn shell',
-      });
-      throw err;
-    }
-  }
-
-  /**
-   * Spawn an elevated shell on Windows (opens in external window)
-   * Uses PowerShell Start-Process with -Verb RunAs to trigger UAC
-   */
-  private spawnElevated(shellInfo: LocalShellInfo, sessionId: string): string {
-    const { spawn } = require('child_process');
-
-    try {
-      // Use PowerShell to launch the process elevated
-      // This will trigger the UAC prompt and open in a new window
-      const psCommand = `Start-Process -FilePath "${shellInfo.path}" -Verb RunAs`;
-
-      const child = spawn('powershell.exe', ['-Command', psCommand], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
-
-      child.unref();
-
-      // Since it opens in external window, we notify immediately that it was launched
-      // We don't track this as a session since we can't control the external window
-      this.eventCallback(sessionId, {
-        type: 'data',
-        data: `\r\n[Launching ${shellInfo.name} in elevated window...]\r\n`,
-      });
-
-      // Close the "session" after a brief moment
-      setTimeout(() => {
-        this.eventCallback(sessionId, {
-          type: 'close',
-          exitCode: 0,
-        });
-      }, 1500);
-
-      return sessionId;
-    } catch (err: any) {
-      this.eventCallback(sessionId, {
-        type: 'error',
-        message: err.message || 'Failed to launch elevated shell',
       });
       throw err;
     }
