@@ -5,6 +5,7 @@
 import { Client, ClientChannel } from 'ssh2';
 import { generateId } from '@connectty/shared';
 import type { ServerConnection, Credential, SSHSessionEvent } from '@connectty/shared';
+import * as net from 'net';
 
 interface SSHSession {
   id: string;
@@ -14,6 +15,32 @@ interface SSHSession {
 }
 
 type EventCallback = (sessionId: string, event: SSHSessionEvent) => void;
+
+/**
+ * Check if Windows SSH agent (OpenSSH) is reachable
+ * Returns false if agent is not running, avoiding connection errors
+ */
+function checkWindowsAgent(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const pipePath = '\\\\.\\pipe\\openssh-ssh-agent';
+    const socket = net.connect(pipePath);
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      resolve(false);
+    }, 1000);
+
+    socket.on('connect', () => {
+      clearTimeout(timeout);
+      socket.destroy();
+      resolve(true);
+    });
+
+    socket.on('error', () => {
+      clearTimeout(timeout);
+      resolve(false);
+    });
+  });
+}
 
 export class SSHService {
   private sessions: Map<string, SSHSession> = new Map();
@@ -26,6 +53,46 @@ export class SSHService {
   async connect(connection: ServerConnection, credential: Credential | null): Promise<string> {
     const sessionId = generateId();
     const client = new Client();
+
+    // Build connection config before creating the Promise
+    const config: Parameters<Client['connect']>[0] = {
+      host: connection.hostname,
+      port: connection.port,
+      username: credential?.username || connection.username || 'root',
+      readyTimeout: 30000,
+      keepaliveInterval: 10000,
+    };
+
+    if (credential) {
+      switch (credential.type) {
+        case 'password':
+          config.password = credential.secret;
+          break;
+        case 'privateKey':
+          config.privateKey = credential.privateKey;
+          if (credential.passphrase) {
+            config.passphrase = credential.passphrase;
+          }
+          break;
+        case 'agent':
+          config.agent = process.env.SSH_AUTH_SOCK;
+          break;
+      }
+    } else {
+      // No credential provided - try SSH agent if available
+      if (process.platform === 'win32') {
+        // On Windows, check if OpenSSH agent is running before trying to use it
+        const agentAvailable = await checkWindowsAgent();
+        if (agentAvailable) {
+          config.agent = '\\\\.\\pipe\\openssh-ssh-agent';
+        }
+      } else if (process.env.SSH_AUTH_SOCK) {
+        config.agent = process.env.SSH_AUTH_SOCK;
+      }
+
+      // Enable keyboard-interactive auth to allow password prompts
+      config.tryKeyboard = true;
+    }
 
     return new Promise((resolve, reject) => {
       client.on('ready', () => {
@@ -87,43 +154,6 @@ export class SSHService {
         });
         this.cleanup(sessionId);
       });
-
-      // Build connection config
-      const config: Parameters<Client['connect']>[0] = {
-        host: connection.hostname,
-        port: connection.port,
-        username: credential?.username || connection.username || 'root',
-        readyTimeout: 30000,
-        keepaliveInterval: 10000,
-      };
-
-      if (credential) {
-        switch (credential.type) {
-          case 'password':
-            config.password = credential.secret;
-            break;
-          case 'privateKey':
-            config.privateKey = credential.privateKey;
-            if (credential.passphrase) {
-              config.passphrase = credential.passphrase;
-            }
-            break;
-          case 'agent':
-            config.agent = process.env.SSH_AUTH_SOCK;
-            break;
-        }
-      } else {
-        // No credential provided - try SSH agent first (works on Windows with Pageant/OpenSSH, macOS/Linux with ssh-agent)
-        if (process.platform === 'win32') {
-          // On Windows, try named pipe for OpenSSH agent
-          config.agent = '\\\\.\\pipe\\openssh-ssh-agent';
-        } else if (process.env.SSH_AUTH_SOCK) {
-          config.agent = process.env.SSH_AUTH_SOCK;
-        }
-
-        // Also enable keyboard-interactive auth to allow password prompts
-        config.tryKeyboard = true;
-      }
 
       client.connect(config);
     });
