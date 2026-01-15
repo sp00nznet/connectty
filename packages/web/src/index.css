@@ -210,6 +210,25 @@ body {
   color: white;
 }
 
+/* New Tab Button */
+.new-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.new-tab-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 /* Terminal Container */
 .terminal-container {
   flex: 1;

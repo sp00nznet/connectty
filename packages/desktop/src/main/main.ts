@@ -13,6 +13,7 @@ import { SerialService } from './serial';
 import { SyncService } from './sync';
 import { CommandService } from './command';
 import { SFTPService } from './sftp';
+import { LocalShellService } from './local-shell';
 import { getProviderService } from './providers';
 
 // App settings interface
@@ -55,6 +56,7 @@ let serialService: SerialService;
 let syncService: SyncService;
 let commandService: CommandService;
 let sftpService: SFTPService;
+let localShellService: LocalShellService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -879,6 +881,32 @@ function setupIpcHandlers(): void {
       startMinimized: settingsStore.get('startMinimized'),
     };
   });
+
+  // Local shell handlers
+  ipcMain.handle('localShell:getAvailable', async () => {
+    return localShellService.getAvailableShells();
+  });
+
+  ipcMain.handle('localShell:spawn', async (_event, shellId: string) => {
+    const shells = await localShellService.getAvailableShells();
+    const shellInfo = shells.find(s => s.id === shellId);
+    if (!shellInfo) {
+      throw new Error(`Shell not found: ${shellId}`);
+    }
+    return localShellService.spawn(shellInfo);
+  });
+
+  ipcMain.handle('localShell:write', async (_event, sessionId: string, data: string) => {
+    localShellService.write(sessionId, data);
+  });
+
+  ipcMain.handle('localShell:resize', async (_event, sessionId: string, cols: number, rows: number) => {
+    localShellService.resize(sessionId, cols, rows);
+  });
+
+  ipcMain.handle('localShell:kill', async (_event, sessionId: string) => {
+    localShellService.kill(sessionId);
+  });
 }
 
 /**
@@ -980,6 +1008,9 @@ app.whenReady().then(async () => {
     sftpService = new SFTPService((progress) => {
       mainWindow?.webContents.send('sftp:progress', progress);
     });
+    localShellService = new LocalShellService((sessionId, event) => {
+      mainWindow?.webContents.send('localShell:event', sessionId, event);
+    });
 
     setupIpcHandlers();
   } catch (err) {
@@ -1003,6 +1034,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   sshService?.disconnectAll();
   sftpService?.disconnectAll();
+  localShellService?.disconnectAll();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -1012,4 +1044,5 @@ app.on('before-quit', () => {
   isQuitting = true;
   sshService?.disconnectAll();
   sftpService?.disconnectAll();
+  localShellService?.disconnectAll();
 });

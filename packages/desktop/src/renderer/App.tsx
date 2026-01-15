@@ -22,7 +22,7 @@ import type {
   SerialParity,
   SerialFlowControl,
 } from '@connectty/shared';
-import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings } from '../main/preload';
+import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -70,7 +70,16 @@ interface RDPSession {
   canvasRef: React.RefObject<HTMLCanvasElement>;
 }
 
-type Session = SSHSession | SerialSession | SFTPSession | RDPSession;
+interface LocalShellSession {
+  id: string;
+  type: 'localShell';
+  shellId: string;
+  shellName: string;
+  terminal: Terminal;
+  fitAddon: FitAddon;
+}
+
+type Session = SSHSession | SerialSession | SFTPSession | RDPSession | LocalShellSession;
 
 export default function App() {
   const [connections, setConnections] = useState<ServerConnection[]>([]);
@@ -104,6 +113,12 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({ minimizeToTray: false, closeToTray: false, startMinimized: false });
 
+  // New tab menu
+  const [showNewTabMenu, setShowNewTabMenu] = useState(false);
+  const [platform, setPlatform] = useState<string>('');
+  const [availableShells, setAvailableShells] = useState<LocalShellInfo[]>([]);
+  const newTabMenuRef = useRef<HTMLDivElement>(null);
+
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
   // Available themes
@@ -128,36 +143,40 @@ export default function App() {
   useEffect(() => {
     loadData();
 
-    // Listen for SSH, serial, and RDP events
+    // Listen for SSH, serial, RDP, and local shell events
     const unsubscribeSSH = window.connectty.ssh.onEvent(handleSSHEvent);
     const unsubscribeSerial = window.connectty.serial.onEvent(handleSerialEvent);
     const unsubscribeRDP = window.connectty.rdp.onEvent(handleRDPEvent);
+    const unsubscribeLocalShell = window.connectty.localShell.onEvent(handleLocalShellEvent);
     return () => {
       unsubscribeSSH();
       unsubscribeSerial();
       unsubscribeRDP();
+      unsubscribeLocalShell();
     };
   }, []);
 
-  // Fit terminal on active session change (for SSH and serial sessions)
+  // Fit terminal on active session change (for SSH, serial, and local shell sessions)
   useEffect(() => {
     const activeSession = sessions.find(s => s.id === activeSessionId);
-    if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial') && terminalContainerRef.current) {
+    if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') && terminalContainerRef.current) {
       terminalContainerRef.current.innerHTML = '';
       activeSession.terminal.open(terminalContainerRef.current);
       activeSession.fitAddon.fit();
     }
   }, [activeSessionId, sessions]);
 
-  // Handle window resize (for SSH and serial sessions)
+  // Handle window resize (for SSH, serial, and local shell sessions)
   useEffect(() => {
     const handleResize = () => {
       const activeSession = sessions.find(s => s.id === activeSessionId);
-      if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial')) {
+      if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell')) {
         activeSession.fitAddon.fit();
         const { cols, rows } = activeSession.terminal;
         if (activeSession.type === 'ssh') {
           window.connectty.ssh.resize(activeSession.id, cols, rows);
+        } else if (activeSession.type === 'localShell') {
+          window.connectty.localShell.resize(activeSession.id, cols, rows);
         }
         // Serial doesn't need resize
       }
@@ -167,19 +186,37 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, [activeSessionId, sessions]);
 
+  // Close new tab menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (newTabMenuRef.current && !newTabMenuRef.current.contains(event.target as Node)) {
+        setShowNewTabMenu(false);
+      }
+    };
+
+    if (showNewTabMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNewTabMenu]);
+
   const loadData = async () => {
-    const [conns, creds, grps, provs, settings] = await Promise.all([
+    const [conns, creds, grps, provs, settings, plat, shells] = await Promise.all([
       window.connectty.connections.list(),
       window.connectty.credentials.list(),
       window.connectty.groups.list(),
       window.connectty.providers.list(),
       window.connectty.settings.get(),
+      window.connectty.app.platform(),
+      window.connectty.localShell.getAvailable(),
     ]);
     setConnections(conns);
     setCredentials(creds);
     setGroups(grps);
     setProviders(provs);
     setAppSettings(settings);
+    setPlatform(plat);
+    setAvailableShells(shells);
   };
 
   const handleSSHEvent = useCallback((sessionId: string, event: SSHSessionEvent) => {
@@ -273,6 +310,26 @@ export default function App() {
         case 'error':
           showNotification('error', event.message || 'RDP connection error');
           return prev.filter(s => s.id !== sessionId);
+      }
+      return prev;
+    });
+  }, []);
+
+  const handleLocalShellEvent = useCallback((sessionId: string, event: LocalShellSessionEvent) => {
+    setSessions(prev => {
+      const session = prev.find(s => s.id === sessionId);
+      if (!session || session.type !== 'localShell') return prev;
+
+      switch (event.type) {
+        case 'data':
+          session.terminal.write(event.data || '');
+          break;
+        case 'close':
+          showNotification('success', `Closed ${session.shellName}`);
+          return prev.filter(s => s.id !== sessionId);
+        case 'error':
+          showNotification('error', event.message || 'Shell error');
+          break;
       }
       return prev;
     });
@@ -427,6 +484,8 @@ export default function App() {
       await window.connectty.rdp.disconnect(sessionId);
     } else if (session.type === 'serial') {
       await window.connectty.serial.disconnect(sessionId);
+    } else if (session.type === 'localShell') {
+      await window.connectty.localShell.kill(sessionId);
     }
 
     setSessions(prev => {
@@ -436,6 +495,53 @@ export default function App() {
       }
       return remaining;
     });
+  };
+
+  const handleSpawnLocalShell = async (shell: LocalShellInfo) => {
+    setShowNewTabMenu(false);
+    try {
+      const sessionId = await window.connectty.localShell.spawn(shell.id);
+
+      // Create terminal
+      const terminal = new Terminal({
+        cursorBlink: true,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontSize: 14,
+        theme: {
+          background: '#000000',
+          foreground: '#ffffff',
+          cursor: '#ffffff',
+        },
+      });
+
+      const fitAddon = new FitAddon();
+      terminal.loadAddon(fitAddon);
+
+      // Handle terminal input
+      terminal.onData((data) => {
+        window.connectty.localShell.write(sessionId, data);
+      });
+
+      // Handle resize
+      terminal.onResize(({ cols, rows }) => {
+        window.connectty.localShell.resize(sessionId, cols, rows);
+      });
+
+      const newSession: LocalShellSession = {
+        id: sessionId,
+        type: 'localShell',
+        shellId: shell.id,
+        shellName: shell.name,
+        terminal,
+        fitAddon,
+      };
+
+      setSessions(prev => [...prev, newSession]);
+      setActiveSessionId(sessionId);
+      showNotification('success', `Opened ${shell.name}`);
+    } catch (err) {
+      showNotification('error', `Failed to open shell: ${(err as Error).message}`);
+    }
   };
 
   const handleCreateConnection = async (data: Partial<ServerConnection>) => {
@@ -785,14 +891,62 @@ export default function App() {
                   onClick={() => setActiveSessionId(session.id)}
                 >
                   <span className={`session-type-badge ${session.type}`}>
-                    {session.type === 'ssh' ? 'SSH' : 'SFTP'}
+                    {session.type === 'ssh' ? 'SSH' :
+                     session.type === 'sftp' ? 'SFTP' :
+                     session.type === 'rdp' ? 'RDP' :
+                     session.type === 'serial' ? 'Serial' :
+                     session.type === 'localShell' ? 'Shell' : ''}
                   </span>
-                  {session.connectionName}
+                  {session.type === 'localShell' ? session.shellName : session.connectionName}
                   <span className="close-btn" onClick={(e) => { e.stopPropagation(); handleDisconnect(session.id); }}>
                     ×
                   </span>
                 </button>
               ))}
+
+              {/* New Tab Button */}
+              <div className="new-tab-container" ref={newTabMenuRef}>
+                <button
+                  className="new-tab-btn"
+                  onClick={() => setShowNewTabMenu(!showNewTabMenu)}
+                  title="New Tab"
+                >
+                  +
+                </button>
+                {showNewTabMenu && (
+                  <div className="new-tab-menu">
+                    <button
+                      className="new-tab-menu-item"
+                      onClick={() => {
+                        setShowNewTabMenu(false);
+                        setShowConnectionModal(true);
+                      }}
+                    >
+                      <span className="menu-icon">🔗</span>
+                      New Connection
+                    </button>
+                    {availableShells.length > 0 && (
+                      <>
+                        <div className="new-tab-menu-divider" />
+                        {availableShells.map(shell => (
+                          <button
+                            key={shell.id}
+                            className="new-tab-menu-item"
+                            onClick={() => handleSpawnLocalShell(shell)}
+                          >
+                            <span className="menu-icon">
+                              {shell.icon === 'cmd' ? '⌨' :
+                               shell.icon === 'powershell' ? '💠' :
+                               shell.icon === 'linux' ? '🐧' : '💻'}
+                            </span>
+                            {shell.name}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Content based on session type */}
@@ -801,7 +955,7 @@ export default function App() {
                 const activeSession = sessions.find(s => s.id === activeSessionId);
                 if (!activeSession) return null;
 
-                if (activeSession.type === 'ssh' || activeSession.type === 'serial') {
+                if (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') {
                   return <div className="terminal-container" ref={terminalContainerRef} />;
                 } else if (activeSession.type === 'sftp') {
                   const otherSftpSessions = sessions.filter(
@@ -870,9 +1024,27 @@ export default function App() {
           <div className="welcome-screen">
             <h2>Welcome to Connectty</h2>
             <p>Select a connection from the sidebar or create a new one to get started.</p>
-            <button className="btn btn-primary" onClick={() => setShowConnectionModal(true)}>
-              Create Connection
-            </button>
+            <div className="welcome-actions">
+              <button className="btn btn-primary" onClick={() => setShowConnectionModal(true)}>
+                New Connection
+              </button>
+              {availableShells.length > 0 && (
+                <div className="welcome-shells">
+                  <span className="welcome-shells-label">or open a local shell:</span>
+                  <div className="welcome-shells-list">
+                    {availableShells.slice(0, 4).map(shell => (
+                      <button
+                        key={shell.id}
+                        className="btn btn-secondary"
+                        onClick={() => handleSpawnLocalShell(shell)}
+                      >
+                        {shell.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>

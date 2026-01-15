@@ -345,6 +345,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     </span>
                   </button>
                 ))}
+
+                {/* New Tab Button */}
+                <button
+                  className="new-tab-btn"
+                  onClick={() => setShowConnectionModal(true)}
+                  title="New Connection"
+                >
+                  +
+                </button>
               </div>
 
               {/* Terminal */}

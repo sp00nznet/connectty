@@ -592,6 +592,108 @@ body {
   background-color: var(--error);
 }
 
+/* New Tab Button and Menu */
+.new-tab-container {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.new-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.new-tab-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.new-tab-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 200px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.new-tab-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.new-tab-menu-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.new-tab-menu-item .menu-icon {
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+}
+
+.new-tab-menu-divider {
+  height: 1px;
+  background-color: var(--border);
+  margin: 8px 0;
+}
+
+/* Welcome screen shells */
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.welcome-shells {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.welcome-shells-label {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.welcome-shells-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* Session type badges for local shell */
+.session-type-badge.localShell {
+  background-color: #9b59b6;
+}
+
 /* Tags */
 .tag {
   display: inline-flex;
