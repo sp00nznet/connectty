@@ -18,7 +18,15 @@ import { createConnectionRoutes } from './routes/connections';
 import { createCredentialRoutes } from './routes/credentials';
 import { createGroupRoutes } from './routes/groups';
 import { createSyncRoutes } from './routes/sync';
+import { createProviderRoutes } from './routes/providers';
+import { createCommandRoutes } from './routes/commands';
+import { createSFTPRoutes } from './routes/sftp';
+import { createRDPRoutes } from './routes/rdp';
 import { setupWebSocket } from './services/websocket';
+import { ProviderDiscoveryService } from './services/provider-discovery';
+import { BulkCommandService } from './services/bulk-commands';
+import { SFTPService } from './services/sftp';
+import { PTYService } from './services/pty';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -46,6 +54,26 @@ async function main() {
   });
 
   const sshService = new SSHService(db);
+  const providerService = new ProviderDiscoveryService();
+  const commandService = new BulkCommandService(db);
+  const ptyService = new PTYService();
+
+  // SFTP service with progress callback (for WebSocket broadcast)
+  const sftpProgressCallbacks = new Map<string, (progress: any) => void>();
+  const sftpService = new SFTPService(db, (userId, progress) => {
+    const callback = sftpProgressCallbacks.get(userId);
+    if (callback) {
+      callback(progress);
+    }
+  });
+
+  // Expose SFTP progress registration for WebSocket
+  (global as any).registerSFTPProgress = (userId: string, callback: (progress: any) => void) => {
+    sftpProgressCallbacks.set(userId, callback);
+  };
+  (global as any).unregisterSFTPProgress = (userId: string) => {
+    sftpProgressCallbacks.delete(userId);
+  };
 
   // Create Express app
   const app = express();
@@ -70,13 +98,17 @@ async function main() {
   app.use('/api/credentials', authMiddleware(authService), createCredentialRoutes(db));
   app.use('/api/groups', authMiddleware(authService), createGroupRoutes(db));
   app.use('/api/sync', authMiddleware(authService), createSyncRoutes(db));
+  app.use('/api/providers', authMiddleware(authService), createProviderRoutes(db, providerService));
+  app.use('/api/commands', authMiddleware(authService), createCommandRoutes(db, commandService));
+  app.use('/api/sftp', authMiddleware(authService), createSFTPRoutes(sftpService));
+  app.use('/api/rdp', authMiddleware(authService), createRDPRoutes(db));
 
   // Create HTTP server
   const server = createServer(app);
 
-  // Setup WebSocket for SSH terminal
+  // Setup WebSocket for SSH and local terminal
   const wss = new WebSocketServer({ server, path: '/ws' });
-  setupWebSocket(wss, authService, sshService);
+  setupWebSocket(wss, authService, sshService, ptyService);
 
   // Start server
   server.listen(PORT, HOST, () => {
@@ -88,6 +120,11 @@ async function main() {
   process.on('SIGTERM', async () => {
     console.log('Shutting down...');
     sshService.disconnectAll();
+    ptyService.disconnectAll();
+    // Disconnect all SFTP sessions
+    for (const userId of sftpProgressCallbacks.keys()) {
+      sftpService.disconnectUser(userId);
+    }
     await db.close();
     server.close();
     process.exit(0);

@@ -2,6 +2,8 @@
 
 Comprehensive documentation for all Connectty features.
 
+> **Platform Note:** Features below are for the **desktop app** (Windows, macOS, Linux). The web client provides SSH terminal access only.
+
 ---
 
 ## Comparison with Other Clients

@@ -1,20 +1,22 @@
 /**
- * WebSocket handler for SSH terminal sessions
+ * WebSocket handler for SSH and local terminal sessions
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
 import type { AuthService } from './auth';
 import type { SSHService } from './ssh';
+import type { PTYService, PTYSessionEvent } from './pty';
 import type { SSHSessionEvent } from '@connectty/shared';
 
 interface WebSocketClient extends WebSocket {
   userId?: string;
   sessionId?: string;
+  sessionType?: 'ssh' | 'local';
   isAlive?: boolean;
 }
 
 interface WSMessage {
-  type: 'auth' | 'connect' | 'disconnect' | 'data' | 'resize';
+  type: 'auth' | 'connect' | 'local-connect' | 'disconnect' | 'data' | 'resize';
   token?: string;
   connectionId?: string;
   sessionId?: string;
@@ -26,19 +28,29 @@ interface WSMessage {
 interface WSResponse {
   type: 'auth_success' | 'auth_error' | 'connected' | 'disconnected' | 'data' | 'error' | 'close';
   sessionId?: string;
+  sessionType?: 'ssh' | 'local';
   data?: string;
   message?: string;
   code?: number;
 }
 
-export function setupWebSocket(wss: WebSocketServer, authService: AuthService, sshService: SSHService): void {
+export function setupWebSocket(
+  wss: WebSocketServer,
+  authService: AuthService,
+  sshService: SSHService,
+  ptyService?: PTYService
+): void {
   // Heartbeat to detect stale connections
   const interval = setInterval(() => {
     wss.clients.forEach((ws) => {
       const client = ws as WebSocketClient;
       if (client.isAlive === false) {
         if (client.sessionId) {
-          sshService.disconnect(client.sessionId);
+          if (client.sessionType === 'local' && ptyService) {
+            ptyService.disconnect(client.sessionId);
+          } else {
+            sshService.disconnect(client.sessionId);
+          }
         }
         return client.terminate();
       }
@@ -62,7 +74,7 @@ export function setupWebSocket(wss: WebSocketServer, authService: AuthService, s
     client.on('message', async (message: Buffer) => {
       try {
         const msg = JSON.parse(message.toString()) as WSMessage;
-        await handleMessage(client, msg, authService, sshService);
+        await handleMessage(client, msg, authService, sshService, ptyService);
       } catch (err) {
         sendResponse(client, {
           type: 'error',
@@ -73,14 +85,22 @@ export function setupWebSocket(wss: WebSocketServer, authService: AuthService, s
 
     client.on('close', () => {
       if (client.sessionId) {
-        sshService.disconnect(client.sessionId);
+        if (client.sessionType === 'local' && ptyService) {
+          ptyService.disconnect(client.sessionId);
+        } else {
+          sshService.disconnect(client.sessionId);
+        }
       }
     });
 
     client.on('error', (err) => {
       console.error('WebSocket error:', err);
       if (client.sessionId) {
-        sshService.disconnect(client.sessionId);
+        if (client.sessionType === 'local' && ptyService) {
+          ptyService.disconnect(client.sessionId);
+        } else {
+          sshService.disconnect(client.sessionId);
+        }
       }
     });
   });
@@ -90,7 +110,8 @@ async function handleMessage(
   client: WebSocketClient,
   msg: WSMessage,
   authService: AuthService,
-  sshService: SSHService
+  sshService: SSHService,
+  ptyService?: PTYService
 ): Promise<void> {
   switch (msg.type) {
     case 'auth': {
@@ -128,6 +149,7 @@ async function handleMessage(
             sendResponse(client, {
               type: event.type as WSResponse['type'],
               sessionId: client.sessionId,
+              sessionType: 'ssh',
               data: event.data,
               message: event.message,
               code: event.code,
@@ -136,7 +158,43 @@ async function handleMessage(
         );
 
         client.sessionId = sessionId;
-        sendResponse(client, { type: 'connected', sessionId });
+        client.sessionType = 'ssh';
+        sendResponse(client, { type: 'connected', sessionId, sessionType: 'ssh' });
+      } catch (err) {
+        sendResponse(client, { type: 'error', message: (err as Error).message });
+      }
+      break;
+    }
+
+    case 'local-connect': {
+      if (!client.userId) {
+        sendResponse(client, { type: 'error', message: 'Not authenticated' });
+        return;
+      }
+
+      if (!ptyService) {
+        sendResponse(client, { type: 'error', message: 'Local shell not available' });
+        return;
+      }
+
+      try {
+        const sessionId = ptyService.connect(
+          client.userId,
+          (event: PTYSessionEvent) => {
+            sendResponse(client, {
+              type: event.type as WSResponse['type'],
+              sessionId: client.sessionId,
+              sessionType: 'local',
+              data: event.data,
+              message: event.message,
+              code: event.code,
+            });
+          }
+        );
+
+        client.sessionId = sessionId;
+        client.sessionType = 'local';
+        sendResponse(client, { type: 'connected', sessionId, sessionType: 'local' });
       } catch (err) {
         sendResponse(client, { type: 'error', message: (err as Error).message });
       }
@@ -145,8 +203,13 @@ async function handleMessage(
 
     case 'disconnect': {
       if (client.sessionId) {
-        sshService.disconnect(client.sessionId);
+        if (client.sessionType === 'local' && ptyService) {
+          ptyService.disconnect(client.sessionId);
+        } else {
+          sshService.disconnect(client.sessionId);
+        }
         client.sessionId = undefined;
+        client.sessionType = undefined;
         sendResponse(client, { type: 'disconnected' });
       }
       break;
@@ -159,7 +222,11 @@ async function handleMessage(
       }
 
       if (msg.data) {
-        sshService.write(client.sessionId, msg.data);
+        if (client.sessionType === 'local' && ptyService) {
+          ptyService.write(client.sessionId, msg.data);
+        } else {
+          sshService.write(client.sessionId, msg.data);
+        }
       }
       break;
     }
@@ -170,7 +237,11 @@ async function handleMessage(
       }
 
       if (msg.cols && msg.rows) {
-        sshService.resize(client.sessionId, msg.cols, msg.rows);
+        if (client.sessionType === 'local' && ptyService) {
+          ptyService.resize(client.sessionId, msg.cols, msg.rows);
+        } else {
+          sshService.resize(client.sessionId, msg.cols, msg.rows);
+        }
       }
       break;
     }

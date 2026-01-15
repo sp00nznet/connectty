@@ -7,6 +7,81 @@ import { generateId, encrypt, decrypt, type EncryptedData } from '@connectty/sha
 import type { ServerConnection, Credential, ConnectionGroup, User } from '@connectty/shared';
 import * as crypto from 'crypto';
 
+// Provider types for cloud discovery
+export interface Provider {
+  id: string;
+  userId: string;
+  name: string;
+  type: string;
+  config: Record<string, unknown>;
+  autoDiscover: boolean;
+  discoverInterval: number;
+  lastDiscoveryAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DiscoveredHost {
+  id: string;
+  userId: string;
+  providerId: string;
+  providerHostId: string;
+  name: string;
+  hostname?: string;
+  privateIp?: string;
+  publicIp?: string;
+  osType?: string;
+  osName?: string;
+  state?: string;
+  metadata?: Record<string, unknown>;
+  tags: string[];
+  discoveredAt: Date;
+  lastSeenAt: Date;
+  imported: boolean;
+  connectionId?: string;
+}
+
+export interface SavedCommand {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  command: string;
+  targetOs: string;
+  category?: string;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CommandExecution {
+  id: string;
+  userId: string;
+  commandId?: string;
+  commandName: string;
+  command: string;
+  targetOs?: string;
+  connectionIds: string[];
+  status: string;
+  startedAt: Date;
+  completedAt?: Date;
+}
+
+export interface CommandResult {
+  id: string;
+  executionId: string;
+  connectionId: string;
+  connectionName: string;
+  hostname: string;
+  status: string;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+}
+
 export class DatabaseService {
   private pool: Pool;
   private masterKey: string;
@@ -74,6 +149,89 @@ export class DatabaseService {
         CREATE INDEX IF NOT EXISTS idx_connections_user ON connections(user_id);
         CREATE INDEX IF NOT EXISTS idx_credentials_user ON credentials(user_id);
         CREATE INDEX IF NOT EXISTS idx_groups_user ON connection_groups(user_id);
+
+        -- Provider tables for cloud discovery
+        CREATE TABLE IF NOT EXISTS providers (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name VARCHAR(255) NOT NULL,
+          type VARCHAR(50) NOT NULL,
+          config TEXT NOT NULL,
+          auto_discover BOOLEAN DEFAULT false,
+          discover_interval INTEGER DEFAULT 3600,
+          last_discovery_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS discovered_hosts (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          provider_id UUID NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+          provider_host_id VARCHAR(255) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          hostname VARCHAR(255),
+          private_ip VARCHAR(255),
+          public_ip VARCHAR(255),
+          os_type VARCHAR(50),
+          os_name VARCHAR(255),
+          state VARCHAR(50),
+          metadata TEXT,
+          tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+          discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          imported BOOLEAN DEFAULT false,
+          connection_id UUID REFERENCES connections(id) ON DELETE SET NULL,
+          UNIQUE(provider_id, provider_host_id)
+        );
+
+        -- Saved commands for bulk execution
+        CREATE TABLE IF NOT EXISTS saved_commands (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          command TEXT NOT NULL,
+          target_os VARCHAR(50) DEFAULT 'all',
+          category VARCHAR(100),
+          tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS command_executions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          command_id UUID REFERENCES saved_commands(id) ON DELETE SET NULL,
+          command_name VARCHAR(255) NOT NULL,
+          command TEXT NOT NULL,
+          target_os VARCHAR(50),
+          connection_ids TEXT[] NOT NULL,
+          status VARCHAR(50) DEFAULT 'pending',
+          started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          completed_at TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS command_results (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          execution_id UUID NOT NULL REFERENCES command_executions(id) ON DELETE CASCADE,
+          connection_id UUID NOT NULL,
+          connection_name VARCHAR(255) NOT NULL,
+          hostname VARCHAR(255) NOT NULL,
+          status VARCHAR(50) DEFAULT 'pending',
+          exit_code INTEGER,
+          stdout TEXT,
+          stderr TEXT,
+          error TEXT,
+          started_at TIMESTAMP,
+          completed_at TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_providers_user ON providers(user_id);
+        CREATE INDEX IF NOT EXISTS idx_discovered_hosts_user ON discovered_hosts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_discovered_hosts_provider ON discovered_hosts(provider_id);
+        CREATE INDEX IF NOT EXISTS idx_saved_commands_user ON saved_commands(user_id);
+        CREATE INDEX IF NOT EXISTS idx_command_executions_user ON command_executions(user_id);
       `);
     } finally {
       client.release();
@@ -347,12 +505,445 @@ export class DatabaseService {
     return (result.rowCount ?? 0) > 0;
   }
 
+  // Provider methods
+  async getProviders(userId: string): Promise<Provider[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM providers WHERE user_id = $1 ORDER BY name',
+      [userId]
+    );
+    return result.rows.map(this.rowToProvider.bind(this));
+  }
+
+  async getProvider(userId: string, id: string): Promise<Provider | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM providers WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return result.rows[0] ? this.rowToProvider(result.rows[0]) : null;
+  }
+
+  async createProvider(userId: string, data: {
+    name: string;
+    type: string;
+    config: Record<string, unknown>;
+    autoDiscover?: boolean;
+    discoverInterval?: number;
+  }): Promise<Provider> {
+    // Encrypt sensitive config data
+    const encryptedConfig = encrypt(JSON.stringify(data.config), this.masterKey);
+    const result = await this.pool.query(
+      `INSERT INTO providers (user_id, name, type, config, auto_discover, discover_interval)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [userId, data.name, data.type, JSON.stringify(encryptedConfig), data.autoDiscover ?? false, data.discoverInterval ?? 3600]
+    );
+    return this.rowToProvider(result.rows[0]);
+  }
+
+  async updateProvider(userId: string, id: string, updates: Partial<{
+    name: string;
+    type: string;
+    config: Record<string, unknown>;
+    autoDiscover: boolean;
+    discoverInterval: number;
+    lastDiscoveryAt: Date;
+  }>): Promise<Provider | null> {
+    const fields: string[] = ['updated_at = CURRENT_TIMESTAMP'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (updates.name !== undefined) {
+      fields.push(`name = $${paramIndex++}`);
+      values.push(updates.name);
+    }
+    if (updates.type !== undefined) {
+      fields.push(`type = $${paramIndex++}`);
+      values.push(updates.type);
+    }
+    if (updates.config !== undefined) {
+      const encryptedConfig = encrypt(JSON.stringify(updates.config), this.masterKey);
+      fields.push(`config = $${paramIndex++}`);
+      values.push(JSON.stringify(encryptedConfig));
+    }
+    if (updates.autoDiscover !== undefined) {
+      fields.push(`auto_discover = $${paramIndex++}`);
+      values.push(updates.autoDiscover);
+    }
+    if (updates.discoverInterval !== undefined) {
+      fields.push(`discover_interval = $${paramIndex++}`);
+      values.push(updates.discoverInterval);
+    }
+    if (updates.lastDiscoveryAt !== undefined) {
+      fields.push(`last_discovery_at = $${paramIndex++}`);
+      values.push(updates.lastDiscoveryAt);
+    }
+
+    values.push(id, userId);
+
+    const result = await this.pool.query(
+      `UPDATE providers SET ${fields.join(', ')} WHERE id = $${paramIndex++} AND user_id = $${paramIndex} RETURNING *`,
+      values
+    );
+    return result.rows[0] ? this.rowToProvider(result.rows[0]) : null;
+  }
+
+  async deleteProvider(userId: string, id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'DELETE FROM providers WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Discovered hosts methods
+  async getDiscoveredHosts(userId: string, providerId?: string): Promise<DiscoveredHost[]> {
+    let query = 'SELECT * FROM discovered_hosts WHERE user_id = $1';
+    const params: unknown[] = [userId];
+
+    if (providerId) {
+      query += ' AND provider_id = $2';
+      params.push(providerId);
+    }
+
+    query += ' ORDER BY name';
+    const result = await this.pool.query(query, params);
+    return result.rows.map(this.rowToDiscoveredHost.bind(this));
+  }
+
+  async getDiscoveredHost(userId: string, id: string): Promise<DiscoveredHost | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM discovered_hosts WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return result.rows[0] ? this.rowToDiscoveredHost(result.rows[0]) : null;
+  }
+
+  async upsertDiscoveredHost(userId: string, providerId: string, data: {
+    providerHostId: string;
+    name: string;
+    hostname?: string;
+    privateIp?: string;
+    publicIp?: string;
+    osType?: string;
+    osName?: string;
+    state?: string;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
+  }): Promise<DiscoveredHost> {
+    const result = await this.pool.query(
+      `INSERT INTO discovered_hosts (user_id, provider_id, provider_host_id, name, hostname, private_ip, public_ip, os_type, os_name, state, metadata, tags)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (provider_id, provider_host_id)
+       DO UPDATE SET
+         name = EXCLUDED.name,
+         hostname = EXCLUDED.hostname,
+         private_ip = EXCLUDED.private_ip,
+         public_ip = EXCLUDED.public_ip,
+         os_type = EXCLUDED.os_type,
+         os_name = EXCLUDED.os_name,
+         state = EXCLUDED.state,
+         metadata = EXCLUDED.metadata,
+         tags = EXCLUDED.tags,
+         last_seen_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [
+        userId, providerId, data.providerHostId, data.name, data.hostname,
+        data.privateIp, data.publicIp, data.osType, data.osName, data.state,
+        data.metadata ? JSON.stringify(data.metadata) : null, data.tags || []
+      ]
+    );
+    return this.rowToDiscoveredHost(result.rows[0]);
+  }
+
+  async bulkUpsertDiscoveredHosts(userId: string, providerId: string, hosts: Array<{
+    providerHostId: string;
+    name: string;
+    hostname?: string;
+    privateIp?: string;
+    publicIp?: string;
+    osType?: string;
+    osName?: string;
+    state?: string;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
+  }>): Promise<DiscoveredHost[]> {
+    const results: DiscoveredHost[] = [];
+    for (const host of hosts) {
+      const result = await this.upsertDiscoveredHost(userId, providerId, host);
+      results.push(result);
+    }
+    return results;
+  }
+
+  async markDiscoveredHostImported(userId: string, id: string, connectionId: string): Promise<DiscoveredHost | null> {
+    const result = await this.pool.query(
+      `UPDATE discovered_hosts SET imported = true, connection_id = $3 WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [id, userId, connectionId]
+    );
+    return result.rows[0] ? this.rowToDiscoveredHost(result.rows[0]) : null;
+  }
+
+  async deleteDiscoveredHost(userId: string, id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'DELETE FROM discovered_hosts WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async deleteDiscoveredHostsByProvider(userId: string, providerId: string): Promise<number> {
+    const result = await this.pool.query(
+      'DELETE FROM discovered_hosts WHERE provider_id = $1 AND user_id = $2',
+      [providerId, userId]
+    );
+    return result.rowCount ?? 0;
+  }
+
+  // Saved commands methods
+  async getSavedCommands(userId: string, category?: string): Promise<SavedCommand[]> {
+    let query = 'SELECT * FROM saved_commands WHERE user_id = $1';
+    const params: unknown[] = [userId];
+
+    if (category) {
+      query += ' AND category = $2';
+      params.push(category);
+    }
+
+    query += ' ORDER BY category, name';
+    const result = await this.pool.query(query, params);
+    return result.rows.map(this.rowToSavedCommand.bind(this));
+  }
+
+  async getSavedCommand(userId: string, id: string): Promise<SavedCommand | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM saved_commands WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return result.rows[0] ? this.rowToSavedCommand(result.rows[0]) : null;
+  }
+
+  async createSavedCommand(userId: string, data: {
+    name: string;
+    description?: string;
+    command: string;
+    targetOs?: string;
+    category?: string;
+    tags?: string[];
+  }): Promise<SavedCommand> {
+    const result = await this.pool.query(
+      `INSERT INTO saved_commands (user_id, name, description, command, target_os, category, tags)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [userId, data.name, data.description, data.command, data.targetOs || 'all', data.category, data.tags || []]
+    );
+    return this.rowToSavedCommand(result.rows[0]);
+  }
+
+  async updateSavedCommand(userId: string, id: string, updates: Partial<{
+    name: string;
+    description: string;
+    command: string;
+    targetOs: string;
+    category: string;
+    tags: string[];
+  }>): Promise<SavedCommand | null> {
+    const fields: string[] = ['updated_at = CURRENT_TIMESTAMP'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (updates.name !== undefined) {
+      fields.push(`name = $${paramIndex++}`);
+      values.push(updates.name);
+    }
+    if (updates.description !== undefined) {
+      fields.push(`description = $${paramIndex++}`);
+      values.push(updates.description);
+    }
+    if (updates.command !== undefined) {
+      fields.push(`command = $${paramIndex++}`);
+      values.push(updates.command);
+    }
+    if (updates.targetOs !== undefined) {
+      fields.push(`target_os = $${paramIndex++}`);
+      values.push(updates.targetOs);
+    }
+    if (updates.category !== undefined) {
+      fields.push(`category = $${paramIndex++}`);
+      values.push(updates.category);
+    }
+    if (updates.tags !== undefined) {
+      fields.push(`tags = $${paramIndex++}`);
+      values.push(updates.tags);
+    }
+
+    values.push(id, userId);
+
+    const result = await this.pool.query(
+      `UPDATE saved_commands SET ${fields.join(', ')} WHERE id = $${paramIndex++} AND user_id = $${paramIndex} RETURNING *`,
+      values
+    );
+    return result.rows[0] ? this.rowToSavedCommand(result.rows[0]) : null;
+  }
+
+  async deleteSavedCommand(userId: string, id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'DELETE FROM saved_commands WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Command execution methods
+  async getCommandExecutions(userId: string, limit = 50): Promise<CommandExecution[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM command_executions WHERE user_id = $1 ORDER BY started_at DESC LIMIT $2',
+      [userId, limit]
+    );
+    return result.rows.map(this.rowToCommandExecution.bind(this));
+  }
+
+  async getCommandExecution(userId: string, id: string): Promise<CommandExecution | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM command_executions WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return result.rows[0] ? this.rowToCommandExecution(result.rows[0]) : null;
+  }
+
+  async createCommandExecution(userId: string, data: {
+    commandId?: string;
+    commandName: string;
+    command: string;
+    targetOs?: string;
+    connectionIds: string[];
+  }): Promise<CommandExecution> {
+    const result = await this.pool.query(
+      `INSERT INTO command_executions (user_id, command_id, command_name, command, target_os, connection_ids, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+       RETURNING *`,
+      [userId, data.commandId, data.commandName, data.command, data.targetOs, data.connectionIds]
+    );
+    return this.rowToCommandExecution(result.rows[0]);
+  }
+
+  async updateCommandExecution(userId: string, id: string, updates: {
+    status?: string;
+    completedAt?: Date;
+  }): Promise<CommandExecution | null> {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (updates.status !== undefined) {
+      fields.push(`status = $${paramIndex++}`);
+      values.push(updates.status);
+    }
+    if (updates.completedAt !== undefined) {
+      fields.push(`completed_at = $${paramIndex++}`);
+      values.push(updates.completedAt);
+    }
+
+    if (fields.length === 0) return null;
+
+    values.push(id, userId);
+
+    const result = await this.pool.query(
+      `UPDATE command_executions SET ${fields.join(', ')} WHERE id = $${paramIndex++} AND user_id = $${paramIndex} RETURNING *`,
+      values
+    );
+    return result.rows[0] ? this.rowToCommandExecution(result.rows[0]) : null;
+  }
+
+  // Command result methods
+  async getCommandResults(executionId: string): Promise<CommandResult[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM command_results WHERE execution_id = $1 ORDER BY connection_name',
+      [executionId]
+    );
+    return result.rows.map(this.rowToCommandResult.bind(this));
+  }
+
+  async createCommandResult(executionId: string, data: {
+    connectionId: string;
+    connectionName: string;
+    hostname: string;
+  }): Promise<CommandResult> {
+    const result = await this.pool.query(
+      `INSERT INTO command_results (execution_id, connection_id, connection_name, hostname, status)
+       VALUES ($1, $2, $3, $4, 'pending')
+       RETURNING *`,
+      [executionId, data.connectionId, data.connectionName, data.hostname]
+    );
+    return this.rowToCommandResult(result.rows[0]);
+  }
+
+  async updateCommandResult(id: string, updates: {
+    status?: string;
+    exitCode?: number;
+    stdout?: string;
+    stderr?: string;
+    error?: string;
+    startedAt?: Date;
+    completedAt?: Date;
+  }): Promise<CommandResult | null> {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (updates.status !== undefined) {
+      fields.push(`status = $${paramIndex++}`);
+      values.push(updates.status);
+    }
+    if (updates.exitCode !== undefined) {
+      fields.push(`exit_code = $${paramIndex++}`);
+      values.push(updates.exitCode);
+    }
+    if (updates.stdout !== undefined) {
+      fields.push(`stdout = $${paramIndex++}`);
+      values.push(updates.stdout);
+    }
+    if (updates.stderr !== undefined) {
+      fields.push(`stderr = $${paramIndex++}`);
+      values.push(updates.stderr);
+    }
+    if (updates.error !== undefined) {
+      fields.push(`error = $${paramIndex++}`);
+      values.push(updates.error);
+    }
+    if (updates.startedAt !== undefined) {
+      fields.push(`started_at = $${paramIndex++}`);
+      values.push(updates.startedAt);
+    }
+    if (updates.completedAt !== undefined) {
+      fields.push(`completed_at = $${paramIndex++}`);
+      values.push(updates.completedAt);
+    }
+
+    if (fields.length === 0) return null;
+
+    values.push(id);
+
+    const result = await this.pool.query(
+      `UPDATE command_results SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+    return result.rows[0] ? this.rowToCommandResult(result.rows[0]) : null;
+  }
+
   // Export all data for sync
-  async exportAll(userId: string): Promise<{ connections: ServerConnection[]; credentials: Credential[]; groups: ConnectionGroup[] }> {
+  async exportAll(userId: string): Promise<{
+    connections: ServerConnection[];
+    credentials: Credential[];
+    groups: ConnectionGroup[];
+    providers: Provider[];
+    savedCommands: SavedCommand[];
+  }> {
     return {
       connections: await this.getConnections(userId),
       credentials: await this.getCredentials(userId),
       groups: await this.getGroups(userId),
+      providers: await this.getProviders(userId),
+      savedCommands: await this.getSavedCommands(userId),
     };
   }
 
@@ -434,6 +1025,115 @@ export class DatabaseService {
       color: row.color as string | undefined,
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),
+    };
+  }
+
+  private rowToProvider(row: Record<string, unknown>): Provider {
+    let config: Record<string, unknown> = {};
+    if (row.config) {
+      try {
+        const encData = JSON.parse(row.config as string) as EncryptedData;
+        const decrypted = decrypt(encData, this.masterKey);
+        config = JSON.parse(decrypted);
+      } catch {
+        // Failed to decrypt, try parsing as plain JSON
+        try {
+          config = JSON.parse(row.config as string);
+        } catch {
+          // Use empty config
+        }
+      }
+    }
+
+    return {
+      id: row.id as string,
+      userId: row.user_id as string,
+      name: row.name as string,
+      type: row.type as string,
+      config,
+      autoDiscover: row.auto_discover as boolean,
+      discoverInterval: row.discover_interval as number,
+      lastDiscoveryAt: row.last_discovery_at ? new Date(row.last_discovery_at as string) : undefined,
+      createdAt: new Date(row.created_at as string),
+      updatedAt: new Date(row.updated_at as string),
+    };
+  }
+
+  private rowToDiscoveredHost(row: Record<string, unknown>): DiscoveredHost {
+    let metadata: Record<string, unknown> | undefined;
+    if (row.metadata) {
+      try {
+        metadata = JSON.parse(row.metadata as string);
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    return {
+      id: row.id as string,
+      userId: row.user_id as string,
+      providerId: row.provider_id as string,
+      providerHostId: row.provider_host_id as string,
+      name: row.name as string,
+      hostname: row.hostname as string | undefined,
+      privateIp: row.private_ip as string | undefined,
+      publicIp: row.public_ip as string | undefined,
+      osType: row.os_type as string | undefined,
+      osName: row.os_name as string | undefined,
+      state: row.state as string | undefined,
+      metadata,
+      tags: (row.tags as string[]) || [],
+      discoveredAt: new Date(row.discovered_at as string),
+      lastSeenAt: new Date(row.last_seen_at as string),
+      imported: row.imported as boolean,
+      connectionId: row.connection_id as string | undefined,
+    };
+  }
+
+  private rowToSavedCommand(row: Record<string, unknown>): SavedCommand {
+    return {
+      id: row.id as string,
+      userId: row.user_id as string,
+      name: row.name as string,
+      description: row.description as string | undefined,
+      command: row.command as string,
+      targetOs: row.target_os as string,
+      category: row.category as string | undefined,
+      tags: (row.tags as string[]) || [],
+      createdAt: new Date(row.created_at as string),
+      updatedAt: new Date(row.updated_at as string),
+    };
+  }
+
+  private rowToCommandExecution(row: Record<string, unknown>): CommandExecution {
+    return {
+      id: row.id as string,
+      userId: row.user_id as string,
+      commandId: row.command_id as string | undefined,
+      commandName: row.command_name as string,
+      command: row.command as string,
+      targetOs: row.target_os as string | undefined,
+      connectionIds: (row.connection_ids as string[]) || [],
+      status: row.status as string,
+      startedAt: new Date(row.started_at as string),
+      completedAt: row.completed_at ? new Date(row.completed_at as string) : undefined,
+    };
+  }
+
+  private rowToCommandResult(row: Record<string, unknown>): CommandResult {
+    return {
+      id: row.id as string,
+      executionId: row.execution_id as string,
+      connectionId: row.connection_id as string,
+      connectionName: row.connection_name as string,
+      hostname: row.hostname as string,
+      status: row.status as string,
+      exitCode: row.exit_code as number | undefined,
+      stdout: row.stdout as string | undefined,
+      stderr: row.stderr as string | undefined,
+      error: row.error as string | undefined,
+      startedAt: row.started_at ? new Date(row.started_at as string) : undefined,
+      completedAt: row.completed_at ? new Date(row.completed_at as string) : undefined,
     };
   }
 }

@@ -175,6 +175,405 @@ class ApiService {
   async deleteGroup(id: string): Promise<void> {
     await this.request(`/groups/${id}`, { method: 'DELETE' });
   }
+
+  // Providers
+  async getProviders(): Promise<Provider[]> {
+    const response = await this.request<APIResponse<Provider[]>>('/providers');
+    return response.data || [];
+  }
+
+  async getProvider(id: string): Promise<Provider | null> {
+    const response = await this.request<APIResponse<Provider>>(`/providers/${id}`);
+    return response.data || null;
+  }
+
+  async createProvider(data: Partial<Provider>): Promise<Provider> {
+    const response = await this.request<APIResponse<Provider>>('/providers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
+  async updateProvider(id: string, data: Partial<Provider>): Promise<Provider> {
+    const response = await this.request<APIResponse<Provider>>(`/providers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
+  async deleteProvider(id: string): Promise<void> {
+    await this.request(`/providers/${id}`, { method: 'DELETE' });
+  }
+
+  async testProvider(id: string): Promise<{ success: boolean; message: string }> {
+    const response = await this.request<APIResponse<{ success: boolean; message: string }>>(`/providers/${id}/test`, {
+      method: 'POST',
+    });
+    return response.data!;
+  }
+
+  async discoverHosts(providerId: string): Promise<DiscoveredHost[]> {
+    const response = await this.request<APIResponse<DiscoveredHost[]>>(`/providers/${providerId}/discover`, {
+      method: 'POST',
+    });
+    return response.data || [];
+  }
+
+  async getDiscoveredHosts(providerId: string): Promise<DiscoveredHost[]> {
+    const response = await this.request<APIResponse<DiscoveredHost[]>>(`/providers/${providerId}/hosts`);
+    return response.data || [];
+  }
+
+  async importHosts(providerId: string, hostIds: string[], options: {
+    credentialId?: string;
+    group?: string;
+    ipPreference?: 'private' | 'public' | 'hostname';
+  }): Promise<{ imported: number; errors: number; errorDetails: string[] }> {
+    const response = await this.request<APIResponse<{ imported: number; errors: number; errorDetails: string[] }>>(`/providers/${providerId}/hosts/import`, {
+      method: 'POST',
+      body: JSON.stringify({ hostIds, ...options }),
+    });
+    return response.data!;
+  }
+
+  // Saved Commands
+  async getSavedCommands(category?: string): Promise<SavedCommand[]> {
+    const url = category ? `/commands/saved?category=${encodeURIComponent(category)}` : '/commands/saved';
+    const response = await this.request<APIResponse<SavedCommand[]>>(url);
+    return response.data || [];
+  }
+
+  async getSavedCommand(id: string): Promise<SavedCommand | null> {
+    const response = await this.request<APIResponse<SavedCommand>>(`/commands/saved/${id}`);
+    return response.data || null;
+  }
+
+  async createSavedCommand(data: Partial<SavedCommand>): Promise<SavedCommand> {
+    const response = await this.request<APIResponse<SavedCommand>>('/commands/saved', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
+  async updateSavedCommand(id: string, data: Partial<SavedCommand>): Promise<SavedCommand> {
+    const response = await this.request<APIResponse<SavedCommand>>(`/commands/saved/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
+  async deleteSavedCommand(id: string): Promise<void> {
+    await this.request(`/commands/saved/${id}`, { method: 'DELETE' });
+  }
+
+  // Command Execution
+  async executeCommand(data: {
+    command?: string;
+    commandId?: string;
+    connectionIds: string[];
+    maxParallel?: number;
+  }): Promise<{ executionId: string; connectionCount: number }> {
+    const response = await this.request<APIResponse<{ executionId: string; connectionCount: number }>>('/commands/execute', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
+  async getCommandExecutions(limit?: number): Promise<CommandExecution[]> {
+    const url = limit ? `/commands/executions?limit=${limit}` : '/commands/executions';
+    const response = await this.request<APIResponse<CommandExecution[]>>(url);
+    return response.data || [];
+  }
+
+  async getCommandExecution(id: string): Promise<CommandExecutionWithResults | null> {
+    const response = await this.request<APIResponse<CommandExecutionWithResults>>(`/commands/executions/${id}`);
+    return response.data || null;
+  }
+
+  // Import/Export
+  async exportData(format: 'json' | 'csv' = 'json', includeCredentials = false): Promise<Blob> {
+    const token = this.getToken();
+    const response = await fetch(
+      `${API_BASE}/sync/export?format=${format}&includeCredentials=${includeCredentials}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Export failed');
+    }
+
+    return response.blob();
+  }
+
+  async importData(
+    format: 'json' | 'csv' | 'ssh-config',
+    data: string
+  ): Promise<{ connections: number; credentials: number; groups: number; errors: string[] }> {
+    const response = await this.request<
+      APIResponse<{ connections: number; credentials: number; groups: number; errors: string[] }>
+    >('/sync/import', {
+      method: 'POST',
+      body: JSON.stringify({ format, data }),
+    });
+    return response.data!;
+  }
+
+  // SFTP
+  async sftpConnect(connectionId: string): Promise<{ sessionId: string }> {
+    const response = await this.request<APIResponse<{ sessionId: string }>>('/sftp/connect', {
+      method: 'POST',
+      body: JSON.stringify({ connectionId }),
+    });
+    return response.data!;
+  }
+
+  async sftpDisconnect(sessionId: string): Promise<void> {
+    await this.request('/sftp/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    });
+  }
+
+  async sftpGetSessions(): Promise<SFTPSession[]> {
+    const response = await this.request<APIResponse<SFTPSession[]>>('/sftp/sessions');
+    return response.data || [];
+  }
+
+  async sftpList(sessionId: string, path: string): Promise<{ path: string; files: RemoteFileInfo[] }> {
+    const response = await this.request<APIResponse<{ path: string; files: RemoteFileInfo[] }>>(
+      `/sftp/list/${sessionId}?path=${encodeURIComponent(path)}`
+    );
+    return response.data!;
+  }
+
+  async sftpStat(sessionId: string, path: string): Promise<RemoteFileInfo> {
+    const response = await this.request<APIResponse<RemoteFileInfo>>(
+      `/sftp/stat/${sessionId}?path=${encodeURIComponent(path)}`
+    );
+    return response.data!;
+  }
+
+  async sftpDownload(sessionId: string, path: string): Promise<Blob> {
+    const token = this.getToken();
+    const response = await fetch(
+      `${API_BASE}/sftp/download/${sessionId}?path=${encodeURIComponent(path)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Download failed');
+    }
+
+    return response.blob();
+  }
+
+  async sftpUpload(sessionId: string, remotePath: string, file: File): Promise<{ path: string; size: number }> {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', remotePath);
+
+    const response = await fetch(`${API_BASE}/sftp/upload/${sessionId}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Upload failed');
+    }
+
+    return data.data;
+  }
+
+  async sftpMkdir(sessionId: string, path: string): Promise<void> {
+    await this.request(`/sftp/mkdir/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
+  }
+
+  async sftpRmdir(sessionId: string, path: string): Promise<void> {
+    await this.request(`/sftp/rmdir/${sessionId}?path=${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sftpUnlink(sessionId: string, path: string): Promise<void> {
+    await this.request(`/sftp/unlink/${sessionId}?path=${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sftpRename(sessionId: string, oldPath: string, newPath: string): Promise<void> {
+    await this.request(`/sftp/rename/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ oldPath, newPath }),
+    });
+  }
+
+  async sftpChmod(sessionId: string, path: string, mode: number): Promise<void> {
+    await this.request(`/sftp/chmod/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ path, mode }),
+    });
+  }
+
+  // RDP
+  async rdpGetInfo(connectionId: string): Promise<RDPConnectionInfo> {
+    const response = await this.request<APIResponse<RDPConnectionInfo>>(`/rdp/info/${connectionId}`);
+    return response.data!;
+  }
+
+  async rdpDownloadFile(connectionId: string): Promise<void> {
+    const token = this.getToken();
+    const response = await fetch(`${API_BASE}/rdp/file/${connectionId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download RDP file');
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `connection.rdp`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+}
+
+// Type definitions for new features
+export interface Provider {
+  id: string;
+  userId: string;
+  name: string;
+  type: string;
+  config: Record<string, unknown>;
+  autoDiscover: boolean;
+  discoverInterval: number;
+  lastDiscoveryAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DiscoveredHost {
+  id: string;
+  userId: string;
+  providerId: string;
+  providerHostId: string;
+  name: string;
+  hostname?: string;
+  privateIp?: string;
+  publicIp?: string;
+  osType?: string;
+  osName?: string;
+  state?: string;
+  metadata?: Record<string, unknown>;
+  tags: string[];
+  discoveredAt: Date;
+  lastSeenAt: Date;
+  imported: boolean;
+  connectionId?: string;
+}
+
+export interface SavedCommand {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  command: string;
+  targetOs: string;
+  category?: string;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CommandExecution {
+  id: string;
+  userId: string;
+  commandId?: string;
+  commandName: string;
+  command: string;
+  targetOs?: string;
+  connectionIds: string[];
+  status: string;
+  startedAt: Date;
+  completedAt?: Date;
+}
+
+export interface CommandResult {
+  id: string;
+  executionId: string;
+  connectionId: string;
+  connectionName: string;
+  hostname: string;
+  status: string;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+}
+
+export interface CommandExecutionWithResults extends CommandExecution {
+  results: CommandResult[];
+}
+
+// SFTP Types
+export interface SFTPSession {
+  id: string;
+  connectionId: string;
+  connectionName: string;
+  currentPath: string;
+}
+
+export interface RemoteFileInfo {
+  name: string;
+  path: string;
+  size: number;
+  isDirectory: boolean;
+  isSymlink: boolean;
+  permissions: string;
+  owner: number;
+  group: number;
+  modifiedAt: string;
+  accessedAt: string;
+}
+
+export interface RDPConnectionInfo {
+  name: string;
+  hostname: string;
+  port: number;
+  username?: string;
+  domain?: string;
+  hasCredentials: boolean;
 }
 
 export const api = new ApiService();
