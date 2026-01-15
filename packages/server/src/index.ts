@@ -22,6 +22,8 @@ import { createProviderRoutes } from './routes/providers';
 import { createCommandRoutes } from './routes/commands';
 import { createSFTPRoutes } from './routes/sftp';
 import { createRDPRoutes } from './routes/rdp';
+import { createSharingRoutes } from './routes/sharing';
+import { createAdminRoutes } from './routes/admin';
 import { setupWebSocket } from './services/websocket';
 import { ProviderDiscoveryService } from './services/provider-discovery';
 import { BulkCommandService } from './services/bulk-commands';
@@ -56,7 +58,7 @@ async function main() {
   const sshService = new SSHService(db);
   const providerService = new ProviderDiscoveryService();
   const commandService = new BulkCommandService(db);
-  const ptyService = new PTYService();
+  const ptyService = new PTYService(db);
 
   // SFTP service with progress callback (for WebSocket broadcast)
   const sftpProgressCallbacks = new Map<string, (progress: any) => void>();
@@ -102,6 +104,8 @@ async function main() {
   app.use('/api/commands', authMiddleware(authService), createCommandRoutes(db, commandService));
   app.use('/api/sftp', authMiddleware(authService), createSFTPRoutes(sftpService));
   app.use('/api/rdp', authMiddleware(authService), createRDPRoutes(db));
+  app.use('/api/sharing', authMiddleware(authService), createSharingRoutes(db));
+  app.use('/api/admin', authMiddleware(authService), createAdminRoutes(db));
 
   // Create HTTP server
   const server = createServer(app);

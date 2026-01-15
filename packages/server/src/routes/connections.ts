@@ -8,10 +8,13 @@ import type { DatabaseService } from '../services/database';
 export function createConnectionRoutes(db: DatabaseService): Router {
   const router = Router();
 
-  // List connections
+  // List connections (optionally including shared)
   router.get('/', async (req, res) => {
     try {
-      const connections = await db.getConnections(req.userId!);
+      const includeShared = req.query.includeShared === 'true';
+      const connections = includeShared
+        ? await db.getAllConnectionsWithShared(req.userId!)
+        : await db.getConnections(req.userId!);
       res.json({
         success: true,
         data: connections,

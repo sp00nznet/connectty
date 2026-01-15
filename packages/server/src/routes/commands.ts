@@ -9,11 +9,23 @@ import type { BulkCommandService } from '../services/bulk-commands';
 export function createCommandRoutes(db: DatabaseService, commandService: BulkCommandService): Router {
   const router = Router();
 
-  // List saved commands
+  // List saved commands (optionally including shared)
   router.get('/saved', async (req, res) => {
     try {
       const category = req.query.category as string | undefined;
-      const commands = await db.getSavedCommands(req.userId!, category);
+      const includeShared = req.query.includeShared === 'true';
+
+      let commands;
+      if (includeShared) {
+        commands = await db.getAllCommandsWithShared(req.userId!);
+        // Filter by category if provided
+        if (category) {
+          commands = commands.filter((cmd: any) => cmd.category === category);
+        }
+      } else {
+        commands = await db.getSavedCommands(req.userId!, category);
+      }
+
       res.json({
         success: true,
         data: commands,

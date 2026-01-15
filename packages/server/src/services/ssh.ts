@@ -13,15 +13,38 @@ interface SSHSession {
   client: Client;
   stream: ClientChannel | null;
   connectionId: string;
+  connectionName?: string;
+  hostname?: string;
   onEvent: (event: SSHSessionEvent) => void;
 }
 
 export class SSHService {
   private db: DatabaseService;
   private sessions: Map<string, SSHSession> = new Map();
+  private loggingEnabled: boolean;
 
   constructor(db: DatabaseService) {
     this.db = db;
+    this.loggingEnabled = process.env.SESSION_LOGGING_ENABLED === 'true';
+  }
+
+  private async logSession(session: SSHSession, data: string, dataType: 'input' | 'output'): Promise<void> {
+    if (!this.loggingEnabled) return;
+
+    try {
+      await this.db.createSessionLog({
+        userId: session.userId,
+        connectionId: session.connectionId,
+        sessionId: session.id,
+        sessionType: 'ssh',
+        connectionName: session.connectionName,
+        hostname: session.hostname,
+        data,
+        dataType,
+      });
+    } catch (err) {
+      console.error('Failed to log session data:', err);
+    }
   }
 
   async connect(
@@ -57,16 +80,21 @@ export class SSHService {
             client,
             stream,
             connectionId,
+            connectionName: connection.name,
+            hostname: connection.hostname,
             onEvent,
           };
 
           this.sessions.set(sessionId, session);
 
           stream.on('data', (data: Buffer) => {
+            const output = data.toString('utf-8');
             onEvent({
               type: 'data',
-              data: data.toString('utf-8'),
+              data: output,
             });
+            // Log output
+            this.logSession(session, output, 'output').catch(() => {});
           });
 
           stream.on('close', () => {
@@ -142,6 +170,8 @@ export class SSHService {
     const session = this.sessions.get(sessionId);
     if (session?.stream) {
       session.stream.write(data);
+      // Log input
+      this.logSession(session, data, 'input').catch(() => {});
     }
   }
 

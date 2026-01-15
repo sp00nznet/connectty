@@ -5,6 +5,7 @@
 import * as pty from 'node-pty';
 import * as os from 'os';
 import { generateId } from '@connectty/shared';
+import type { DatabaseService } from './database';
 
 export interface PTYSession {
   id: string;
@@ -23,8 +24,31 @@ export interface PTYSessionEvent {
 type SessionCallback = (event: PTYSessionEvent) => void;
 
 export class PTYService {
+  private db?: DatabaseService;
   private sessions: Map<string, PTYSession> = new Map();
   private callbacks: Map<string, SessionCallback> = new Map();
+  private loggingEnabled: boolean;
+
+  constructor(db?: DatabaseService) {
+    this.db = db;
+    this.loggingEnabled = process.env.SESSION_LOGGING_ENABLED === 'true';
+  }
+
+  private async logSession(session: PTYSession, data: string, dataType: 'input' | 'output'): Promise<void> {
+    if (!this.loggingEnabled || !this.db) return;
+
+    try {
+      await this.db.createSessionLog({
+        userId: session.userId,
+        sessionId: session.id,
+        sessionType: 'pty',
+        data,
+        dataType,
+      });
+    } catch (err) {
+      console.error('Failed to log PTY session data:', err);
+    }
+  }
 
   /**
    * Create a new local shell session
@@ -64,6 +88,8 @@ export class PTYService {
       if (cb) {
         cb({ type: 'data', data });
       }
+      // Log output
+      this.logSession(session, data, 'output').catch(() => {});
     });
 
     // Handle PTY exit
@@ -122,6 +148,8 @@ export class PTYService {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.ptyProcess.write(data);
+      // Log input
+      this.logSession(session, data, 'input').catch(() => {});
     }
   }
 

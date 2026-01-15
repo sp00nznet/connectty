@@ -9,10 +9,13 @@ import type { ProviderDiscoveryService } from '../services/provider-discovery';
 export function createProviderRoutes(db: DatabaseService, providerService: ProviderDiscoveryService): Router {
   const router = Router();
 
-  // List providers
+  // List providers (optionally including shared)
   router.get('/', async (req, res) => {
     try {
-      const providers = await db.getProviders(req.userId!);
+      const includeShared = req.query.includeShared === 'true';
+      const providers = includeShared
+        ? await db.getAllProvidersWithShared(req.userId!)
+        : await db.getProviders(req.userId!);
       // Don't return sensitive config data in list
       const safeProviders = providers.map(p => ({
         ...p,
