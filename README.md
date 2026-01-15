@@ -66,6 +66,7 @@ Connect to anything: SSH, RDP, Serial/COM, SFTP, and local shells—all in one t
 Auto-discover and import servers from your infrastructure.
 
 ![Provider Discovery](screen/Providers.png)
+![Import Hosts](screen/Import.png)
 
 | Provider | Features |
 |:---------|:---------|
@@ -75,8 +76,6 @@ Auto-discover and import servers from your infrastructure.
 | **Google Cloud** | Compute Engine, zones, service account auth |
 | **Microsoft Azure** | VMs, resource groups, service principal |
 | **IBM BigFix** | Managed endpoints, AD auth, online status |
-
-![Import Hosts](screen/Import.png)
 
 ---
 
