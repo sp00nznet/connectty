@@ -186,6 +186,7 @@ export class DatabaseService {
       { table: 'credentials', column: 'domain', sql: 'ALTER TABLE credentials ADD COLUMN domain TEXT' },
       { table: 'credentials', column: 'auto_assign_patterns', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_patterns TEXT DEFAULT '[]'" },
       { table: 'credentials', column: 'auto_assign_os_types', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_os_types TEXT DEFAULT '[]'" },
+      { table: 'credentials', column: 'auto_assign_group', sql: 'ALTER TABLE credentials ADD COLUMN auto_assign_group TEXT' },
     ];
 
     for (const migration of migrations) {
@@ -374,7 +375,7 @@ export class DatabaseService {
       : null;
 
     const stmt = this.db.prepare(`
-      INSERT INTO credentials (id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_os_types, created_at, updated_at)
+      INSERT INTO credentials (id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_group, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -386,7 +387,7 @@ export class DatabaseService {
       data.domain || null,
       encryptedData ? JSON.stringify(encryptedData) : null,
       JSON.stringify(data.autoAssignPatterns || []),
-      JSON.stringify(data.autoAssignOSTypes || []),
+      data.autoAssignGroup || null,
       now,
       now
     );
@@ -422,9 +423,9 @@ export class DatabaseService {
       fields.push('auto_assign_patterns = ?');
       values.push(JSON.stringify(updates.autoAssignPatterns));
     }
-    if (updates.autoAssignOSTypes !== undefined) {
-      fields.push('auto_assign_os_types = ?');
-      values.push(JSON.stringify(updates.autoAssignOSTypes));
+    if (updates.autoAssignGroup !== undefined) {
+      fields.push('auto_assign_group = ?');
+      values.push(updates.autoAssignGroup || null);
     }
 
     // Handle encrypted data updates
@@ -980,7 +981,7 @@ export class DatabaseService {
       privateKey: sensitiveData.privateKey,
       passphrase: sensitiveData.passphrase,
       autoAssignPatterns: row.auto_assign_patterns ? JSON.parse(row.auto_assign_patterns) : undefined,
-      autoAssignOSTypes: row.auto_assign_os_types ? JSON.parse(row.auto_assign_os_types) : undefined,
+      autoAssignGroup: row.auto_assign_group || undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
       usedBy: usedBy.map((r) => r.id),
@@ -1111,7 +1112,7 @@ interface CredentialRow {
   domain: string | null;
   encrypted_data: string | null;
   auto_assign_patterns: string | null;
-  auto_assign_os_types: string | null;
+  auto_assign_group: string | null;
   created_at: string;
   updated_at: string;
 }

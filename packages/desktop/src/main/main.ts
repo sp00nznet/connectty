@@ -260,6 +260,26 @@ function setupIpcHandlers(): void {
     return service.testConnection(provider);
   });
 
+  // Test provider connection with config (before saving)
+  ipcMain.handle('providers:testConfig', async (_event, providerData: Partial<Provider>) => {
+    if (!providerData.type || !providerData.config) {
+      throw new Error('Provider type and config are required');
+    }
+    const service = getProviderService(providerData.type);
+    // Create a temporary provider object for testing
+    const tempProvider: Provider = {
+      id: 'temp-test',
+      name: providerData.name || 'Test',
+      type: providerData.type,
+      enabled: true,
+      config: providerData.config,
+      autoDiscover: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    return service.testConnection(tempProvider);
+  });
+
   ipcMain.handle('providers:discover', async (_event, id: string) => {
     const provider = db.getProvider(id);
     if (!provider) {
@@ -285,7 +305,7 @@ function setupIpcHandlers(): void {
     return db.getDiscoveredHosts(providerId);
   });
 
-  ipcMain.handle('discovered:import', async (_event, hostId: string, credentialId?: string) => {
+  ipcMain.handle('discovered:import', async (_event, hostId: string, credentialId?: string, groupId?: string) => {
     const host = db.getDiscoveredHost(hostId);
     if (!host) {
       throw new Error('Host not found');
@@ -295,10 +315,10 @@ function setupIpcHandlers(): void {
     const connectionType = host.osType === 'windows' ? 'rdp' : 'ssh';
     const port = connectionType === 'rdp' ? 3389 : 22;
 
-    // Auto-assign credential if not provided
+    // Auto-assign credential if not provided - check for group-based auto-assign
     let finalCredentialId = credentialId;
     if (!finalCredentialId) {
-      finalCredentialId = findMatchingCredential(db, host);
+      finalCredentialId = findMatchingCredential(db, host, groupId);
     }
 
     // Get unique name (adds provider suffix if duplicates exist)
@@ -312,6 +332,7 @@ function setupIpcHandlers(): void {
       connectionType,
       osType: host.osType,
       credentialId: finalCredentialId,
+      group: groupId,
       tags: Object.entries(host.tags).map(([k, v]) => `${k}:${v}`),
       providerId: host.providerId,
       providerHostId: host.providerHostId,
@@ -324,14 +345,14 @@ function setupIpcHandlers(): void {
     return connection;
   });
 
-  ipcMain.handle('discovered:importAll', async (_event, providerId: string) => {
+  ipcMain.handle('discovered:importAll', async (_event, providerId: string, groupId?: string) => {
     const hosts = db.getDiscoveredHosts(providerId).filter(h => !h.imported);
     const connections: ServerConnection[] = [];
 
     for (const host of hosts) {
       const connectionType = host.osType === 'windows' ? 'rdp' : 'ssh';
       const port = connectionType === 'rdp' ? 3389 : 22;
-      const credentialId = findMatchingCredential(db, host);
+      const credentialId = findMatchingCredential(db, host, groupId);
 
       // Get unique name (adds provider suffix if duplicates exist)
       const uniqueName = getUniqueConnectionName(db, host.name, host.providerId);
@@ -343,6 +364,7 @@ function setupIpcHandlers(): void {
         connectionType,
         osType: host.osType,
         credentialId,
+        group: groupId,
         tags: Object.entries(host.tags).map(([k, v]) => `${k}:${v}`),
         providerId: host.providerId,
         providerHostId: host.providerHostId,
@@ -356,7 +378,7 @@ function setupIpcHandlers(): void {
     return connections;
   });
 
-  ipcMain.handle('discovered:importSelected', async (_event, hostIds: string[], assignedCredentialId?: string) => {
+  ipcMain.handle('discovered:importSelected', async (_event, hostIds: string[], assignedCredentialId?: string, groupId?: string) => {
     const connections: ServerConnection[] = [];
 
     for (const hostId of hostIds) {
@@ -365,8 +387,8 @@ function setupIpcHandlers(): void {
 
       const connectionType = host.osType === 'windows' ? 'rdp' : 'ssh';
       const port = connectionType === 'rdp' ? 3389 : 22;
-      // Use assigned credential if provided, otherwise try to find a matching one
-      const credentialId = assignedCredentialId || findMatchingCredential(db, host);
+      // Use assigned credential if provided, otherwise try to find a matching one based on group
+      const credentialId = assignedCredentialId || findMatchingCredential(db, host, groupId);
 
       // Get unique name (adds provider suffix if duplicates exist)
       const uniqueName = getUniqueConnectionName(db, host.name, host.providerId);
@@ -378,6 +400,7 @@ function setupIpcHandlers(): void {
         connectionType,
         osType: host.osType,
         credentialId,
+        group: groupId,
         tags: Object.entries(host.tags).map(([k, v]) => `${k}:${v}`),
         providerId: host.providerId,
         providerHostId: host.providerHostId,
@@ -916,15 +939,13 @@ function setupIpcHandlers(): void {
 /**
  * Find a matching credential for a discovered host based on auto-assign rules
  */
-function findMatchingCredential(database: DatabaseService, host: DiscoveredHost): string | undefined {
+function findMatchingCredential(database: DatabaseService, host: DiscoveredHost, targetGroupId?: string): string | undefined {
   const credentials = database.getCredentials();
 
   for (const cred of credentials) {
-    // Check OS type match
-    if (cred.autoAssignOSTypes?.length) {
-      if (cred.autoAssignOSTypes.includes(host.osType)) {
-        return cred.id;
-      }
+    // Check group match - if importing into a group, use credentials assigned to that group
+    if (targetGroupId && cred.autoAssignGroup === targetGroupId) {
+      return cred.id;
     }
 
     // Check hostname pattern match

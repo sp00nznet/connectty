@@ -629,8 +629,9 @@ body {
   border-radius: 12px;
   width: 100%;
   max-width: 480px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
 }
 
@@ -640,6 +641,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -649,6 +651,9 @@ body {
 
 .modal-body {
   padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .modal-footer {
@@ -657,6 +662,7 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 /* Tabs */
@@ -1173,6 +1179,16 @@ body {
   background-color: #dc2626;
 }
 
+/* Success Button */
+.btn-success {
+  background-color: var(--success);
+  color: #1a1a2e;
+}
+
+.btn-success:hover {
+  background-color: #22c55e;
+}
+
 /* Checkbox Group */
 .checkbox-group {
   display: flex;
@@ -1332,6 +1348,7 @@ body {
   display: flex;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .tab-btn {
@@ -2275,9 +2292,12 @@ body {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  padding: 8px 0;
+  padding: 8px 12px;
   color: var(--text-primary);
   font-size: 0.95rem;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  margin-bottom: 4px;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -2294,7 +2314,7 @@ body {
 .checkbox-help {
   color: var(--text-muted);
   font-size: 0.8rem;
-  margin-left: 28px;
+  margin-left: 12px;
   margin-bottom: 12px;
 }
 

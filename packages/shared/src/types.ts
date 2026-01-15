@@ -67,7 +67,7 @@ export interface Credential {
   passphrase?: string;
   // Auto-assign rules
   autoAssignPatterns?: string[]; // Hostname patterns to auto-assign this credential
-  autoAssignOSTypes?: OSType[];  // OS types to auto-assign this credential
+  autoAssignGroup?: string;  // Group ID to auto-assign this credential to imported hosts
   // Metadata
   createdAt: Date;
   updatedAt: Date;

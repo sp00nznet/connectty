@@ -104,7 +104,7 @@ export default function App() {
   const [discoveredHosts, setDiscoveredHosts] = useState<DiscoveredHost[]>([]);
   const [hostSelectionProvider, setHostSelectionProvider] = useState<Provider | null>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
-  const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
+  const [showRepeatedActionsModal, setShowRepeatedActionsModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<ConnectionGroup | null>(null);
   // FXP: track selected SFTP session for site-to-site transfer
@@ -127,6 +127,16 @@ export default function App() {
   const tabContextMenuRef = useRef<HTMLDivElement>(null);
   const [customTabNames, setCustomTabNames] = useState<Map<string, string>>(new Map());
   const [renamingTab, setRenamingTab] = useState<{ sessionId: string; currentName: string } | null>(null);
+
+  // Terminal command history (from SSH and local shells)
+  interface TerminalCommand {
+    command: string;
+    sessionType: 'ssh' | 'local' | 'serial';
+    sessionName: string;
+    timestamp: Date;
+  }
+  const [terminalCommands, setTerminalCommands] = useState<TerminalCommand[]>([]);
+  const commandBuffersRef = useRef<Map<string, string>>(new Map());
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
@@ -385,6 +395,38 @@ export default function App() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  // Helper to capture terminal commands when Enter is pressed
+  const captureTerminalCommand = (sessionId: string, data: string, sessionType: 'ssh' | 'local' | 'serial', sessionName: string) => {
+    const buffer = commandBuffersRef.current.get(sessionId) || '';
+
+    // Check for Enter key (carriage return)
+    if (data === '\r' || data === '\n') {
+      const command = buffer.trim();
+      if (command && command.length > 0) {
+        setTerminalCommands(prev => {
+          const newCommands = [{
+            command,
+            sessionType,
+            sessionName,
+            timestamp: new Date(),
+          }, ...prev].slice(0, 100); // Keep last 100 commands
+          return newCommands;
+        });
+      }
+      commandBuffersRef.current.set(sessionId, '');
+    } else if (data === '\x7f' || data === '\b') {
+      // Backspace - remove last character
+      commandBuffersRef.current.set(sessionId, buffer.slice(0, -1));
+    } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+      // Printable character
+      commandBuffersRef.current.set(sessionId, buffer + data);
+    } else if (data.length > 1 && !data.includes('\x1b')) {
+      // Pasted text (multiple printable chars without escape sequences)
+      commandBuffersRef.current.set(sessionId, buffer + data);
+    }
+    // Ignore control sequences (arrow keys, etc.)
+  };
+
   const handleConnect = async (connection: ServerConnection, password?: string) => {
     // If RDP connection, try embedded client first, fall back to external
     if (connection.connectionType === 'rdp') {
@@ -485,6 +527,7 @@ export default function App() {
       terminal.loadAddon(fitAddon);
 
       terminal.onData((data) => {
+        captureTerminalCommand(sessionId, data, 'ssh', connection.name);
         window.connectty.ssh.write(sessionId, data);
       });
 
@@ -622,6 +665,7 @@ export default function App() {
 
       // Handle terminal input
       terminal.onData((data) => {
+        captureTerminalCommand(sessionId, data, 'local', shell.name);
         window.connectty.localShell.write(sessionId, data);
       });
 
@@ -894,11 +938,11 @@ export default function App() {
         </div>
 
         <div className="sidebar-actions sidebar-actions-grid">
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkActionsModal(true)}>
-            Bulk Actions
-          </button>
           <button className="btn btn-secondary btn-sm" onClick={handleImport}>Import</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
+            Repeated Actions
+          </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowSettingsModal(true)}>
             Settings
           </button>
@@ -1247,6 +1291,7 @@ export default function App() {
         <CredentialModal
           credential={editingCredential}
           credentials={credentials}
+          groups={groups}
           onClose={() => { setShowCredentialModal(false); setEditingCredential(null); }}
           onSave={handleCreateCredential}
           onEdit={(cred) => { setEditingCredential(cred); }}
@@ -1324,12 +1369,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Bulk Actions Modal */}
-      {showBulkActionsModal && (
-        <BulkActionsModal
+      {/* Repeated Actions Modal */}
+      {showRepeatedActionsModal && (
+        <RepeatedActionsModal
           connections={connections}
           groups={groups}
-          onClose={() => setShowBulkActionsModal(false)}
+          terminalCommands={terminalCommands}
+          onClose={() => setShowRepeatedActionsModal(false)}
           onNotification={showNotification}
         />
       )}
@@ -1846,13 +1892,14 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
 interface CredentialModalProps {
   credential: Credential | null;
   credentials: Credential[];
+  groups: ConnectionGroup[];
   onClose: () => void;
   onSave: (data: Partial<Credential>) => Promise<void>;
   onEdit: (cred: Credential | null) => void;
   onDelete: (id: string) => void;
 }
 
-function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onDelete }: CredentialModalProps) {
+function CredentialModal({ credential, credentials, groups, onClose, onSave, onEdit, onDelete }: CredentialModalProps) {
   const [showForm, setShowForm] = useState(!!credential);
   const [name, setName] = useState(credential?.name || '');
   const [type, setType] = useState<CredentialType>(credential?.type || 'password');
@@ -1861,29 +1908,14 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState(credential?.privateKey || '');
   const [passphrase, setPassphrase] = useState('');
-  const [autoAssignOSTypes, setAutoAssignOSTypes] = useState<string[]>(credential?.autoAssignOSTypes || []);
-
-  const osTypeOptions: { value: OSType; label: string }[] = [
-    { value: 'linux', label: 'Linux (Ubuntu, CentOS, Debian, etc.)' },
-    { value: 'windows', label: 'Windows' },
-    { value: 'unix', label: 'Unix (FreeBSD, Solaris, etc.)' },
-    { value: 'esxi', label: 'VMware ESXi' },
-  ];
-
-  const toggleOSType = (osType: string) => {
-    setAutoAssignOSTypes(prev =>
-      prev.includes(osType)
-        ? prev.filter(t => t !== osType)
-        : [...prev, osType]
-    );
-  };
+  const [autoAssignGroup, setAutoAssignGroup] = useState<string>(credential?.autoAssignGroup || '');
 
   const populateForm = (cred: Credential) => {
     setName(cred.name);
     setType(cred.type);
     setUsername(cred.username);
     setDomain(cred.domain || '');
-    setAutoAssignOSTypes(cred.autoAssignOSTypes || []);
+    setAutoAssignGroup(cred.autoAssignGroup || '');
     setPrivateKey(cred.privateKey || '');
     // Don't populate password/passphrase for security - user must re-enter
     setPassword('');
@@ -1898,7 +1930,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
     setPassword('');
     setPrivateKey('');
     setPassphrase('');
-    setAutoAssignOSTypes([]);
+    setAutoAssignGroup('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1908,7 +1940,7 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
       type,
       username,
       domain: domain || undefined,
-      autoAssignOSTypes: autoAssignOSTypes.length > 0 ? autoAssignOSTypes as OSType[] : undefined,
+      autoAssignGroup: autoAssignGroup || undefined,
     };
 
     if (type === 'password' || type === 'domain') {
@@ -1943,11 +1975,11 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
                       <div className="credential-details">
                         {cred.domain ? `${cred.domain}\\` : ''}{cred.username} ({cred.type})
                       </div>
-                      {cred.autoAssignOSTypes && cred.autoAssignOSTypes.length > 0 && (
+                      {cred.autoAssignGroup && (
                         <div className="credential-os-tags">
-                          {cred.autoAssignOSTypes.map(os => (
-                            <span key={os} className="os-tag">{os}</span>
-                          ))}
+                          <span className="os-tag">
+                            Auto-assign: {groups.find(g => g.id === cred.autoAssignGroup)?.name || 'Unknown group'}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -2077,22 +2109,20 @@ function CredentialModal({ credential, credentials, onClose, onSave, onEdit, onD
             )}
 
             <div className="form-group">
-              <label className="form-label">Auto-assign to OS Types</label>
+              <label className="form-label">Auto-assign to Group</label>
               <p style={{ fontSize: '0.75rem', color: '#a0aec0', marginBottom: '8px' }}>
-                When importing discovered hosts, automatically assign this credential to systems with these OS types
+                When importing discovered hosts into this group, automatically assign this credential
               </p>
-              <div className="checkbox-group">
-                {osTypeOptions.map(({ value, label }) => (
-                  <label key={value} className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={autoAssignOSTypes.includes(value)}
-                      onChange={() => toggleOSType(value)}
-                    />
-                    <span>{label}</span>
-                  </label>
+              <select
+                className="form-input"
+                value={autoAssignGroup}
+                onChange={(e) => setAutoAssignGroup(e.target.value)}
+              >
+                <option value="">None</option>
+                {groups.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
-              </div>
+              </select>
             </div>
           </div>
 
@@ -2127,6 +2157,8 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
   const [showForm, setShowForm] = useState(!!provider);
   const [name, setName] = useState(provider?.name || '');
   const [type, setType] = useState<ProviderType>(provider?.type || 'esxi');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<'success' | 'failed' | null>(null);
   // ESXi/Proxmox fields
   const [host, setHost] = useState((provider?.config as any)?.host || '');
   const [port, setPort] = useState((provider?.config as any)?.port || (type === 'esxi' ? 443 : type === 'proxmox' ? 8006 : 443));
@@ -2284,6 +2316,37 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     await onSave(data);
     resetForm();
     setShowForm(false);
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      let testConfig: any;
+
+      if (type === 'esxi') {
+        testConfig = { type: 'esxi', host, port, username, password, ignoreCertErrors };
+      } else if (type === 'proxmox') {
+        testConfig = { type: 'proxmox', host, port, username, password, realm, ignoreCertErrors };
+      } else if (type === 'aws') {
+        testConfig = { type: 'aws', accessKeyId, secretAccessKey, region };
+      } else if (type === 'gcp') {
+        testConfig = { type: 'gcp', projectId, serviceAccountKey };
+      } else if (type === 'azure') {
+        testConfig = { type: 'azure', tenantId, clientId, clientSecret, subscriptionId };
+      } else if (type === 'bigfix') {
+        testConfig = { type: 'bigfix', host, port, username, password, ignoreCertErrors };
+      }
+
+      const success = await window.connectty.providers.testConfig({ name, type, config: testConfig });
+      setTestResult(success ? 'success' : 'failed');
+    } catch (error) {
+      console.error('Test connection failed:', error);
+      setTestResult('failed');
+    } finally {
+      setTesting(false);
+    }
   };
 
   if (!showForm) {
@@ -2620,13 +2683,25 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
             )}
           </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={() => { resetForm(); setShowForm(false); }}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary">
-              {provider ? 'Save Changes' : 'Add Provider'}
-            </button>
+          <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+            <div>
+              <button
+                type="button"
+                className={`btn ${testResult === 'success' ? 'btn-success' : testResult === 'failed' ? 'btn-danger' : 'btn-secondary'}`}
+                onClick={handleTestConnection}
+                disabled={testing || !host || !username || (!password && !provider)}
+              >
+                {testing ? 'Testing...' : testResult === 'success' ? 'Connected!' : testResult === 'failed' ? 'Failed' : 'Test Connection'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => { resetForm(); setShowForm(false); }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                {provider ? 'Save Changes' : 'Add Provider'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -2804,17 +2879,36 @@ function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupM
   );
 }
 
-// Bulk Actions Modal Component
-interface BulkActionsModalProps {
+// Repeated Actions Modal Component
+interface TerminalCommandEntry {
+  command: string;
+  sessionType: 'ssh' | 'local' | 'serial';
+  sessionName: string;
+  timestamp: Date;
+}
+
+interface RepeatedActionsModalProps {
   connections: ServerConnection[];
   groups: ConnectionGroup[];
+  terminalCommands: TerminalCommandEntry[];
   onClose: () => void;
   onNotification: (type: 'success' | 'error', message: string) => void;
 }
 
-function BulkActionsModal({ connections, groups, onClose, onNotification }: BulkActionsModalProps) {
+interface SavedScript {
+  id: string;
+  name: string;
+  description: string;
+  language: 'bash' | 'powershell' | 'python';
+  content: string;
+  targetOS: CommandTargetOS;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, onNotification }: RepeatedActionsModalProps) {
   // Tab state
-  const [activeTab, setActiveTab] = useState<'execute' | 'saved' | 'history'>('execute');
+  const [activeTab, setActiveTab] = useState<'execute' | 'saved' | 'scripts' | 'history'>('execute');
 
   // Host selection state
   const [filterType, setFilterType] = useState<HostFilter['type']>('all');
@@ -2832,6 +2926,10 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
   const [scriptContent, setScriptContent] = useState('');
   const [scriptLanguage, setScriptLanguage] = useState<'bash' | 'powershell' | 'python'>('bash');
 
+  // Saved scripts state
+  const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
+  const [selectedScriptId, setSelectedScriptId] = useState('');
+
   // Execution state
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentExecution, setCurrentExecution] = useState<CommandExecution | null>(null);
@@ -2846,6 +2944,15 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
   const [commandName, setCommandName] = useState('');
   const [commandDescription, setCommandDescription] = useState('');
   const [commandCategory, setCommandCategory] = useState('');
+
+  // Saved script form state
+  const [showScriptForm, setShowScriptForm] = useState(false);
+  const [editingScript, setEditingScript] = useState<SavedScript | null>(null);
+  const [scriptName, setScriptName] = useState('');
+  const [scriptDescription, setScriptDescription] = useState('');
+  const [scriptFormContent, setScriptFormContent] = useState('');
+  const [scriptFormLanguage, setScriptFormLanguage] = useState<'bash' | 'powershell' | 'python'>('bash');
+  const [scriptFormTargetOS, setScriptFormTargetOS] = useState<CommandTargetOS>('all');
 
   // Load saved commands and history
   useEffect(() => {
@@ -2882,6 +2989,113 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
     const history = await window.connectty.commands.history(20);
     setCommandHistory(history);
   };
+
+  // Load saved scripts from localStorage
+  const loadSavedScripts = () => {
+    const stored = localStorage.getItem('connectty-saved-scripts');
+    if (stored) {
+      try {
+        const scripts = JSON.parse(stored).map((s: any) => ({
+          ...s,
+          createdAt: new Date(s.createdAt),
+          updatedAt: new Date(s.updatedAt),
+        }));
+        setSavedScripts(scripts);
+      } catch (e) {
+        console.error('Failed to load saved scripts:', e);
+      }
+    }
+  };
+
+  // Save scripts to localStorage
+  const persistScripts = (scripts: SavedScript[]) => {
+    localStorage.setItem('connectty-saved-scripts', JSON.stringify(scripts));
+  };
+
+  // Create or update a script
+  const handleSaveScript = () => {
+    const now = new Date();
+    if (editingScript) {
+      // Update existing
+      const updated = savedScripts.map(s =>
+        s.id === editingScript.id
+          ? {
+              ...s,
+              name: scriptName,
+              description: scriptDescription,
+              language: scriptFormLanguage,
+              content: scriptFormContent,
+              targetOS: scriptFormTargetOS,
+              updatedAt: now,
+            }
+          : s
+      );
+      setSavedScripts(updated);
+      persistScripts(updated);
+      onNotification('success', 'Script updated');
+    } else {
+      // Create new
+      const newScript: SavedScript = {
+        id: `script-${Date.now()}`,
+        name: scriptName,
+        description: scriptDescription,
+        language: scriptFormLanguage,
+        content: scriptFormContent,
+        targetOS: scriptFormTargetOS,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const updated = [...savedScripts, newScript];
+      setSavedScripts(updated);
+      persistScripts(updated);
+      onNotification('success', 'Script saved');
+    }
+    resetScriptForm();
+    setShowScriptForm(false);
+  };
+
+  // Delete a script
+  const handleDeleteScript = (id: string) => {
+    const updated = savedScripts.filter(s => s.id !== id);
+    setSavedScripts(updated);
+    persistScripts(updated);
+    onNotification('success', 'Script deleted');
+  };
+
+  // Reset script form
+  const resetScriptForm = () => {
+    setScriptName('');
+    setScriptDescription('');
+    setScriptFormContent('');
+    setScriptFormLanguage('bash');
+    setScriptFormTargetOS('all');
+    setEditingScript(null);
+  };
+
+  // Edit a script
+  const handleEditScript = (script: SavedScript) => {
+    setEditingScript(script);
+    setScriptName(script.name);
+    setScriptDescription(script.description);
+    setScriptFormContent(script.content);
+    setScriptFormLanguage(script.language);
+    setScriptFormTargetOS(script.targetOS);
+    setShowScriptForm(true);
+  };
+
+  // Use a saved script in execute tab
+  const handleUseScript = (script: SavedScript) => {
+    setCommandMode('script');
+    setScriptContent(script.content);
+    setScriptLanguage(script.language);
+    setTargetOS(script.targetOS);
+    setActiveTab('execute');
+  };
+
+  // Load scripts on mount
+  useEffect(() => {
+    loadSavedScripts();
+  }, []);
 
   // Build filter from selections
   const buildFilter = (): HostFilter => {
@@ -3042,7 +3256,7 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Bulk Actions</h3>
+          <h3>Repeated Actions</h3>
           <button className="btn btn-icon" onClick={onClose}>×</button>
         </div>
 
@@ -3058,7 +3272,13 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
             className={`tab-btn ${activeTab === 'saved' ? 'active' : ''}`}
             onClick={() => setActiveTab('saved')}
           >
-            Saved Commands ({savedCommands.length})
+            Commands ({savedCommands.length})
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'scripts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('scripts')}
+          >
+            Scripts ({savedScripts.length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
@@ -3068,7 +3288,7 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
           </button>
         </div>
 
-        <div className="modal-body" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+        <div className="modal-body">
           {/* Execute Tab */}
           {activeTab === 'execute' && (
             <div className="bulk-execute-content">
@@ -3430,46 +3650,275 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
             </div>
           )}
 
+          {/* Scripts Tab */}
+          {activeTab === 'scripts' && (
+            <div className="saved-scripts-content">
+              {!showScriptForm ? (
+                <>
+                  {savedScripts.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#a0aec0' }}>
+                      No saved scripts. Create one to reuse multi-line scripts.
+                    </p>
+                  ) : (
+                    <div className="scripts-list">
+                      {savedScripts.map(script => (
+                        <div key={script.id} className="script-item" style={{
+                          background: 'var(--bg-tertiary)',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          marginBottom: '12px',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div>
+                              <h5 style={{ margin: 0, color: 'var(--text-primary)' }}>{script.name}</h5>
+                              {script.description && (
+                                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                  {script.description}
+                                </p>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <span className="os-badge" style={{
+                                fontSize: '10px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: script.language === 'bash' ? '#22c55e' : script.language === 'powershell' ? '#3b82f6' : '#f59e0b',
+                                color: 'white',
+                                textTransform: 'uppercase',
+                              }}>
+                                {script.language}
+                              </span>
+                              <span className="os-badge" style={{
+                                fontSize: '10px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: 'var(--bg-secondary)',
+                                color: 'var(--text-secondary)',
+                              }}>
+                                {script.targetOS}
+                              </span>
+                            </div>
+                          </div>
+                          <pre style={{
+                            background: 'var(--bg-secondary)',
+                            padding: '8px 12px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                            margin: '8px 0',
+                            maxHeight: '100px',
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                          }}>
+                            {script.content}
+                          </pre>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={() => handleUseScript(script)}
+                            >
+                              Use
+                            </button>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => handleEditScript(script)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => {
+                                if (window.confirm('Delete this script?')) {
+                                  handleDeleteScript(script.id);
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="script-form">
+                  <h4>{editingScript ? 'Edit Script' : 'New Script'}</h4>
+                  <div className="form-group">
+                    <label className="form-label">Name *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={scriptName}
+                      onChange={(e) => setScriptName(e.target.value)}
+                      placeholder="e.g., System Health Check"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={scriptDescription}
+                      onChange={(e) => setScriptDescription(e.target.value)}
+                      placeholder="What does this script do?"
+                    />
+                  </div>
+                  <div className="form-row" style={{ display: 'flex', gap: '16px' }}>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Language</label>
+                      <select
+                        className="form-select"
+                        value={scriptFormLanguage}
+                        onChange={(e) => setScriptFormLanguage(e.target.value as 'bash' | 'powershell' | 'python')}
+                      >
+                        <option value="bash">Bash</option>
+                        <option value="powershell">PowerShell</option>
+                        <option value="python">Python</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Target OS</label>
+                      <select
+                        className="form-select"
+                        value={scriptFormTargetOS}
+                        onChange={(e) => setScriptFormTargetOS(e.target.value as CommandTargetOS)}
+                      >
+                        <option value="all">All (Linux + Windows)</option>
+                        <option value="linux">Linux Only</option>
+                        <option value="windows">Windows Only</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Script Content *</label>
+                    <textarea
+                      className="form-input"
+                      value={scriptFormContent}
+                      onChange={(e) => setScriptFormContent(e.target.value)}
+                      placeholder={scriptFormLanguage === 'bash' ? '#!/bin/bash\n\necho "Hello World"' : scriptFormLanguage === 'powershell' ? 'Write-Host "Hello World"' : 'print("Hello World")'}
+                      rows={10}
+                      style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div className="form-row" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setShowScriptForm(false);
+                        resetScriptForm();
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleSaveScript}
+                      disabled={!scriptName || !scriptFormContent}
+                    >
+                      {editingScript ? 'Update' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* History Tab */}
           {activeTab === 'history' && (
             <div className="history-content">
-              {commandHistory.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#a0aec0' }}>
-                  No command history yet.
-                </p>
-              ) : (
-                <div className="history-list">
-                  {commandHistory.map(exec => (
-                    <div key={exec.id} className={`history-item ${exec.status}`}>
-                      <div className="history-header">
-                        <span className="history-name">{exec.commandName}</span>
-                        <span className={`history-status ${exec.status}`}>{exec.status}</span>
-                        <span className="history-time">
-                          {new Date(exec.startedAt).toLocaleString()}
+              {/* Terminal Command History */}
+              {terminalCommands.length > 0 && (
+                <div className="bulk-section">
+                  <h4>Recent Terminal Commands</h4>
+                  <div className="terminal-history-list" style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '16px' }}>
+                    {terminalCommands.map((cmd, idx) => (
+                      <div key={idx} className="terminal-history-item" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '8px 12px',
+                        background: 'var(--bg-tertiary)',
+                        borderRadius: '6px',
+                        marginBottom: '4px',
+                        fontFamily: 'monospace',
+                        fontSize: '13px',
+                      }}>
+                        <span className={`os-badge ${cmd.sessionType}`} style={{
+                          fontSize: '10px',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: cmd.sessionType === 'ssh' ? '#3b82f6' : cmd.sessionType === 'local' ? '#22c55e' : '#a855f7',
+                          color: 'white',
+                          textTransform: 'uppercase',
+                        }}>
+                          {cmd.sessionType}
                         </span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '11px', minWidth: '80px' }}>
+                          {cmd.sessionName}
+                        </span>
+                        <code style={{ flex: 1, color: 'var(--text-primary)' }}>{cmd.command}</code>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                          {cmd.timestamp.toLocaleTimeString()}
+                        </span>
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          style={{ padding: '2px 8px', fontSize: '11px' }}
+                          onClick={() => {
+                            setInlineCommand(cmd.command);
+                            setActiveTab('execute');
+                          }}
+                          title="Use this command"
+                        >
+                          Use
+                        </button>
                       </div>
-                      <div className="history-details">
-                        <span>{exec.connectionIds.length} hosts</span>
-                        <span className={`os-badge ${exec.targetOS}`}>{exec.targetOS}</span>
-                      </div>
-                      <pre className="history-command">{exec.command}</pre>
-                      {exec.results && exec.results.length > 0 && (
-                        <div className="history-results-summary">
-                          <span className="success">
-                            {exec.results.filter(r => r.status === 'success').length} success
-                          </span>
-                          <span className="error">
-                            {exec.results.filter(r => r.status === 'error').length} failed
-                          </span>
-                          <span className="skipped">
-                            {exec.results.filter(r => r.status === 'skipped').length} skipped
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Bulk Execution History */}
+              <div className="bulk-section">
+                <h4>Bulk Execution History</h4>
+                {commandHistory.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#a0aec0' }}>
+                    No bulk command history yet.
+                  </p>
+                ) : (
+                  <div className="history-list">
+                    {commandHistory.map(exec => (
+                      <div key={exec.id} className={`history-item ${exec.status}`}>
+                        <div className="history-header">
+                          <span className="history-name">{exec.commandName}</span>
+                          <span className={`history-status ${exec.status}`}>{exec.status}</span>
+                          <span className="history-time">
+                            {new Date(exec.startedAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="history-details">
+                          <span>{exec.connectionIds.length} hosts</span>
+                          <span className={`os-badge ${exec.targetOS}`}>{exec.targetOS}</span>
+                        </div>
+                        <pre className="history-command">{exec.command}</pre>
+                        {exec.results && exec.results.length > 0 && (
+                          <div className="history-results-summary">
+                            <span className="success">
+                              {exec.results.filter(r => r.status === 'success').length} success
+                            </span>
+                            <span className="error">
+                              {exec.results.filter(r => r.status === 'error').length} failed
+                            </span>
+                            <span className="skipped">
+                              {exec.results.filter(r => r.status === 'skipped').length} skipped
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -3498,6 +3947,11 @@ function BulkActionsModal({ connections, groups, onClose, onNotification }: Bulk
           {activeTab === 'saved' && !showCommandForm && (
             <button className="btn btn-primary" onClick={() => setShowCommandForm(true)}>
               + New Command
+            </button>
+          )}
+          {activeTab === 'scripts' && !showScriptForm && (
+            <button className="btn btn-primary" onClick={() => setShowScriptForm(true)}>
+              + New Script
             </button>
           )}
         </div>

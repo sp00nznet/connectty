@@ -122,18 +122,19 @@ const api = {
       ipcRenderer.invoke('providers:update', id, updates),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('providers:delete', id),
     test: (id: string): Promise<boolean> => ipcRenderer.invoke('providers:test', id),
+    testConfig: (providerData: Partial<Provider>): Promise<boolean> => ipcRenderer.invoke('providers:testConfig', providerData),
     discover: (id: string): Promise<DiscoveryResult> => ipcRenderer.invoke('providers:discover', id),
   },
 
   // Discovered hosts operations
   discovered: {
     list: (providerId?: string): Promise<DiscoveredHost[]> => ipcRenderer.invoke('discovered:list', providerId),
-    import: (hostId: string, credentialId?: string): Promise<ServerConnection> =>
-      ipcRenderer.invoke('discovered:import', hostId, credentialId),
-    importAll: (providerId: string): Promise<ServerConnection[]> =>
-      ipcRenderer.invoke('discovered:importAll', providerId),
-    importSelected: (hostIds: string[], credentialId?: string): Promise<ServerConnection[]> =>
-      ipcRenderer.invoke('discovered:importSelected', hostIds, credentialId),
+    import: (hostId: string, credentialId?: string, groupId?: string): Promise<ServerConnection> =>
+      ipcRenderer.invoke('discovered:import', hostId, credentialId, groupId),
+    importAll: (providerId: string, groupId?: string): Promise<ServerConnection[]> =>
+      ipcRenderer.invoke('discovered:importAll', providerId, groupId),
+    importSelected: (hostIds: string[], credentialId?: string, groupId?: string): Promise<ServerConnection[]> =>
+      ipcRenderer.invoke('discovered:importSelected', hostIds, credentialId, groupId),
   },
 
   // Connection bulk operations
