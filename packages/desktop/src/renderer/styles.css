@@ -618,16 +618,14 @@ body {
 }
 
 .new-tab-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
+  position: fixed;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px;
   min-width: 200px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .new-tab-menu-item {
