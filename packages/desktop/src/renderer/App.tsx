@@ -157,6 +157,8 @@ export default function App() {
     { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
     { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
     { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
+    { id: 'everforest', name: 'Everforest', description: 'Nature-inspired green theme' },
+    { id: 'rose-pine', name: 'Rosé Pine', description: 'Elegant, dark soho vibes' },
     { id: 'high-contrast', name: 'High Contrast', description: 'Maximum visibility' },
   ];
 
