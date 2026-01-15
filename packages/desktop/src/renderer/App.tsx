@@ -2899,7 +2899,6 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [hostnamePattern, setHostnamePattern] = useState('');
   const [selectedConnectionIds, setSelectedConnectionIds] = useState<string[]>([]);
-  const [selectedOsType, setSelectedOsType] = useState<OSType | ''>('');
 
   // Command state
   const [commandMode, setCommandMode] = useState<'inline' | 'saved' | 'script'>('inline');
@@ -3092,8 +3091,6 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
         return { type: 'pattern', pattern: hostnamePattern };
       case 'selection':
         return { type: 'selection', connectionIds: selectedConnectionIds };
-      case 'os':
-        return { type: 'os', osType: selectedOsType as OSType };
       default:
         return { type: 'all' };
     }
@@ -3115,11 +3112,6 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
         break;
       case 'selection':
         filtered = filtered.filter(c => selectedConnectionIds.includes(c.id));
-        break;
-      case 'os':
-        if (selectedOsType) {
-          filtered = filtered.filter(c => c.osType === selectedOsType);
-        }
         break;
     }
 
@@ -3291,7 +3283,6 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
                       <option value="group">By Group</option>
                       <option value="pattern">By Hostname Pattern</option>
                       <option value="selection">Individual Selection</option>
-                      <option value="os">By OS Type</option>
                     </select>
                   </div>
 
@@ -3321,23 +3312,6 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
                         onChange={(e) => setHostnamePattern(e.target.value)}
                         placeholder="web-*, *-prod-*, 192.168.1.*"
                       />
-                    </div>
-                  )}
-
-                  {filterType === 'os' && (
-                    <div className="form-group">
-                      <label className="form-label">OS Type</label>
-                      <select
-                        className="form-select"
-                        value={selectedOsType}
-                        onChange={(e) => setSelectedOsType(e.target.value as OSType)}
-                      >
-                        <option value="">All</option>
-                        <option value="linux">Linux</option>
-                        <option value="windows">Windows</option>
-                        <option value="unix">Unix</option>
-                        <option value="esxi">ESXi</option>
-                      </select>
                     </div>
                   )}
                 </div>
