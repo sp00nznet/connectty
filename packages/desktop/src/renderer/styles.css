@@ -730,6 +730,71 @@ body {
   text-align: center;
 }
 
+/* Tab Context Menu (right-click on existing tabs) */
+.tab-context-menu {
+  position: fixed;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 160px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  z-index: 1100;
+}
+
+.tab-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.tab-context-menu-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.tab-context-menu-item.danger {
+  color: var(--error);
+}
+
+.tab-context-menu-item.danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.tab-context-menu-item .menu-icon {
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+}
+
+.tab-context-menu-divider {
+  height: 1px;
+  background-color: var(--border);
+  margin: 6px 0;
+}
+
+/* Rename Tab Modal */
+.rename-tab-modal {
+  max-width: 400px;
+}
+
+.rename-tab-modal .modal-body {
+  padding: 20px;
+}
+
+.rename-tab-modal input {
+  width: 100%;
+}
+
 /* Tags */
 .tag {
   display: inline-flex;

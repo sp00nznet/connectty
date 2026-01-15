@@ -122,6 +122,12 @@ export default function App() {
   const [shellContextMenu, setShellContextMenu] = useState<{ x: number; y: number } | null>(null);
   const shellContextMenuRef = useRef<HTMLDivElement>(null);
 
+  // Tab context menu (right-click on existing tabs)
+  const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
+  const tabContextMenuRef = useRef<HTMLDivElement>(null);
+  const [customTabNames, setCustomTabNames] = useState<Map<string, string>>(new Map());
+  const [renamingTab, setRenamingTab] = useState<{ sessionId: string; currentName: string } | null>(null);
+
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
   // Available themes
@@ -216,6 +222,20 @@ export default function App() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [shellContextMenu]);
+
+  // Close tab context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tabContextMenuRef.current && !tabContextMenuRef.current.contains(event.target as Node)) {
+        setTabContextMenu(null);
+      }
+    };
+
+    if (tabContextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [tabContextMenu]);
 
   const loadData = async () => {
     const [conns, creds, grps, provs, settings, plat, shells] = await Promise.all([
@@ -512,6 +532,63 @@ export default function App() {
       }
       return remaining;
     });
+
+    // Clean up custom tab name
+    setCustomTabNames(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(sessionId);
+      return newMap;
+    });
+  };
+
+  // Duplicate an existing tab
+  const handleDuplicateTab = async (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    setTabContextMenu(null);
+
+    if (session.type === 'localShell') {
+      // Find the shell info and spawn a new one
+      const shellInfo = availableShells.find(s => s.id === session.shellId);
+      if (shellInfo) {
+        await handleSpawnLocalShell(shellInfo);
+      }
+    } else if (session.type === 'ssh' || session.type === 'sftp' || session.type === 'rdp' || session.type === 'serial') {
+      // Find the connection and reconnect
+      const connection = connections.find(c => c.id === session.connectionId);
+      if (connection) {
+        await handleConnect(connection);
+      }
+    }
+  };
+
+  // Rename a tab (display name only, not saved connection)
+  const handleRenameTab = (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    setTabContextMenu(null);
+
+    // Get current display name
+    let currentName = customTabNames.get(sessionId);
+    if (!currentName) {
+      currentName = session.type === 'localShell' ? session.shellName : session.connectionName;
+    }
+
+    setRenamingTab({ sessionId, currentName });
+  };
+
+  // Apply the rename
+  const handleApplyRename = (newName: string) => {
+    if (renamingTab && newName.trim()) {
+      setCustomTabNames(prev => {
+        const newMap = new Map(prev);
+        newMap.set(renamingTab.sessionId, newName.trim());
+        return newMap;
+      });
+    }
+    setRenamingTab(null);
   };
 
   const handleSpawnLocalShell = async (shell: LocalShellInfo) => {
@@ -907,6 +984,10 @@ export default function App() {
                   key={session.id}
                   className={`session-tab ${session.type} ${activeSessionId === session.id ? 'active' : ''}`}
                   onClick={() => setActiveSessionId(session.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setTabContextMenu({ x: e.clientX, y: e.clientY, sessionId: session.id });
+                  }}
                 >
                   <span className={`session-type-badge ${session.type}`}>
                     {session.type === 'ssh' ? 'SSH' :
@@ -915,7 +996,7 @@ export default function App() {
                      session.type === 'serial' ? 'Serial' :
                      session.type === 'localShell' ? 'Shell' : ''}
                   </span>
-                  {session.type === 'localShell' ? session.shellName : session.connectionName}
+                  {customTabNames.get(session.id) || (session.type === 'localShell' ? session.shellName : session.connectionName)}
                   <span className="close-btn" onClick={(e) => { e.stopPropagation(); handleDisconnect(session.id); }}>
                     ×
                   </span>
@@ -973,6 +1054,41 @@ export default function App() {
                     {shell.name}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Tab Context Menu (right-click on existing tab) */}
+            {tabContextMenu && (
+              <div
+                ref={tabContextMenuRef}
+                className="tab-context-menu"
+                style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+              >
+                <button
+                  className="tab-context-menu-item"
+                  onClick={() => handleDuplicateTab(tabContextMenu.sessionId)}
+                >
+                  <span className="menu-icon">📋</span>
+                  Duplicate Tab
+                </button>
+                <button
+                  className="tab-context-menu-item"
+                  onClick={() => handleRenameTab(tabContextMenu.sessionId)}
+                >
+                  <span className="menu-icon">✏️</span>
+                  Rename Tab
+                </button>
+                <div className="tab-context-menu-divider" />
+                <button
+                  className="tab-context-menu-item danger"
+                  onClick={() => {
+                    handleDisconnect(tabContextMenu.sessionId);
+                    setTabContextMenu(null);
+                  }}
+                >
+                  <span className="menu-icon">✕</span>
+                  Close Tab
+                </button>
               </div>
             )}
 
@@ -1228,6 +1344,47 @@ export default function App() {
           onClose={() => setShowSettingsModal(false)}
           onSave={handleSaveSettings}
         />
+      )}
+
+      {/* Rename Tab Modal */}
+      {renamingTab && (
+        <div className="modal-overlay" onClick={() => setRenamingTab(null)}>
+          <div className="modal rename-tab-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Rename Tab</h2>
+              <button className="close-btn" onClick={() => setRenamingTab(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <input
+                type="text"
+                className="form-control"
+                defaultValue={renamingTab.currentName}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleApplyRename((e.target as HTMLInputElement).value);
+                  } else if (e.key === 'Escape') {
+                    setRenamingTab(null);
+                  }
+                }}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setRenamingTab(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={(e) => {
+                  const input = (e.target as HTMLElement).closest('.modal')?.querySelector('input');
+                  if (input) handleApplyRename(input.value);
+                }}
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Notification */}
