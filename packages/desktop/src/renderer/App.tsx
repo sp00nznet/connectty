@@ -790,10 +790,13 @@ export default function App() {
     setIsDiscovering(provider.id);
     try {
       // Discover hosts from the provider
+      console.log('[Discovery] Starting discovery for provider:', provider.name);
       const result = await window.connectty.providers.discover(provider.id);
+      console.log('[Discovery] Result:', result);
 
       if (result.hosts.length === 0) {
-        showNotification('error', 'No hosts found on this provider');
+        console.log('[Discovery] No hosts found. Success:', result.success, 'Error:', result.error);
+        showNotification('error', result.error || 'No hosts found on this provider');
         setIsDiscovering(null);
         return;
       }
