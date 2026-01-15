@@ -409,6 +409,10 @@ function setupIpcHandlers(): void {
     let credential: Credential | null = null;
     if (connection.credentialId) {
       credential = db.getCredential(connection.credentialId);
+      if (!credential) {
+        // Credential reference exists but credential was deleted
+        throw new Error('Saved credential not found. Please edit the connection and select a valid credential or enter a password.');
+      }
     }
 
     // If password provided (from prompt), create a temporary credential

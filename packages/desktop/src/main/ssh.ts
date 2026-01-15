@@ -75,7 +75,19 @@ export class SSHService {
           }
           break;
         case 'agent':
-          config.agent = process.env.SSH_AUTH_SOCK;
+          // Handle agent credential - use platform-appropriate path
+          if (process.platform === 'win32') {
+            const agentAvailable = await checkWindowsAgent();
+            if (agentAvailable) {
+              config.agent = '\\\\.\\pipe\\openssh-ssh-agent';
+            } else {
+              throw new Error('SSH agent is not running. Start the OpenSSH Authentication Agent service or use a different authentication method.');
+            }
+          } else if (process.env.SSH_AUTH_SOCK) {
+            config.agent = process.env.SSH_AUTH_SOCK;
+          } else {
+            throw new Error('SSH agent socket not found. Ensure ssh-agent is running.');
+          }
           break;
       }
     } else {
