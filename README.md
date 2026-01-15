@@ -4,9 +4,9 @@
 
 **The Modern Connection Manager for DevOps & SysAdmins**
 
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Web-0078D4?style=for-the-badge)](../../releases)
+[![Desktop](https://img.shields.io/badge/desktop-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge)](../../releases)
+[![Web](https://img.shields.io/badge/web-SSH%20Terminal-4A90D9?style=for-the-badge)](../../releases)
 [![License](https://img.shields.io/badge/license-MIT-00C853?style=for-the-badge)](LICENSE)
-[![Node](https://img.shields.io/badge/node-≥18-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 
 [Features](#features) • [Comparison](#comparison) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
@@ -25,6 +25,8 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 - **Bulk command execution** - Run commands across hundreds of servers simultaneously
 - **Unified interface** - SSH, RDP, Serial, SFTP, and local shells in tabbed sessions
 - **Free & open source** - No subscriptions, no seat licenses, no feature gates
+
+> **Note:** The web client provides SSH terminal access for teams. Full features (RDP, Serial, SFTP, Providers, Bulk Commands) require the desktop app.
 
 ---
 
