@@ -895,7 +895,7 @@ export default function App() {
           <button className="btn btn-secondary btn-sm" onClick={() => setShowGroupModal(true)}>
             Groups
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowProviderModal(true)}>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }}>
             Providers
           </button>
         </div>
@@ -1277,6 +1277,7 @@ export default function App() {
       {/* Provider Modal */}
       {showProviderModal && (
         <ProviderModal
+          key={editingProvider?.id || 'new'}
           provider={editingProvider}
           providers={providers}
           onClose={() => { setShowProviderModal(false); setEditingProvider(null); }}
