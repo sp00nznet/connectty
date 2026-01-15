@@ -304,19 +304,75 @@ export class LocalShellService {
   }
 
   /**
+   * Find gsudo executable - checks bundled location first, then PATH
+   */
+  private findGsudo(): string | null {
+    if (this.platform !== 'win32') return null;
+
+    // Check for bundled gsudo in app resources
+    // In production: resources/gsudo/gsudo.exe
+    // In development: packages/desktop/resources/gsudo/gsudo.exe
+    const possiblePaths = [
+      // Production path (packaged app)
+      path.join(process.resourcesPath || '', 'gsudo', 'gsudo.exe'),
+      // Development paths
+      path.join(__dirname, '..', '..', 'resources', 'gsudo', 'gsudo.exe'),
+      path.join(__dirname, '..', 'resources', 'gsudo', 'gsudo.exe'),
+    ];
+
+    for (const gsudoPath of possiblePaths) {
+      if (fs.existsSync(gsudoPath)) {
+        return gsudoPath;
+      }
+    }
+
+    // Check if gsudo is in PATH
+    try {
+      const result = execSync('where gsudo', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const gsudoPath = result.trim().split('\n')[0];
+      if (gsudoPath && fs.existsSync(gsudoPath)) {
+        return gsudoPath;
+      }
+    } catch {
+      // gsudo not in PATH
+    }
+
+    return null;
+  }
+
+  /**
    * Spawn a new local shell session
-   * For elevated shells on Windows, opens an external elevated window
    */
   spawn(shellInfo: LocalShellInfo): string {
     const sessionId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Handle elevated shells on Windows - these open in external windows
-    if (shellInfo.elevated && this.platform === 'win32') {
-      return this.spawnElevated(shellInfo, sessionId);
-    }
+    let shell = shellInfo.path;
+    let args = shellInfo.args || [];
 
-    const shell = shellInfo.path;
-    const args = shellInfo.args || [];
+    // For elevated shells on Windows, use gsudo if available
+    if (shellInfo.elevated && this.platform === 'win32') {
+      const gsudoPath = this.findGsudo();
+      const targetShell = shellInfo.path;
+      const isCmd = targetShell.toLowerCase().includes('cmd');
+
+      if (gsudoPath) {
+        // Use gsudo to run elevated in-tab
+        shell = gsudoPath;
+        args = isCmd ? [targetShell, '/k'] : [targetShell];
+      } else {
+        // Fall back to PowerShell Start-Process (opens external window)
+        shell = 'powershell.exe';
+        args = [
+          '-NoProfile',
+          '-Command',
+          `Write-Host 'gsudo not found. Launching elevated window via UAC...' -ForegroundColor Yellow; ` +
+          `Write-Host 'To run admin shells in this tab, install gsudo: winget install gsudo' -ForegroundColor Gray; ` +
+          `Write-Host ''; ` +
+          `Start-Process "${targetShell}" -Verb RunAs; ` +
+          `Start-Sleep -Seconds 2`
+        ];
+      }
+    }
 
     // Get environment variables
     const env = { ...process.env };
@@ -366,51 +422,6 @@ export class LocalShellService {
       this.eventCallback(sessionId, {
         type: 'error',
         message: err.message || 'Failed to spawn shell',
-      });
-      throw err;
-    }
-  }
-
-  /**
-   * Spawn an elevated shell on Windows (opens in external window)
-   * Uses PowerShell Start-Process with -Verb RunAs to trigger UAC
-   */
-  private spawnElevated(shellInfo: LocalShellInfo, sessionId: string): string {
-    const { spawn } = require('child_process');
-
-    try {
-      // Use PowerShell to launch the process elevated
-      // This will trigger the UAC prompt and open in a new window
-      const psCommand = `Start-Process -FilePath "${shellInfo.path}" -Verb RunAs`;
-
-      const child = spawn('powershell.exe', ['-Command', psCommand], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
-
-      child.unref();
-
-      // Since it opens in external window, we notify immediately that it was launched
-      // We don't track this as a session since we can't control the external window
-      this.eventCallback(sessionId, {
-        type: 'data',
-        data: `\r\n[Launching ${shellInfo.name} in elevated window...]\r\n`,
-      });
-
-      // Close the "session" after a brief moment
-      setTimeout(() => {
-        this.eventCallback(sessionId, {
-          type: 'close',
-          exitCode: 0,
-        });
-      }, 1500);
-
-      return sessionId;
-    } catch (err: any) {
-      this.eventCallback(sessionId, {
-        type: 'error',
-        message: err.message || 'Failed to launch elevated shell',
       });
       throw err;
     }
