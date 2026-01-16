@@ -42,6 +42,7 @@ interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
   startMinimized: boolean;
+  terminalTheme?: 'sync' | 'classic';
   retroTerm?: RetroTermSettings;
 }
 
