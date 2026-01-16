@@ -5339,7 +5339,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     }
   };
 
-  const handleAddAccount = async (provider: 'microsoft' | 'google' | 'github') => {
+  const handleAddAccount = async (provider: 'google' | 'github') => {
     setShowAddAccountMenu(false);
     setConnectingProvider(provider);
     try {
@@ -5435,7 +5435,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
 
   const getProviderIcon = (provider: string) => {
     switch (provider) {
-      case 'microsoft': return '🔷';
       case 'google': return '🔴';
       case 'github': return '⬛';
       default: return '☁️';
@@ -5444,7 +5443,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
 
   const getProviderName = (provider: string) => {
     switch (provider) {
-      case 'microsoft': return 'Microsoft OneDrive';
       case 'google': return 'Google Drive';
       case 'github': return 'GitHub Gists';
       default: return provider;
@@ -5718,14 +5716,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                       </div>
                     ) : showAddAccountMenu ? (
                       <div className="sync-provider-menu">
-                        <button
-                          type="button"
-                          className="sync-provider-option"
-                          onClick={() => handleAddAccount('microsoft')}
-                        >
-                          <span className="sync-provider-icon">🔷</span>
-                          <span>Microsoft OneDrive</span>
-                        </button>
                         <button
                           type="button"
                           className="sync-provider-option"

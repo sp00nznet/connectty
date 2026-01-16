@@ -282,19 +282,6 @@ interface GitHubEmail {
 }
 
 /**
- * OneDrive file response
- */
-interface OneDriveFile {
-  id: string;
-  name: string;
-  lastModifiedDateTime: string;
-}
-
-interface OneDriveListResponse {
-  value: OneDriveFile[];
-}
-
-/**
  * Google Drive file response
  */
 interface GoogleDriveFile {
@@ -325,7 +312,7 @@ interface GitHubGist {
 }
 
 /**
- * Cloud Sync Service - OAuth-based sync with Microsoft, Google, and GitHub
+ * Cloud Sync Service - OAuth-based sync with Google Drive and GitHub Gists
  */
 export class CloudSyncService {
   private db: DatabaseService;
@@ -335,13 +322,6 @@ export class CloudSyncService {
 
   // OAuth configuration
   private readonly OAUTH_CONFIG = {
-    microsoft: {
-      clientId: 'YOUR_MICROSOFT_CLIENT_ID', // To be configured by user
-      authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-      tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-      scope: 'openid profile email Files.ReadWrite.AppFolder offline_access',
-      redirectUri: 'http://localhost:19283/callback',
-    },
     google: {
       clientId: 'YOUR_GOOGLE_CLIENT_ID', // To be configured by user
       authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -398,7 +378,7 @@ export class CloudSyncService {
   /**
    * Start OAuth flow to connect a new cloud account
    */
-  async connect(provider: 'microsoft' | 'google' | 'github'): Promise<SyncAccount | null> {
+  async connect(provider: 'google' | 'github'): Promise<SyncAccount | null> {
     const config = this.OAUTH_CONFIG[provider];
     const state = crypto.randomBytes(16).toString('hex');
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
@@ -503,7 +483,7 @@ export class CloudSyncService {
    * Exchange authorization code for access tokens
    */
   private async exchangeCodeForTokens(
-    provider: 'microsoft' | 'google' | 'github',
+    provider: 'google' | 'github',
     code: string,
     codeVerifier: string
   ): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: number } | null> {
@@ -548,7 +528,7 @@ export class CloudSyncService {
    * Get user info from the provider
    */
   private async getUserInfo(
-    provider: 'microsoft' | 'google' | 'github',
+    provider: 'google' | 'github',
     accessToken: string
   ): Promise<{ email: string; displayName?: string } | null> {
     try {
@@ -556,13 +536,6 @@ export class CloudSyncService {
       let data: any;
 
       switch (provider) {
-        case 'microsoft':
-          response = await fetch('https://graph.microsoft.com/v1.0/me', {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          data = await response.json();
-          return { email: data.mail || data.userPrincipalName, displayName: data.displayName };
-
         case 'google':
           response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
             headers: { Authorization: `Bearer ${accessToken}` },
@@ -624,8 +597,6 @@ export class CloudSyncService {
 
       // Upload based on provider
       switch (account.provider) {
-        case 'microsoft':
-          return await this.uploadToOneDrive(account, filename, content);
         case 'google':
           return await this.uploadToGoogleDrive(account, filename, content);
         case 'github':
@@ -651,8 +622,6 @@ export class CloudSyncService {
       await this.refreshTokenIfNeeded(account);
 
       switch (account.provider) {
-        case 'microsoft':
-          return await this.listOneDriveConfigs(account);
         case 'google':
           return await this.listGoogleDriveConfigs(account);
         case 'github':
@@ -686,9 +655,6 @@ export class CloudSyncService {
 
       let content: string;
       switch (account.provider) {
-        case 'microsoft':
-          content = await this.downloadFromOneDrive(account, configId);
-          break;
         case 'google':
           content = await this.downloadFromGoogleDrive(account, configId);
           break;
@@ -852,78 +818,6 @@ export class CloudSyncService {
       account.expiresAt = Date.now() + data.expires_in * 1000;
     }
     this.saveAccounts();
-  }
-
-  // OneDrive implementation
-  private async uploadToOneDrive(
-    account: SyncAccount,
-    filename: string,
-    content: string
-  ): Promise<{ success: boolean; configId?: string; error?: string }> {
-    const response = await fetch(
-      `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${filename}:/content`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${account.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: content,
-      }
-    );
-
-    if (!response.ok) {
-      return { success: false, error: await response.text() };
-    }
-
-    const data = (await response.json()) as OneDriveFile;
-    return { success: true, configId: data.id };
-  }
-
-  private async listOneDriveConfigs(account: SyncAccount): Promise<{ success: boolean; configs?: SyncConfigInfo[]; error?: string }> {
-    const response = await fetch(
-      `https://graph.microsoft.com/v1.0/me/drive/special/approot/children?$filter=startswith(name,'connectty-config-')`,
-      {
-        headers: { Authorization: `Bearer ${account.accessToken}` },
-      }
-    );
-
-    if (!response.ok) {
-      return { success: false, error: await response.text() };
-    }
-
-    const data = (await response.json()) as OneDriveListResponse;
-    const configs: SyncConfigInfo[] = [];
-
-    for (const item of data.value || []) {
-      // Parse device info from filename
-      const match = item.name.match(/connectty-config-(.+)\.json/);
-      configs.push({
-        id: item.id,
-        deviceName: match ? match[1] : 'Unknown',
-        deviceId: match ? match[1] : item.id,
-        uploadedAt: item.lastModifiedDateTime,
-        connectionCount: 0, // Would need to download to get actual counts
-        credentialCount: 0,
-      });
-    }
-
-    return { success: true, configs };
-  }
-
-  private async downloadFromOneDrive(account: SyncAccount, configId: string): Promise<string> {
-    const response = await fetch(
-      `https://graph.microsoft.com/v1.0/me/drive/items/${configId}/content`,
-      {
-        headers: { Authorization: `Bearer ${account.accessToken}` },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to download from OneDrive');
-    }
-
-    return await response.text();
   }
 
   // Google Drive implementation
