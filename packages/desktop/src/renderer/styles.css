@@ -2279,6 +2279,7 @@ body {
   display: flex;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 /* Sidebar */
@@ -2467,6 +2468,7 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
 }
 
 .content-header {
@@ -5574,11 +5576,11 @@ body {
   animation: jitter 0.1s steps(2) infinite;
 }
 
-/* Ambient light effect */
+/* Ambient light effect - use inset to keep glow inside terminal */
 .terminal-container.retro-term-enabled.ambient-light {
   box-shadow:
-    0 0 calc(var(--ambient-intensity, 0.2) * 100px) var(--glow-color, #00ff00),
-    0 0 calc(var(--ambient-intensity, 0.2) * 200px) color-mix(in srgb, var(--glow-color, #00ff00) 50%, transparent);
+    inset 0 0 calc(var(--ambient-intensity, 0.2) * 60px) var(--glow-color, #00ff00),
+    inset 0 0 calc(var(--ambient-intensity, 0.2) * 120px) color-mix(in srgb, var(--glow-color, #00ff00) 50%, transparent);
 }
 
 /* Phosphor glow text effect */
