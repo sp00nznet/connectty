@@ -211,25 +211,56 @@ Write-Host "`n[6/6] Building Linux distribution..." -ForegroundColor Yellow
 if ($AppImage) {
     Write-Host "  Target: AppImage only" -ForegroundColor Cyan
     Write-Host "  Note: AppImage requires admin privileges or Developer Mode on Windows" -ForegroundColor Yellow
-    $buildTarget = "--linux AppImage"
+    $buildTarget = "AppImage"
 } else {
-    # Default to .deb only - AppImage has symlink issues on Windows without admin
     Write-Host "  Target: Debian (.deb)" -ForegroundColor Cyan
-    $buildTarget = "--linux deb"
+    $buildTarget = "deb"
+}
+
+# Check if WSL is available (required for .deb builds on Windows)
+$hasWSL = $false
+try {
+    $wslCheck = wsl --status 2>&1
+    $hasWSL = $LASTEXITCODE -eq 0
+} catch {
+    $hasWSL = $false
 }
 
 # Run electron-builder for Linux
 Set-Location "$ProjectRoot\packages\desktop"
-npx electron-builder $buildTarget.Split(' ')
-$buildResult = $LASTEXITCODE
+$buildResult = 1
+
+if ($hasWSL -and -not $AppImage) {
+    # Use WSL for .deb builds (fpm not available on Windows)
+    Write-Host "  Using WSL for .deb build..." -ForegroundColor Green
+
+    # Convert Windows path to WSL path
+    $wslPath = $ProjectRoot -replace '\\', '/' -replace '^([A-Za-z]):', '/mnt/$1'.ToLower()
+    $wslPath = $wslPath.Substring(0,5) + $wslPath.Substring(5).ToLower().Substring(0,1) + $wslPath.Substring(6)
+    $wslPath = "/mnt/" + $ProjectRoot.Substring(0,1).ToLower() + $ProjectRoot.Substring(2).Replace('\', '/')
+
+    # Run build in WSL
+    wsl bash -c "cd '$wslPath/packages/desktop' && npm run build && npx electron-builder --linux $buildTarget"
+    $buildResult = $LASTEXITCODE
+} else {
+    # Try native build (will likely fail for .deb without fpm)
+    npx electron-builder --linux $buildTarget
+    $buildResult = $LASTEXITCODE
+}
+
 Set-Location $ProjectRoot
 
 if ($buildResult -ne 0) {
     Write-Host "`nLinux build failed!" -ForegroundColor Red
-    Write-Host "`nCommon fixes:" -ForegroundColor Yellow
-    Write-Host "  1. Run PowerShell as Administrator" -ForegroundColor White
-    Write-Host "  2. Enable Windows Developer Mode (Settings > Privacy & Security > For developers)" -ForegroundColor White
-    Write-Host "  3. Use WSL: wsl npm run dist:linux" -ForegroundColor White
+    Write-Host "`nThe .deb build requires 'fpm' which isn't available on Windows natively." -ForegroundColor Yellow
+    Write-Host "`nSolutions:" -ForegroundColor Yellow
+    Write-Host "  1. Install WSL with Ubuntu and ensure npm is installed:" -ForegroundColor White
+    Write-Host "     wsl --install -d Ubuntu" -ForegroundColor Gray
+    Write-Host "     # Then in WSL: sudo apt update && sudo apt install -y nodejs npm ruby ruby-dev build-essential" -ForegroundColor Gray
+    Write-Host "     # And: sudo gem install fpm" -ForegroundColor Gray
+    Write-Host "  2. Build manually in WSL:" -ForegroundColor White
+    Write-Host "     wsl -d Ubuntu" -ForegroundColor Gray
+    Write-Host "     cd /mnt/c/connectty && npm run dist:linux -w @connectty/desktop" -ForegroundColor Gray
     exit 1
 }
 
