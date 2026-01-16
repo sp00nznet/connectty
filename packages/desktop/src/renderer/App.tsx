@@ -22,7 +22,7 @@ import type {
   SerialParity,
   SerialFlowControl,
 } from '@connectty/shared';
-import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, RetroTermSettings } from '../main/preload';
+import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, RetroTermSettings, RetroTermPreset } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -118,6 +118,7 @@ export default function App() {
     terminalTheme: 'classic',
     retroTerm: {
       enabled: false,
+      preset: 'classic-crt',
       scanlines: 0.3,
       screenCurvature: 0.2,
       flickering: 0.1,
@@ -5395,8 +5396,58 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   });
 
   // RetroTerm settings state
+  // RetroTerm preset configurations
+  const retroTermPresets: Record<RetroTermPreset, Omit<RetroTermSettings, 'enabled' | 'preset'>> = {
+    'custom': {
+      scanlines: 0.3, screenCurvature: 0.2, flickering: 0.1, bloom: 0.4,
+      rgbShift: 0.15, noise: 0.05, burnIn: 0, jitter: 0.02,
+      ambientLight: 0.2, phosphorGlow: true, glowColor: '#00ff00',
+    },
+    'ibm-5151': {
+      scanlines: 0.4, screenCurvature: 0.3, flickering: 0.05, bloom: 0.5,
+      rgbShift: 0, noise: 0.02, burnIn: 0.1, jitter: 0,
+      ambientLight: 0.3, phosphorGlow: true, glowColor: '#33ff33',
+    },
+    'vt220': {
+      scanlines: 0.35, screenCurvature: 0.25, flickering: 0.08, bloom: 0.45,
+      rgbShift: 0, noise: 0.03, burnIn: 0.05, jitter: 0.01,
+      ambientLight: 0.25, phosphorGlow: true, glowColor: '#ffb000',
+    },
+    'apple-ii': {
+      scanlines: 0.5, screenCurvature: 0.35, flickering: 0.1, bloom: 0.6,
+      rgbShift: 0.1, noise: 0.04, burnIn: 0, jitter: 0.02,
+      ambientLight: 0.35, phosphorGlow: true, glowColor: '#00ff00',
+    },
+    'c64': {
+      scanlines: 0.3, screenCurvature: 0.2, flickering: 0.05, bloom: 0.4,
+      rgbShift: 0.05, noise: 0.03, burnIn: 0, jitter: 0.01,
+      ambientLight: 0.2, phosphorGlow: true, glowColor: '#7b7bff',
+    },
+    'classic-crt': {
+      scanlines: 0.4, screenCurvature: 0.3, flickering: 0.15, bloom: 0.5,
+      rgbShift: 0.2, noise: 0.08, burnIn: 0.05, jitter: 0.03,
+      ambientLight: 0.3, phosphorGlow: true, glowColor: '#00ff00',
+    },
+    'subtle': {
+      scanlines: 0.15, screenCurvature: 0.1, flickering: 0.02, bloom: 0.2,
+      rgbShift: 0, noise: 0.01, burnIn: 0, jitter: 0,
+      ambientLight: 0.1, phosphorGlow: false, glowColor: '#00ff00',
+    },
+  };
+
+  const presetNames: Record<RetroTermPreset, string> = {
+    'custom': 'Custom',
+    'ibm-5151': 'IBM 5151',
+    'vt220': 'VT220 Amber',
+    'apple-ii': 'Apple II',
+    'c64': 'Commodore 64',
+    'classic-crt': 'Classic CRT',
+    'subtle': 'Subtle',
+  };
+
   const defaultRetroTerm: RetroTermSettings = {
     enabled: false,
+    preset: 'classic-crt',
     scanlines: 0.3,
     screenCurvature: 0.2,
     flickering: 0.1,
@@ -5410,6 +5461,16 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     glowColor: '#00ff00',
   };
   const [retroTerm, setRetroTerm] = useState<RetroTermSettings>(settings.retroTerm || defaultRetroTerm);
+
+  // Apply preset when changed
+  const applyPreset = (preset: RetroTermPreset) => {
+    if (preset !== 'custom') {
+      const presetSettings = retroTermPresets[preset];
+      setRetroTerm(prev => ({ ...prev, preset, ...presetSettings }));
+    } else {
+      setRetroTerm(prev => ({ ...prev, preset: 'custom' }));
+    }
+  };
 
   // Save collapse states to localStorage when they change
   useEffect(() => {
@@ -6034,148 +6095,115 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     {/* RetroTerm Sub-options */}
                     {retroTerm.enabled && (
                       <div className="retro-term-options">
-                        <div className="retro-term-grid">
-                          {/* Scanlines */}
-                          <div className="retro-option">
-                            <label>Scanlines</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.scanlines * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, scanlines: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.scanlines * 100)}%</span>
-                          </div>
-
-                          {/* Screen Curvature */}
-                          <div className="retro-option">
-                            <label>Screen Curvature</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.screenCurvature * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, screenCurvature: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.screenCurvature * 100)}%</span>
-                          </div>
-
-                          {/* Bloom/Glow */}
-                          <div className="retro-option">
-                            <label>Bloom</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.bloom * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, bloom: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.bloom * 100)}%</span>
-                          </div>
-
-                          {/* RGB Shift */}
-                          <div className="retro-option">
-                            <label>RGB Shift</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.rgbShift * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, rgbShift: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.rgbShift * 100)}%</span>
-                          </div>
-
-                          {/* Flickering */}
-                          <div className="retro-option">
-                            <label>Flickering</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.flickering * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, flickering: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.flickering * 100)}%</span>
-                          </div>
-
-                          {/* Static Noise */}
-                          <div className="retro-option">
-                            <label>Static Noise</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.noise * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, noise: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.noise * 100)}%</span>
-                          </div>
-
-                          {/* Jitter */}
-                          <div className="retro-option">
-                            <label>Jitter</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.jitter * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, jitter: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.jitter * 100)}%</span>
-                          </div>
-
-                          {/* Ambient Light */}
-                          <div className="retro-option">
-                            <label>Ambient Light</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.ambientLight * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, ambientLight: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.ambientLight * 100)}%</span>
-                          </div>
-
-                          {/* Burn-in */}
-                          <div className="retro-option">
-                            <label>Burn-in</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={retroTerm.burnIn * 100}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, burnIn: parseInt(e.target.value) / 100 })}
-                            />
-                            <span className="value">{Math.round(retroTerm.burnIn * 100)}%</span>
+                        {/* Preset Selection */}
+                        <div className="retro-presets">
+                          <label className="retro-presets-label">Terminal Style:</label>
+                          <div className="retro-preset-buttons">
+                            {(Object.keys(presetNames) as RetroTermPreset[]).filter(p => p !== 'custom').map((preset) => (
+                              <button
+                                key={preset}
+                                type="button"
+                                className={`retro-preset-btn ${retroTerm.preset === preset ? 'active' : ''}`}
+                                onClick={() => applyPreset(preset)}
+                                style={{ '--preset-color': retroTermPresets[preset].glowColor } as React.CSSProperties}
+                              >
+                                <span className="preset-glow" style={{ backgroundColor: retroTermPresets[preset].glowColor }}></span>
+                                {presetNames[preset]}
+                              </button>
+                            ))}
                           </div>
                         </div>
 
-                        {/* Phosphor Glow Toggle and Color */}
-                        <div className="retro-option-row">
-                          <label className="setting-toggle small">
-                            <input
-                              type="checkbox"
-                              checked={retroTerm.phosphorGlow}
-                              onChange={(e) => setRetroTerm({ ...retroTerm, phosphorGlow: e.target.checked })}
-                            />
-                            <span className="toggle-switch"></span>
-                            <span>Phosphor Glow</span>
-                          </label>
-                          {retroTerm.phosphorGlow && (
-                            <div className="glow-color-picker">
-                              <label>Glow Color:</label>
-                              <input
-                                type="color"
-                                value={retroTerm.glowColor}
-                                onChange={(e) => setRetroTerm({ ...retroTerm, glowColor: e.target.value })}
-                              />
-                              <span className="color-preview" style={{ backgroundColor: retroTerm.glowColor }}></span>
+                        {/* Current preset indicator with customize button */}
+                        <div className="retro-current-preset">
+                          <span>Active: <strong>{presetNames[retroTerm.preset || 'classic-crt']}</strong></span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => setRetroTerm(prev => ({ ...prev, preset: 'custom' }))}
+                          >
+                            Customize...
+                          </button>
+                        </div>
+
+                        {/* Advanced Sliders - Only show for Custom preset */}
+                        {retroTerm.preset === 'custom' && (
+                          <>
+                            <div className="retro-term-grid">
+                              <div className="retro-option">
+                                <label>Scanlines</label>
+                                <input type="range" min="0" max="100" value={retroTerm.scanlines * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, scanlines: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.scanlines * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>Screen Curvature</label>
+                                <input type="range" min="0" max="100" value={retroTerm.screenCurvature * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, screenCurvature: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.screenCurvature * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>Bloom</label>
+                                <input type="range" min="0" max="100" value={retroTerm.bloom * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, bloom: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.bloom * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>RGB Shift</label>
+                                <input type="range" min="0" max="100" value={retroTerm.rgbShift * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, rgbShift: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.rgbShift * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>Flickering</label>
+                                <input type="range" min="0" max="100" value={retroTerm.flickering * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, flickering: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.flickering * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>Static Noise</label>
+                                <input type="range" min="0" max="100" value={retroTerm.noise * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, noise: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.noise * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>Jitter</label>
+                                <input type="range" min="0" max="100" value={retroTerm.jitter * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, jitter: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.jitter * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>Ambient Light</label>
+                                <input type="range" min="0" max="100" value={retroTerm.ambientLight * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, ambientLight: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.ambientLight * 100)}%</span>
+                              </div>
+                              <div className="retro-option">
+                                <label>Burn-in</label>
+                                <input type="range" min="0" max="100" value={retroTerm.burnIn * 100}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, burnIn: parseInt(e.target.value) / 100 })} />
+                                <span className="value">{Math.round(retroTerm.burnIn * 100)}%</span>
+                              </div>
                             </div>
-                          )}
-                        </div>
+
+                            <div className="retro-option-row">
+                              <label className="setting-toggle small">
+                                <input type="checkbox" checked={retroTerm.phosphorGlow}
+                                  onChange={(e) => setRetroTerm({ ...retroTerm, phosphorGlow: e.target.checked })} />
+                                <span className="toggle-switch"></span>
+                                <span>Phosphor Glow</span>
+                              </label>
+                              {retroTerm.phosphorGlow && (
+                                <div className="glow-color-picker">
+                                  <label>Glow Color:</label>
+                                  <input type="color" value={retroTerm.glowColor}
+                                    onChange={(e) => setRetroTerm({ ...retroTerm, glowColor: e.target.value })} />
+                                  <span className="color-preview" style={{ backgroundColor: retroTerm.glowColor }}></span>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

@@ -5327,6 +5327,82 @@ body {
   transform: translateX(14px);
 }
 
+/* RetroTerm Presets */
+.retro-presets {
+  margin-bottom: 16px;
+}
+
+.retro-presets-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.retro-preset-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .retro-preset-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.retro-preset-btn {
+  position: relative;
+  padding: 12px 10px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.retro-preset-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.retro-preset-btn.active {
+  border-color: var(--preset-color, var(--accent));
+  background: var(--bg-hover);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--preset-color, var(--accent)) 40%, transparent);
+}
+
+.preset-glow {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.retro-current-preset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.retro-current-preset strong {
+  color: var(--text-primary);
+}
+
 .glow-color-picker {
   display: flex;
   align-items: center;
@@ -5373,6 +5449,17 @@ body {
   overflow: hidden !important;
 }
 
+/* Ensure xterm is below overlays */
+.terminal-container.retro-term-enabled .xterm {
+  position: relative;
+  z-index: 1;
+}
+
+.terminal-container.retro-term-enabled .xterm-viewport,
+.terminal-container.retro-term-enabled .xterm-screen {
+  z-index: 1;
+}
+
 /* Scanlines overlay - separate element for better control */
 .retro-term-scanlines {
   position: absolute;
@@ -5381,15 +5468,15 @@ body {
   right: 0;
   bottom: 0;
   pointer-events: none;
-  z-index: 100;
+  z-index: 1000;
   background: repeating-linear-gradient(
     0deg,
-    rgba(0, 0, 0, 0.4) 0px,
-    rgba(0, 0, 0, 0.4) 1px,
+    rgba(0, 0, 0, 0.5) 0px,
+    rgba(0, 0, 0, 0.5) 1px,
     transparent 1px,
     transparent 3px
   );
-  opacity: var(--scanline-opacity, 0.3);
+  opacity: var(--scanline-opacity, 0.5);
 }
 
 /* Screen curvature overlay */
@@ -5400,12 +5487,12 @@ body {
   right: 0;
   bottom: 0;
   pointer-events: none;
-  z-index: 101;
+  z-index: 1001;
   box-shadow:
-    inset 0 0 60px rgba(0, 0, 0, 0.4),
-    inset 0 0 30px var(--glow-color, #00ff00);
-  border-radius: 10px;
-  opacity: var(--curvature-opacity, 0.2);
+    inset 0 0 80px rgba(0, 0, 0, 0.5),
+    inset 0 0 40px var(--glow-color, #00ff00);
+  border-radius: 15px;
+  opacity: var(--curvature-opacity, 0.5);
 }
 
 /* Bloom glow effect */
@@ -5416,9 +5503,9 @@ body {
   right: 0;
   bottom: 0;
   pointer-events: none;
-  z-index: 99;
-  box-shadow: 0 0 40px var(--glow-color, #00ff00) inset;
-  opacity: var(--bloom-opacity, 0.4);
+  z-index: 999;
+  box-shadow: 0 0 60px var(--glow-color, #00ff00) inset;
+  opacity: var(--bloom-opacity, 0.5);
 }
 
 /* Flicker animation */

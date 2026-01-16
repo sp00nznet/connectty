@@ -97,9 +97,13 @@ export interface SyncConfigInfo {
   credentialCount: number;
 }
 
+// RetroTerm preset types
+export type RetroTermPreset = 'custom' | 'ibm-5151' | 'vt220' | 'apple-ii' | 'c64' | 'classic-crt' | 'subtle';
+
 // RetroTerm CRT effect settings
 export interface RetroTermSettings {
   enabled: boolean;
+  preset: RetroTermPreset;  // Selected preset profile
   scanlines: number;        // 0-1 intensity
   screenCurvature: number;  // 0-1 intensity
   flickering: number;       // 0-1 intensity

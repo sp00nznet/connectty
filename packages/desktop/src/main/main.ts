@@ -17,9 +17,13 @@ import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
 import { getProviderService } from './providers';
 
+// RetroTerm preset types
+type RetroTermPreset = 'custom' | 'ibm-5151' | 'vt220' | 'apple-ii' | 'c64' | 'classic-crt' | 'subtle';
+
 // RetroTerm CRT effect settings
 interface RetroTermSettings {
   enabled: boolean;
+  preset: RetroTermPreset;
   scanlines: number;
   screenCurvature: number;
   flickering: number;
@@ -44,6 +48,7 @@ interface AppSettings {
 // Default RetroTerm settings
 const defaultRetroTermSettings: RetroTermSettings = {
   enabled: false,
+  preset: 'classic-crt',
   scanlines: 0.3,
   screenCurvature: 0.2,
   flickering: 0.1,
