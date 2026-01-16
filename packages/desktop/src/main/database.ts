@@ -172,6 +172,8 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_connections_provider ON connections(provider_id);
       CREATE INDEX IF NOT EXISTS idx_groups_parent ON connection_groups(parent_id);
       CREATE INDEX IF NOT EXISTS idx_discovered_provider ON discovered_hosts(provider_id);
+      CREATE INDEX IF NOT EXISTS idx_connections_name ON connections(name);
+      CREATE INDEX IF NOT EXISTS idx_discovered_imported ON discovered_hosts(imported, provider_id);
     `);
   }
 
@@ -189,14 +191,29 @@ export class DatabaseService {
       { table: 'credentials', column: 'auto_assign_group', sql: 'ALTER TABLE credentials ADD COLUMN auto_assign_group TEXT' },
     ];
 
-    for (const migration of migrations) {
+    // Cache table schemas to avoid multiple PRAGMA calls (optimization)
+    const schemaCache = new Map<string, Set<string>>();
+    const tables = [...new Set(migrations.map(m => m.table))];
+
+    for (const table of tables) {
       try {
-        const columns = this.db.pragma(`table_info(${migration.table})`) as Array<{ name: string }>;
-        if (!columns.some(col => col.name === migration.column)) {
-          this.db.exec(migration.sql);
-        }
+        const columns = this.db.pragma(`table_info(${table})`) as Array<{ name: string }>;
+        schemaCache.set(table, new Set(columns.map(c => c.name)));
       } catch {
-        // Column might already exist or table doesn't exist yet
+        schemaCache.set(table, new Set());
+      }
+    }
+
+    // Run migrations using cached schema
+    for (const migration of migrations) {
+      const tableColumns = schemaCache.get(migration.table);
+      if (tableColumns && !tableColumns.has(migration.column)) {
+        try {
+          this.db.exec(migration.sql);
+          tableColumns.add(migration.column);
+        } catch {
+          // Column might already exist
+        }
       }
     }
   }
@@ -351,7 +368,21 @@ export class DatabaseService {
   getCredentials(): Credential[] {
     const stmt = this.db.prepare('SELECT * FROM credentials ORDER BY name');
     const rows = stmt.all() as CredentialRow[];
-    return rows.map((row) => this.rowToCredential(row));
+
+    // Batch load all credential->connection mappings in ONE query (fixes N+1 problem)
+    const usedByMap = new Map<string, string[]>();
+    const usedByRows = this.db.prepare(
+      'SELECT credential_id, id FROM connections WHERE credential_id IS NOT NULL'
+    ).all() as Array<{ credential_id: string; id: string }>;
+
+    for (const row of usedByRows) {
+      if (!usedByMap.has(row.credential_id)) {
+        usedByMap.set(row.credential_id, []);
+      }
+      usedByMap.get(row.credential_id)!.push(row.id);
+    }
+
+    return rows.map((row) => this.rowToCredential(row, usedByMap.get(row.id)));
   }
 
   getCredential(id: string): Credential | null {
@@ -959,7 +990,7 @@ export class DatabaseService {
     };
   }
 
-  private rowToCredential(row: CredentialRow): Credential {
+  private rowToCredential(row: CredentialRow, preloadedUsedBy?: string[]): Credential {
     let sensitiveData: Record<string, string> = {};
 
     if (row.encrypted_data) {
@@ -972,10 +1003,11 @@ export class DatabaseService {
       }
     }
 
-    // Get connections using this credential
-    const usedBy = this.db
+    // Use pre-loaded usedBy if available, otherwise query (for single credential lookups)
+    const usedBy = preloadedUsedBy ?? this.db
       .prepare('SELECT id FROM connections WHERE credential_id = ?')
-      .all(row.id) as { id: string }[];
+      .all(row.id)
+      .map((r: { id: string }) => r.id);
 
     return {
       id: row.id,
@@ -990,7 +1022,7 @@ export class DatabaseService {
       autoAssignGroup: row.auto_assign_group || undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
-      usedBy: usedBy.map((r) => r.id),
+      usedBy,
     };
   }
 
