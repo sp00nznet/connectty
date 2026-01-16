@@ -133,8 +133,8 @@ async function createWindow(): Promise<void> {
 
     windowOptions.titleBarStyle = 'hidden';
     windowOptions.titleBarOverlay = {
-      color: savedColor,
-      symbolColor: savedSymbolColor,
+      color: '#ff0000', // TEST: bright red to verify API works
+      symbolColor: '#ffffff',
       height: 32,
     };
   }
