@@ -323,14 +323,14 @@ export class CloudSyncService {
   // OAuth configuration
   private readonly OAUTH_CONFIG = {
     google: {
-      clientId: 'YOUR_GOOGLE_CLIENT_ID', // To be configured by user
+      clientId: '1081959577053-rfp12bd9ikrjhl3ptgk03a8v0ofr7ri6.apps.googleusercontent.com',
       authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       scope: 'openid email profile https://www.googleapis.com/auth/drive.appdata',
       redirectUri: 'http://localhost:19283/callback',
     },
     github: {
-      clientId: 'YOUR_GITHUB_CLIENT_ID', // To be configured by user
+      clientId: 'Ov23liqvNVMDWijyAPNT',
       authUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
       scope: 'gist read:user user:email',
