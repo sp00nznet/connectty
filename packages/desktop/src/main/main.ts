@@ -963,6 +963,7 @@ function setupIpcHandlers(): void {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
+      retroTerm: settingsStore.get('retroTerm') || defaultRetroTermSettings,
     };
   });
 
@@ -976,10 +977,14 @@ function setupIpcHandlers(): void {
     if (settings.startMinimized !== undefined) {
       settingsStore.set('startMinimized', settings.startMinimized);
     }
+    if (settings.retroTerm !== undefined) {
+      settingsStore.set('retroTerm', settings.retroTerm);
+    }
     return {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
+      retroTerm: settingsStore.get('retroTerm') || defaultRetroTermSettings,
     };
   });
 
