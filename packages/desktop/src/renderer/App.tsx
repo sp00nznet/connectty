@@ -22,7 +22,7 @@ import type {
   SerialParity,
   SerialFlowControl,
 } from '@connectty/shared';
-import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent } from '../main/preload';
+import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -5193,6 +5193,24 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
   const [saving, setSaving] = useState(false);
 
+  // Collapsible section states
+  const [themesExpanded, setThemesExpanded] = useState(true);
+  const [trayExpanded, setTrayExpanded] = useState(true);
+  const [syncExpanded, setSyncExpanded] = useState(true);
+
+  // Sync accounts state
+  const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
+  const [showAddAccountMenu, setShowAddAccountMenu] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+
+  // Config sync state
+  const [showConfigPicker, setShowConfigPicker] = useState<string | null>(null); // accountId when showing picker
+  const [availableConfigs, setAvailableConfigs] = useState<SyncConfigInfo[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [uploadingAccount, setUploadingAccount] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -5201,6 +5219,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         minimizeToTray,
         closeToTray,
         startMinimized,
+        syncAccounts,
       });
       onClose();
     } finally {
@@ -5208,75 +5227,378 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     }
   };
 
+  const handleAddAccount = async (provider: 'microsoft' | 'google' | 'github') => {
+    setShowAddAccountMenu(false);
+    setConnectingProvider(provider);
+    try {
+      const account = await window.connectty.sync.connect(provider);
+      if (account) {
+        setSyncAccounts(prev => [...prev, account]);
+      }
+    } catch (error) {
+      console.error('Failed to connect account:', error);
+    } finally {
+      setConnectingProvider(null);
+    }
+  };
+
+  const handleRemoveAccount = async (accountId: string) => {
+    try {
+      await window.connectty.sync.disconnect(accountId);
+      setSyncAccounts(prev => prev.filter(a => a.id !== accountId));
+    } catch (error) {
+      console.error('Failed to remove account:', error);
+    }
+  };
+
+  const handleUpload = async (accountId: string) => {
+    setUploadingAccount(accountId);
+    setSyncMessage(null);
+    try {
+      const result = await window.connectty.sync.upload(accountId);
+      if (result.success) {
+        setSyncMessage({ type: 'success', text: 'Configuration uploaded successfully!' });
+      } else {
+        setSyncMessage({ type: 'error', text: result.error || 'Failed to upload configuration' });
+      }
+    } catch (error) {
+      setSyncMessage({ type: 'error', text: 'Failed to upload configuration' });
+    } finally {
+      setUploadingAccount(null);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
+  const handleShowConfigs = async (accountId: string) => {
+    setLoadingConfigs(true);
+    setShowConfigPicker(accountId);
+    setSyncMessage(null);
+    try {
+      const result = await window.connectty.sync.download(accountId);
+      if (result.success && result.configs) {
+        setAvailableConfigs(result.configs);
+      } else {
+        setSyncMessage({ type: 'error', text: result.error || 'Failed to list configurations' });
+        setShowConfigPicker(null);
+      }
+    } catch (error) {
+      setSyncMessage({ type: 'error', text: 'Failed to list configurations' });
+      setShowConfigPicker(null);
+    } finally {
+      setLoadingConfigs(false);
+    }
+  };
+
+  const handleImportConfig = async (accountId: string, configId: string) => {
+    setImporting(true);
+    setSyncMessage(null);
+    try {
+      const result = await window.connectty.sync.importConfig(accountId, configId);
+      if (result.success && result.imported) {
+        setSyncMessage({
+          type: 'success',
+          text: `Imported ${result.imported.connections} connections, ${result.imported.credentials} credentials, ${result.imported.groups} groups`
+        });
+        setShowConfigPicker(null);
+        setAvailableConfigs([]);
+      } else {
+        setSyncMessage({ type: 'error', text: result.error || 'Failed to import configuration' });
+      }
+    } catch (error) {
+      setSyncMessage({ type: 'error', text: 'Failed to import configuration' });
+    } finally {
+      setImporting(false);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const getProviderIcon = (provider: string) => {
+    switch (provider) {
+      case 'microsoft': return '🔷';
+      case 'google': return '🔴';
+      case 'github': return '⬛';
+      default: return '☁️';
+    }
+  };
+
+  const getProviderName = (provider: string) => {
+    switch (provider) {
+      case 'microsoft': return 'Microsoft OneDrive';
+      case 'google': return 'Google Drive';
+      case 'github': return 'GitHub Gists';
+      default: return provider;
+    }
+  };
+
   return (
     <div className="modal-overlay">
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Settings</h3>
           <button className="btn btn-icon" onClick={onClose}>×</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <div className="settings-section">
-              <h4>Appearance</h4>
-              <p className="settings-description">
-                Customize the look and feel of the application.
-              </p>
-
-              <div className="form-group">
-                <label className="form-label">Theme</label>
-                <div className="theme-grid">
-                  {themes.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`theme-option ${currentTheme === t.id ? 'active' : ''}`}
-                      onClick={() => onThemeChange(t.id)}
-                      title={t.description}
-                    >
-                      <span className="theme-preview" data-theme={t.id}></span>
-                      <span className="theme-name">{t.name}</span>
-                    </button>
-                  ))}
+            {/* Themes Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setThemesExpanded(!themesExpanded)}
+              >
+                <span className={`collapse-icon ${themesExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Themes</h4>
+                <span className="settings-badge">{themes.length} available</span>
+              </button>
+              {themesExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Customize the look and feel of the application.
+                  </p>
+                  <div className="form-group">
+                    <div className="theme-grid">
+                      {themes.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`theme-option ${currentTheme === t.id ? 'active' : ''}`}
+                          onClick={() => onThemeChange(t.id)}
+                          title={t.description}
+                        >
+                          <span className="theme-preview" data-theme={t.id}></span>
+                          <span className="theme-name">{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            <div className="settings-section">
-              <h4>System Tray</h4>
-              <p className="settings-description">
-                Configure how the app behaves with the system tray.
-              </p>
+            {/* System Tray Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setTrayExpanded(!trayExpanded)}
+              >
+                <span className={`collapse-icon ${trayExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>System Tray</h4>
+              </button>
+              {trayExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Configure how the app behaves with the system tray.
+                  </p>
 
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={minimizeToTray}
-                  onChange={(e) => setMinimizeToTray(e.target.checked)}
-                />
-                <span>Minimize to system tray</span>
-              </label>
-              <p className="checkbox-help">When minimizing, hide the window to the system tray instead of the taskbar.</p>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={minimizeToTray}
+                      onChange={(e) => setMinimizeToTray(e.target.checked)}
+                    />
+                    <span>Minimize to system tray</span>
+                  </label>
+                  <p className="checkbox-help">When minimizing, hide the window to the system tray instead of the taskbar.</p>
 
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={closeToTray}
-                  onChange={(e) => setCloseToTray(e.target.checked)}
-                />
-                <span>Close to system tray</span>
-              </label>
-              <p className="checkbox-help">When closing, hide the window to the system tray instead of quitting the app.</p>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={closeToTray}
+                      onChange={(e) => setCloseToTray(e.target.checked)}
+                    />
+                    <span>Close to system tray</span>
+                  </label>
+                  <p className="checkbox-help">When closing, hide the window to the system tray instead of quitting the app.</p>
 
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={startMinimized}
-                  onChange={(e) => setStartMinimized(e.target.checked)}
-                />
-                <span>Start minimized</span>
-              </label>
-              <p className="checkbox-help">Start the app hidden in the system tray.</p>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={startMinimized}
+                      onChange={(e) => setStartMinimized(e.target.checked)}
+                    />
+                    <span>Start minimized</span>
+                  </label>
+                  <p className="checkbox-help">Start the app hidden in the system tray.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Sync Accounts Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setSyncExpanded(!syncExpanded)}
+              >
+                <span className={`collapse-icon ${syncExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Sync Accounts</h4>
+                {syncAccounts.length > 0 && (
+                  <span className="settings-badge">{syncAccounts.length} connected</span>
+                )}
+              </button>
+              {syncExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Connect cloud accounts to sync your connections, credentials, and settings across devices.
+                  </p>
+
+                  {/* Sync Message */}
+                  {syncMessage && (
+                    <div className={`sync-message sync-message-${syncMessage.type}`}>
+                      {syncMessage.text}
+                    </div>
+                  )}
+
+                  {/* Connected Accounts List */}
+                  {syncAccounts.length > 0 && (
+                    <div className="sync-accounts-list">
+                      {syncAccounts.map(account => (
+                        <div key={account.id} className="sync-account-item">
+                          <span className="sync-account-icon">{getProviderIcon(account.provider)}</span>
+                          <div className="sync-account-info">
+                            <span className="sync-account-email">{account.email}</span>
+                            <span className="sync-account-provider">{getProviderName(account.provider)}</span>
+                          </div>
+                          <div className="sync-account-actions">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => handleUpload(account.id)}
+                              disabled={uploadingAccount === account.id}
+                              title="Upload config to cloud"
+                            >
+                              {uploadingAccount === account.id ? '...' : '↑ Upload'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => handleShowConfigs(account.id)}
+                              title="Download config from cloud"
+                            >
+                              ↓ Download
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
+                              onClick={() => handleRemoveAccount(account.id)}
+                              title="Remove account"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Config Picker */}
+                  {showConfigPicker && (
+                    <div className="sync-config-picker">
+                      <div className="sync-config-header">
+                        <h5>Available Configurations</h5>
+                        <button
+                          type="button"
+                          className="btn btn-icon btn-sm"
+                          onClick={() => { setShowConfigPicker(null); setAvailableConfigs([]); }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {loadingConfigs ? (
+                        <div className="sync-config-loading">
+                          <span className="sync-connecting-spinner"></span>
+                          Loading configurations...
+                        </div>
+                      ) : availableConfigs.length === 0 ? (
+                        <div className="sync-config-empty">
+                          No configurations found. Upload a configuration first.
+                        </div>
+                      ) : (
+                        <div className="sync-config-list">
+                          {availableConfigs.map(config => (
+                            <div key={config.id} className="sync-config-item">
+                              <div className="sync-config-info">
+                                <span className="sync-config-device">{config.deviceName}</span>
+                                <span className="sync-config-date">Uploaded: {formatDate(config.uploadedAt)}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                onClick={() => handleImportConfig(showConfigPicker, config.id)}
+                                disabled={importing}
+                              >
+                                {importing ? 'Importing...' : 'Import'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Add Account Button/Menu */}
+                  <div className="sync-add-account">
+                    {connectingProvider ? (
+                      <div className="sync-connecting">
+                        <span className="sync-connecting-spinner"></span>
+                        Connecting to {getProviderName(connectingProvider)}...
+                      </div>
+                    ) : showAddAccountMenu ? (
+                      <div className="sync-provider-menu">
+                        <button
+                          type="button"
+                          className="sync-provider-option"
+                          onClick={() => handleAddAccount('microsoft')}
+                        >
+                          <span className="sync-provider-icon">🔷</span>
+                          <span>Microsoft OneDrive</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="sync-provider-option"
+                          onClick={() => handleAddAccount('google')}
+                        >
+                          <span className="sync-provider-icon">🔴</span>
+                          <span>Google Drive</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="sync-provider-option"
+                          onClick={() => handleAddAccount('github')}
+                        >
+                          <span className="sync-provider-icon">⬛</span>
+                          <span>GitHub Gists</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => setShowAddAccountMenu(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary sync-add-btn"
+                        onClick={() => setShowAddAccountMenu(true)}
+                      >
+                        + Add Account...
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="modal-footer">

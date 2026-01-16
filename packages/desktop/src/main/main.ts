@@ -11,7 +11,7 @@ import { SSHService } from './ssh';
 import { RDPService } from './rdp';
 import { RDPSessionService } from './rdp-session';
 import { SerialService } from './serial';
-import { SyncService } from './sync';
+import { SyncService, CloudSyncService } from './sync';
 import { CommandService } from './command';
 import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
@@ -55,6 +55,7 @@ let rdpService: RDPService;
 let rdpSessionService: RDPSessionService;
 let serialService: SerialService;
 let syncService: SyncService;
+let cloudSyncService: CloudSyncService;
 let commandService: CommandService;
 let sftpService: SFTPService;
 let localShellService: LocalShellService;
@@ -624,6 +625,31 @@ function setupIpcHandlers(): void {
     return syncService.pullFromServer(serverUrl, token);
   });
 
+  // Cloud sync handlers
+  ipcMain.handle('sync:connect', async (_event, provider: 'microsoft' | 'google' | 'github') => {
+    return cloudSyncService.connect(provider);
+  });
+
+  ipcMain.handle('sync:disconnect', async (_event, accountId: string) => {
+    return cloudSyncService.disconnect(accountId);
+  });
+
+  ipcMain.handle('sync:upload', async (_event, accountId: string) => {
+    return cloudSyncService.upload(accountId);
+  });
+
+  ipcMain.handle('sync:listConfigs', async (_event, accountId: string) => {
+    return cloudSyncService.listConfigs(accountId);
+  });
+
+  ipcMain.handle('sync:importConfig', async (_event, accountId: string, configId: string) => {
+    return cloudSyncService.importConfig(accountId, configId);
+  });
+
+  ipcMain.handle('sync:getAccounts', async () => {
+    return cloudSyncService.getAccounts();
+  });
+
   // App info
   ipcMain.handle('app:version', () => {
     return app.getVersion();
@@ -1043,6 +1069,7 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('serial:event', sessionId, event);
     });
     syncService = new SyncService(db);
+    cloudSyncService = new CloudSyncService(db);
     commandService = new CommandService();
     sftpService = new SFTPService((progress) => {
       mainWindow?.webContents.send('sftp:progress', progress);

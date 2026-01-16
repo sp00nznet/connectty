@@ -160,6 +160,12 @@ export class DatabaseService {
         completed_at TEXT,
         status TEXT NOT NULL DEFAULT 'pending'
       );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
 
     // Run migrations for existing databases BEFORE creating indexes
@@ -1115,6 +1121,26 @@ export class DatabaseService {
       credentials: this.getCredentials(),
       groups: this.getGroups(),
     };
+  }
+
+  // Settings management
+  getSettings(): Record<string, unknown> {
+    try {
+      const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get('app_settings') as { value: string } | undefined;
+      if (row) {
+        return JSON.parse(row.value);
+      }
+    } catch {
+      // Table may not exist yet
+    }
+    return {};
+  }
+
+  setSettings(settings: Record<string, unknown>): void {
+    const value = JSON.stringify(settings);
+    this.db.prepare(
+      'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)'
+    ).run('app_settings', value, new Date().toISOString());
   }
 
   close(): void {
