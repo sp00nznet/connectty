@@ -55,11 +55,45 @@ export interface TransferProgress {
   error?: string;
 }
 
+// Sync account types
+export interface SyncAccount {
+  id: string;
+  provider: 'microsoft' | 'google' | 'github';
+  email: string;
+  displayName?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  connectedAt: string;
+}
+
+export interface SyncConfig {
+  deviceId: string;
+  deviceName: string;
+  lastSyncAt?: string;
+  connections: boolean;
+  credentials: boolean;
+  groups: boolean;
+  providers: boolean;
+  commands: boolean;
+  theme: boolean;
+}
+
+export interface SyncConfigInfo {
+  id: string;
+  deviceName: string;
+  deviceId: string;
+  uploadedAt: string;
+  connectionCount: number;
+  credentialCount: number;
+}
+
 // App settings types
 export interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
   startMinimized: boolean;
+  syncAccounts?: SyncAccount[];
 }
 
 // Local shell types
@@ -211,9 +245,25 @@ const api = {
 
   // Sync operations
   sync: {
+    // Legacy server sync (deprecated)
     push: (serverUrl: string, token: string): Promise<boolean> => ipcRenderer.invoke('sync:push', serverUrl, token),
     pull: (serverUrl: string, token: string): Promise<{ connections: number; credentials: number; groups: number }> =>
       ipcRenderer.invoke('sync:pull', serverUrl, token),
+
+    // Cloud sync via OAuth providers
+    connect: (provider: 'microsoft' | 'google' | 'github'): Promise<SyncAccount | null> =>
+      ipcRenderer.invoke('sync:connect', provider),
+    disconnect: (accountId: string): Promise<boolean> => ipcRenderer.invoke('sync:disconnect', accountId),
+    upload: (accountId: string): Promise<{ success: boolean; configId?: string; error?: string }> =>
+      ipcRenderer.invoke('sync:upload', accountId),
+    download: (accountId: string): Promise<{ success: boolean; configs?: SyncConfigInfo[]; error?: string }> =>
+      ipcRenderer.invoke('sync:listConfigs', accountId),
+    importConfig: (accountId: string, configId: string): Promise<{
+      success: boolean;
+      imported?: { connections: number; credentials: number; groups: number; providers: number; commands: number };
+      error?: string;
+    }> => ipcRenderer.invoke('sync:importConfig', accountId, configId),
+    getAccounts: (): Promise<SyncAccount[]> => ipcRenderer.invoke('sync:getAccounts'),
   },
 
   // Command operations (bulk actions)

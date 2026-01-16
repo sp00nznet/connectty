@@ -107,7 +107,7 @@ export default function ImportExportModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal import-export-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Import / Export</h2>

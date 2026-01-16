@@ -121,7 +121,7 @@ export default function CredentialModal({ onClose, onNotification }: CredentialM
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal credential-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Credentials</h2>

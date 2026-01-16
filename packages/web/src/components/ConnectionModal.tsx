@@ -41,7 +41,7 @@ export default function ConnectionModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{connection ? 'Edit Connection' : 'New Connection'}</h3>

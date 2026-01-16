@@ -22,7 +22,7 @@ import type {
   SerialParity,
   SerialFlowControl,
 } from '@connectty/shared';
-import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent } from '../main/preload';
+import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -146,26 +146,85 @@ export default function App() {
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
-  // Available themes
+  // Available themes (66 themes for 22 rows × 3 columns)
   const themes = [
+    // Dark themes - Blues
     { id: 'midnight', name: 'Midnight', description: 'Default dark blue theme' },
-    { id: 'light', name: 'Light', description: 'Clean light theme' },
+    { id: 'cobalt', name: 'Cobalt', description: 'Deep blue coding classic' },
+    { id: 'oceanic', name: 'Oceanic', description: 'Deep sea inspired' },
+    { id: 'night-owl', name: 'Night Owl', description: 'For night owls and low light' },
+    { id: 'deep-blue', name: 'Deep Blue', description: 'Rich navy tones' },
+    { id: 'winter-dark', name: 'Winter Dark', description: 'Cold blue palette' },
+    // Dark themes - Purples
     { id: 'dracula', name: 'Dracula', description: 'Popular dark purple theme' },
-    { id: 'nord', name: 'Nord', description: 'Arctic, north-bluish palette' },
-    { id: 'solarized', name: 'Solarized Dark', description: 'Precision colors for machines and people' },
-    { id: 'solarized-light', name: 'Solarized Light', description: 'Solarized light variant' },
-    { id: 'monokai', name: 'Monokai', description: 'Sublime Text inspired' },
-    { id: 'github', name: 'GitHub Dark', description: 'GitHub\'s dark mode' },
-    { id: 'github-light', name: 'GitHub Light', description: 'GitHub\'s light mode' },
-    { id: 'one-dark', name: 'One Dark', description: 'Atom\'s iconic dark theme' },
-    { id: 'tokyo-night', name: 'Tokyo Night', description: 'Clean dark theme inspired by Tokyo lights' },
-    { id: 'catppuccin', name: 'Catppuccin Mocha', description: 'Soothing pastel dark theme' },
-    { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
-    { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
-    { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
+    { id: 'synthwave', name: 'Synthwave', description: '80s retro neon vibes' },
+    { id: 'shades-purple', name: 'Shades of Purple', description: 'Epic purple variant' },
+    { id: 'cyberpunk', name: 'Cyberpunk', description: 'Neon future aesthetic' },
+    { id: 'laserwave', name: 'Laserwave', description: 'Retro-futuristic synthwave' },
+    { id: 'andromeda', name: 'Andromeda', description: 'Dark with purple accents' },
+    // Dark themes - Greens
     { id: 'everforest', name: 'Everforest', description: 'Nature-inspired green theme' },
+    { id: 'forest', name: 'Forest', description: 'Deep woodland greens' },
+    { id: 'matrix', name: 'Matrix', description: 'Digital rain aesthetic' },
+    { id: 'sublime-monokai', name: 'Monokai', description: 'Sublime Text inspired' },
+    { id: 'palenight', name: 'Palenight', description: 'Soft dark with green hints' },
+    { id: 'vue', name: 'Vue', description: 'Vue.js inspired greens' },
+    // Dark themes - Reds/Oranges
+    { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
+    { id: 'ayu-mirage', name: 'Ayu Mirage', description: 'Ayu with deeper tones' },
+    { id: 'tokyo-night', name: 'Tokyo Night', description: 'Clean dark theme inspired by Tokyo lights' },
+    { id: 'panda', name: 'Panda', description: 'Superminimal dark syntax' },
+    { id: 'nord', name: 'Nord', description: 'Arctic, north-bluish palette' },
+    { id: 'aurora', name: 'Aurora', description: 'Northern lights inspired' },
+    // Dark themes - Neutrals
+    { id: 'one-dark', name: 'One Dark', description: 'Atom\'s iconic dark theme' },
+    { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
+    { id: 'github', name: 'GitHub Dark', description: 'GitHub\'s dark mode' },
+    { id: 'vs-dark', name: 'VS Dark', description: 'Visual Studio Code dark' },
+    { id: 'sublime', name: 'Sublime', description: 'Sublime Text default' },
+    { id: 'atom', name: 'Atom One', description: 'Atom editor default' },
+    // Dark themes - Warm
+    { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
+    { id: 'gruvbox-hard', name: 'Gruvbox Hard', description: 'Higher contrast Gruvbox' },
+    { id: 'solarized', name: 'Solarized Dark', description: 'Precision colors for machines and people' },
+    { id: 'monokai', name: 'Monokai Pro', description: 'Modern Monokai variant' },
+    { id: 'tomorrow-night', name: 'Tomorrow Night', description: 'Tomorrow theme dark' },
+    { id: 'horizon', name: 'Horizon', description: 'Warm dark theme' },
+    // Dark themes - Pastels
+    { id: 'catppuccin', name: 'Catppuccin Mocha', description: 'Soothing pastel dark theme' },
+    { id: 'catppuccin-macchiato', name: 'Catppuccin Macchiato', description: 'Medium dark pastel' },
     { id: 'rose-pine', name: 'Rosé Pine', description: 'Elegant, dark soho vibes' },
+    { id: 'rose-pine-moon', name: 'Rosé Pine Moon', description: 'Rosé Pine variant' },
+    { id: 'kanagawa', name: 'Kanagawa', description: 'Wave-inspired Japanese theme' },
+    { id: 'fairy-floss', name: 'Fairy Floss', description: 'Sweet pastel candy' },
+    // Light themes - Clean
+    { id: 'light', name: 'Light', description: 'Clean light theme' },
+    { id: 'github-light', name: 'GitHub Light', description: 'GitHub\'s light mode' },
+    { id: 'vs-light', name: 'VS Light', description: 'Visual Studio Code light' },
+    { id: 'atom-light', name: 'Atom Light', description: 'Atom One Light' },
+    { id: 'xcode', name: 'Xcode', description: 'Apple Xcode default' },
+    { id: 'intellij', name: 'IntelliJ', description: 'JetBrains light theme' },
+    // Light themes - Warm
+    { id: 'solarized-light', name: 'Solarized Light', description: 'Solarized light variant' },
+    { id: 'gruvbox-light', name: 'Gruvbox Light', description: 'Retro light variant' },
+    { id: 'ayu-light', name: 'Ayu Light', description: 'Ayu bright variant' },
+    { id: 'tomorrow', name: 'Tomorrow', description: 'Tomorrow theme light' },
+    { id: 'paper', name: 'Paper', description: 'Minimal paper-like theme' },
+    { id: 'sepia', name: 'Sepia', description: 'Warm reading theme' },
+    // Light themes - Cool
+    { id: 'catppuccin-latte', name: 'Catppuccin Latte', description: 'Light pastel theme' },
+    { id: 'rose-pine-dawn', name: 'Rosé Pine Dawn', description: 'Rosé Pine light' },
+    { id: 'winter-light', name: 'Winter Light', description: 'Cool light palette' },
+    { id: 'quiet-light', name: 'Quiet Light', description: 'Soft muted light' },
+    { id: 'notion', name: 'Notion', description: 'Notion-inspired minimal' },
+    { id: 'slack', name: 'Slack Light', description: 'Slack workspace theme' },
+    // Special themes
     { id: 'high-contrast', name: 'High Contrast', description: 'Maximum visibility' },
+    { id: 'hc-light', name: 'HC Light', description: 'High contrast light' },
+    { id: 'retro', name: 'Retro', description: 'Classic terminal green' },
+    { id: 'amber', name: 'Amber', description: 'Classic amber CRT' },
+    { id: 'blue-screen', name: 'Blue Screen', description: 'DOS-era inspired' },
+    { id: 'newspaper', name: 'Newspaper', description: 'Print-inspired minimal' },
   ];
 
   // Apply theme to document
@@ -1445,7 +1504,7 @@ export default function App() {
 
       {/* Rename Tab Modal */}
       {renamingTab && (
-        <div className="modal-overlay" onClick={() => setRenamingTab(null)}>
+        <div className="modal-overlay">
           <div className="modal rename-tab-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Rename Tab</h2>
@@ -1534,7 +1593,7 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete, 
 
       {showMenu && (
         <>
-          <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowMenu(false)} />
+          <div className="modal-overlay" style={{ background: 'transparent' }} />
           <div className="context-menu" style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y }}>
             <div className="context-menu-item" onClick={() => { onConnect(); setShowMenu(false); }}>
               Connect
@@ -1579,7 +1638,7 @@ function PasswordPrompt({ connection, onSubmit, onCancel }: PasswordPromptProps)
   };
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay">
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Enter Password</h3>
@@ -1695,7 +1754,7 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{connection ? 'Edit Connection' : 'New Connection'}</h3>
@@ -1995,7 +2054,7 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
 
   if (!showForm) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>Credentials</h3>
@@ -2048,7 +2107,7 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{credential ? 'Edit Credential' : 'New Credential'}</h3>
@@ -2389,7 +2448,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
 
   if (!showForm) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>Providers (Hypervisors)</h3>
@@ -2462,7 +2521,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{provider ? 'Edit Provider' : 'Add Provider'}</h3>
@@ -2795,7 +2854,7 @@ function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupM
 
   if (!showForm) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>Groups</h3>
@@ -2855,7 +2914,7 @@ function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupM
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{group ? 'Edit Group' : 'New Group'}</h3>
@@ -3283,7 +3342,7 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
   const filteredConnections = getFilteredConnections();
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Repeated Actions</h3>
@@ -4879,7 +4938,7 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
 
   if (isConnecting) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>SFTP - {connection.name}</h3>
@@ -4898,7 +4957,7 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
 
   if (error) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>SFTP - {connection.name}</h3>
@@ -4919,7 +4978,7 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-fullscreen" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>SFTP - {connection.name}</h3>
@@ -5134,6 +5193,24 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
   const [saving, setSaving] = useState(false);
 
+  // Collapsible section states
+  const [themesExpanded, setThemesExpanded] = useState(true);
+  const [trayExpanded, setTrayExpanded] = useState(true);
+  const [syncExpanded, setSyncExpanded] = useState(true);
+
+  // Sync accounts state
+  const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
+  const [showAddAccountMenu, setShowAddAccountMenu] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+
+  // Config sync state
+  const [showConfigPicker, setShowConfigPicker] = useState<string | null>(null); // accountId when showing picker
+  const [availableConfigs, setAvailableConfigs] = useState<SyncConfigInfo[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [uploadingAccount, setUploadingAccount] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -5142,6 +5219,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         minimizeToTray,
         closeToTray,
         startMinimized,
+        syncAccounts,
       });
       onClose();
     } finally {
@@ -5149,75 +5227,378 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     }
   };
 
+  const handleAddAccount = async (provider: 'microsoft' | 'google' | 'github') => {
+    setShowAddAccountMenu(false);
+    setConnectingProvider(provider);
+    try {
+      const account = await window.connectty.sync.connect(provider);
+      if (account) {
+        setSyncAccounts(prev => [...prev, account]);
+      }
+    } catch (error) {
+      console.error('Failed to connect account:', error);
+    } finally {
+      setConnectingProvider(null);
+    }
+  };
+
+  const handleRemoveAccount = async (accountId: string) => {
+    try {
+      await window.connectty.sync.disconnect(accountId);
+      setSyncAccounts(prev => prev.filter(a => a.id !== accountId));
+    } catch (error) {
+      console.error('Failed to remove account:', error);
+    }
+  };
+
+  const handleUpload = async (accountId: string) => {
+    setUploadingAccount(accountId);
+    setSyncMessage(null);
+    try {
+      const result = await window.connectty.sync.upload(accountId);
+      if (result.success) {
+        setSyncMessage({ type: 'success', text: 'Configuration uploaded successfully!' });
+      } else {
+        setSyncMessage({ type: 'error', text: result.error || 'Failed to upload configuration' });
+      }
+    } catch (error) {
+      setSyncMessage({ type: 'error', text: 'Failed to upload configuration' });
+    } finally {
+      setUploadingAccount(null);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
+  const handleShowConfigs = async (accountId: string) => {
+    setLoadingConfigs(true);
+    setShowConfigPicker(accountId);
+    setSyncMessage(null);
+    try {
+      const result = await window.connectty.sync.download(accountId);
+      if (result.success && result.configs) {
+        setAvailableConfigs(result.configs);
+      } else {
+        setSyncMessage({ type: 'error', text: result.error || 'Failed to list configurations' });
+        setShowConfigPicker(null);
+      }
+    } catch (error) {
+      setSyncMessage({ type: 'error', text: 'Failed to list configurations' });
+      setShowConfigPicker(null);
+    } finally {
+      setLoadingConfigs(false);
+    }
+  };
+
+  const handleImportConfig = async (accountId: string, configId: string) => {
+    setImporting(true);
+    setSyncMessage(null);
+    try {
+      const result = await window.connectty.sync.importConfig(accountId, configId);
+      if (result.success && result.imported) {
+        setSyncMessage({
+          type: 'success',
+          text: `Imported ${result.imported.connections} connections, ${result.imported.credentials} credentials, ${result.imported.groups} groups`
+        });
+        setShowConfigPicker(null);
+        setAvailableConfigs([]);
+      } else {
+        setSyncMessage({ type: 'error', text: result.error || 'Failed to import configuration' });
+      }
+    } catch (error) {
+      setSyncMessage({ type: 'error', text: 'Failed to import configuration' });
+    } finally {
+      setImporting(false);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const getProviderIcon = (provider: string) => {
+    switch (provider) {
+      case 'microsoft': return '🔷';
+      case 'google': return '🔴';
+      case 'github': return '⬛';
+      default: return '☁️';
+    }
+  };
+
+  const getProviderName = (provider: string) => {
+    switch (provider) {
+      case 'microsoft': return 'Microsoft OneDrive';
+      case 'google': return 'Google Drive';
+      case 'github': return 'GitHub Gists';
+      default: return provider;
+    }
+  };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Settings</h3>
           <button className="btn btn-icon" onClick={onClose}>×</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <div className="settings-section">
-              <h4>Appearance</h4>
-              <p className="settings-description">
-                Customize the look and feel of the application.
-              </p>
-
-              <div className="form-group">
-                <label className="form-label">Theme</label>
-                <div className="theme-grid">
-                  {themes.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`theme-option ${currentTheme === t.id ? 'active' : ''}`}
-                      onClick={() => onThemeChange(t.id)}
-                      title={t.description}
-                    >
-                      <span className="theme-preview" data-theme={t.id}></span>
-                      <span className="theme-name">{t.name}</span>
-                    </button>
-                  ))}
+            {/* Themes Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setThemesExpanded(!themesExpanded)}
+              >
+                <span className={`collapse-icon ${themesExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Themes</h4>
+                <span className="settings-badge">{themes.length} available</span>
+              </button>
+              {themesExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Customize the look and feel of the application.
+                  </p>
+                  <div className="form-group">
+                    <div className="theme-grid">
+                      {themes.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`theme-option ${currentTheme === t.id ? 'active' : ''}`}
+                          onClick={() => onThemeChange(t.id)}
+                          title={t.description}
+                        >
+                          <span className="theme-preview" data-theme={t.id}></span>
+                          <span className="theme-name">{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            <div className="settings-section">
-              <h4>System Tray</h4>
-              <p className="settings-description">
-                Configure how the app behaves with the system tray.
-              </p>
+            {/* System Tray Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setTrayExpanded(!trayExpanded)}
+              >
+                <span className={`collapse-icon ${trayExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>System Tray</h4>
+              </button>
+              {trayExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Configure how the app behaves with the system tray.
+                  </p>
 
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={minimizeToTray}
-                  onChange={(e) => setMinimizeToTray(e.target.checked)}
-                />
-                <span>Minimize to system tray</span>
-              </label>
-              <p className="checkbox-help">When minimizing, hide the window to the system tray instead of the taskbar.</p>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={minimizeToTray}
+                      onChange={(e) => setMinimizeToTray(e.target.checked)}
+                    />
+                    <span>Minimize to system tray</span>
+                  </label>
+                  <p className="checkbox-help">When minimizing, hide the window to the system tray instead of the taskbar.</p>
 
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={closeToTray}
-                  onChange={(e) => setCloseToTray(e.target.checked)}
-                />
-                <span>Close to system tray</span>
-              </label>
-              <p className="checkbox-help">When closing, hide the window to the system tray instead of quitting the app.</p>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={closeToTray}
+                      onChange={(e) => setCloseToTray(e.target.checked)}
+                    />
+                    <span>Close to system tray</span>
+                  </label>
+                  <p className="checkbox-help">When closing, hide the window to the system tray instead of quitting the app.</p>
 
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={startMinimized}
-                  onChange={(e) => setStartMinimized(e.target.checked)}
-                />
-                <span>Start minimized</span>
-              </label>
-              <p className="checkbox-help">Start the app hidden in the system tray.</p>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={startMinimized}
+                      onChange={(e) => setStartMinimized(e.target.checked)}
+                    />
+                    <span>Start minimized</span>
+                  </label>
+                  <p className="checkbox-help">Start the app hidden in the system tray.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Sync Accounts Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setSyncExpanded(!syncExpanded)}
+              >
+                <span className={`collapse-icon ${syncExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Sync Accounts</h4>
+                {syncAccounts.length > 0 && (
+                  <span className="settings-badge">{syncAccounts.length} connected</span>
+                )}
+              </button>
+              {syncExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Connect cloud accounts to sync your connections, credentials, and settings across devices.
+                  </p>
+
+                  {/* Sync Message */}
+                  {syncMessage && (
+                    <div className={`sync-message sync-message-${syncMessage.type}`}>
+                      {syncMessage.text}
+                    </div>
+                  )}
+
+                  {/* Connected Accounts List */}
+                  {syncAccounts.length > 0 && (
+                    <div className="sync-accounts-list">
+                      {syncAccounts.map(account => (
+                        <div key={account.id} className="sync-account-item">
+                          <span className="sync-account-icon">{getProviderIcon(account.provider)}</span>
+                          <div className="sync-account-info">
+                            <span className="sync-account-email">{account.email}</span>
+                            <span className="sync-account-provider">{getProviderName(account.provider)}</span>
+                          </div>
+                          <div className="sync-account-actions">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => handleUpload(account.id)}
+                              disabled={uploadingAccount === account.id}
+                              title="Upload config to cloud"
+                            >
+                              {uploadingAccount === account.id ? '...' : '↑ Upload'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => handleShowConfigs(account.id)}
+                              title="Download config from cloud"
+                            >
+                              ↓ Download
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
+                              onClick={() => handleRemoveAccount(account.id)}
+                              title="Remove account"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Config Picker */}
+                  {showConfigPicker && (
+                    <div className="sync-config-picker">
+                      <div className="sync-config-header">
+                        <h5>Available Configurations</h5>
+                        <button
+                          type="button"
+                          className="btn btn-icon btn-sm"
+                          onClick={() => { setShowConfigPicker(null); setAvailableConfigs([]); }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {loadingConfigs ? (
+                        <div className="sync-config-loading">
+                          <span className="sync-connecting-spinner"></span>
+                          Loading configurations...
+                        </div>
+                      ) : availableConfigs.length === 0 ? (
+                        <div className="sync-config-empty">
+                          No configurations found. Upload a configuration first.
+                        </div>
+                      ) : (
+                        <div className="sync-config-list">
+                          {availableConfigs.map(config => (
+                            <div key={config.id} className="sync-config-item">
+                              <div className="sync-config-info">
+                                <span className="sync-config-device">{config.deviceName}</span>
+                                <span className="sync-config-date">Uploaded: {formatDate(config.uploadedAt)}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                onClick={() => handleImportConfig(showConfigPicker, config.id)}
+                                disabled={importing}
+                              >
+                                {importing ? 'Importing...' : 'Import'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Add Account Button/Menu */}
+                  <div className="sync-add-account">
+                    {connectingProvider ? (
+                      <div className="sync-connecting">
+                        <span className="sync-connecting-spinner"></span>
+                        Connecting to {getProviderName(connectingProvider)}...
+                      </div>
+                    ) : showAddAccountMenu ? (
+                      <div className="sync-provider-menu">
+                        <button
+                          type="button"
+                          className="sync-provider-option"
+                          onClick={() => handleAddAccount('microsoft')}
+                        >
+                          <span className="sync-provider-icon">🔷</span>
+                          <span>Microsoft OneDrive</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="sync-provider-option"
+                          onClick={() => handleAddAccount('google')}
+                        >
+                          <span className="sync-provider-icon">🔴</span>
+                          <span>Google Drive</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="sync-provider-option"
+                          onClick={() => handleAddAccount('github')}
+                        >
+                          <span className="sync-provider-icon">⬛</span>
+                          <span>GitHub Gists</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => setShowAddAccountMenu(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary sync-add-btn"
+                        onClick={() => setShowAddAccountMenu(true)}
+                      >
+                        + Add Account...
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="modal-footer">
@@ -5294,7 +5675,7 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Import Hosts from {provider.name}</h3>
