@@ -359,14 +359,12 @@ export default function App() {
 
   // Update existing terminals when theme changes
   useEffect(() => {
-    if (appSettings.terminalTheme === 'sync') {
-      const terminalTheme = getTerminalTheme();
-      sessions.forEach(session => {
-        if ('terminal' in session && session.terminal) {
-          session.terminal.options.theme = terminalTheme;
-        }
-      });
-    }
+    const terminalTheme = getTerminalTheme();
+    sessions.forEach(session => {
+      if ('terminal' in session && session.terminal) {
+        session.terminal.options.theme = terminalTheme;
+      }
+    });
   }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
 
   // Apply theme to document
@@ -5399,42 +5397,48 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   });
 
   // RetroTerm settings state
-  // RetroTerm preset configurations
+  // RetroTerm preset configurations - tuned for authentic CRT look
   const retroTermPresets: Record<RetroTermPreset, Omit<RetroTermSettings, 'enabled' | 'preset'>> = {
     'custom': {
-      scanlines: 0.3, screenCurvature: 0.2, flickering: 0.1, bloom: 0.4,
-      rgbShift: 0.15, noise: 0.05, burnIn: 0, jitter: 0.02,
-      ambientLight: 0.2, phosphorGlow: true, glowColor: '#00ff00',
+      scanlines: 0.5, screenCurvature: 0.7, flickering: 0.1, bloom: 0.6,
+      rgbShift: 0.3, noise: 0.03, burnIn: 0, jitter: 0.02,
+      ambientLight: 0.5, phosphorGlow: true, glowColor: '#00ff00',
     },
     'ibm-5151': {
-      scanlines: 0.4, screenCurvature: 0.3, flickering: 0.05, bloom: 0.5,
+      // IBM 5151 green phosphor monochrome - crisp scanlines, strong glow
+      scanlines: 0.7, screenCurvature: 0.8, flickering: 0.05, bloom: 0.7,
       rgbShift: 0, noise: 0.02, burnIn: 0.1, jitter: 0,
-      ambientLight: 0.3, phosphorGlow: true, glowColor: '#33ff33',
+      ambientLight: 0.6, phosphorGlow: true, glowColor: '#33ff33',
     },
     'vt220': {
-      scanlines: 0.35, screenCurvature: 0.25, flickering: 0.08, bloom: 0.45,
-      rgbShift: 0, noise: 0.03, burnIn: 0.05, jitter: 0.01,
-      ambientLight: 0.25, phosphorGlow: true, glowColor: '#ffb000',
+      // DEC VT220 amber phosphor - warm glow, visible scanlines
+      scanlines: 0.6, screenCurvature: 0.75, flickering: 0.08, bloom: 0.65,
+      rgbShift: 0, noise: 0.02, burnIn: 0.05, jitter: 0.01,
+      ambientLight: 0.55, phosphorGlow: true, glowColor: '#ffb000',
     },
     'apple-ii': {
-      scanlines: 0.5, screenCurvature: 0.35, flickering: 0.1, bloom: 0.6,
-      rgbShift: 0.1, noise: 0.04, burnIn: 0, jitter: 0.02,
-      ambientLight: 0.35, phosphorGlow: true, glowColor: '#00ff00',
+      // Apple II green screen - heavy scanlines, bright phosphor
+      scanlines: 0.8, screenCurvature: 0.85, flickering: 0.1, bloom: 0.8,
+      rgbShift: 0.15, noise: 0.03, burnIn: 0, jitter: 0.02,
+      ambientLight: 0.7, phosphorGlow: true, glowColor: '#00ff00',
     },
     'c64': {
-      scanlines: 0.3, screenCurvature: 0.2, flickering: 0.05, bloom: 0.4,
-      rgbShift: 0.05, noise: 0.03, burnIn: 0, jitter: 0.01,
-      ambientLight: 0.2, phosphorGlow: true, glowColor: '#7b7bff',
+      // Commodore 64 - blue-tinted phosphor, softer look
+      scanlines: 0.5, screenCurvature: 0.7, flickering: 0.05, bloom: 0.6,
+      rgbShift: 0.1, noise: 0.02, burnIn: 0, jitter: 0.01,
+      ambientLight: 0.5, phosphorGlow: true, glowColor: '#8888ff',
     },
     'classic-crt': {
-      scanlines: 0.4, screenCurvature: 0.3, flickering: 0.15, bloom: 0.5,
-      rgbShift: 0.2, noise: 0.08, burnIn: 0.05, jitter: 0.03,
-      ambientLight: 0.3, phosphorGlow: true, glowColor: '#00ff00',
+      // Generic old CRT - all effects visible
+      scanlines: 0.65, screenCurvature: 0.8, flickering: 0.15, bloom: 0.7,
+      rgbShift: 0.25, noise: 0.05, burnIn: 0.05, jitter: 0.03,
+      ambientLight: 0.6, phosphorGlow: true, glowColor: '#00ff00',
     },
     'subtle': {
-      scanlines: 0.15, screenCurvature: 0.1, flickering: 0.02, bloom: 0.2,
+      // Subtle hints of CRT without being distracting
+      scanlines: 0.25, screenCurvature: 0.4, flickering: 0.02, bloom: 0.3,
       rgbShift: 0, noise: 0.01, burnIn: 0, jitter: 0,
-      ambientLight: 0.1, phosphorGlow: false, glowColor: '#00ff00',
+      ambientLight: 0.2, phosphorGlow: true, glowColor: '#00ff00',
     },
   };
 
