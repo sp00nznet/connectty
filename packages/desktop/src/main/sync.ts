@@ -322,9 +322,12 @@ export class CloudSyncService {
   private currentOAuthServer: http.Server | null = null;
 
   // OAuth configuration
+  // Note: Google "Web application" clients require clientSecret
+  // Google "Desktop app" clients work without clientSecret when using PKCE
   private readonly OAUTH_CONFIG = {
     google: {
       clientId: '1081959577053-rfp12bd9ikrjhl3ptgk03a8v0ofr7ri6.apps.googleusercontent.com',
+      clientSecret: '', // Add your client secret here if using Web application type
       authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       scope: 'openid email profile https://www.googleapis.com/auth/drive.appdata',
@@ -332,6 +335,7 @@ export class CloudSyncService {
     },
     github: {
       clientId: 'Ov23liqvNVMDWijyAPNT',
+      clientSecret: '', // GitHub OAuth apps also need a secret
       authUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
       scope: 'gist read:user user:email',
@@ -403,20 +407,29 @@ export class CloudSyncService {
     // Start local HTTP server and wait for callback
     const authCode = await this.startOAuthCallbackAndOpenBrowser(state, authUrl);
     if (!authCode) {
+      console.log('OAuth: No auth code received');
       return null;
     }
+
+    console.log('OAuth: Got auth code, exchanging for tokens...');
 
     // Exchange code for tokens
     const tokens = await this.exchangeCodeForTokens(provider, authCode, codeVerifier);
     if (!tokens) {
+      console.error('OAuth: Token exchange failed');
       return null;
     }
+
+    console.log('OAuth: Got tokens, fetching user info...');
 
     // Get user info
     const userInfo = await this.getUserInfo(provider, tokens.accessToken);
     if (!userInfo) {
+      console.error('OAuth: Failed to get user info');
       return null;
     }
+
+    console.log('OAuth: Got user info, creating account...');
 
     // Create account
     const account: SyncAccount = {
@@ -432,6 +445,8 @@ export class CloudSyncService {
 
     this.accounts.set(account.id, account);
     this.saveAccounts();
+
+    console.log('OAuth: Account created successfully:', account.email);
 
     return account;
   }
@@ -535,8 +550,17 @@ export class CloudSyncService {
       code,
       redirect_uri: config.redirectUri,
       grant_type: 'authorization_code',
-      ...(provider !== 'github' && { code_verifier: codeVerifier }),
     });
+
+    // Add client_secret if available (required for Web application type clients)
+    if (config.clientSecret) {
+      params.set('client_secret', config.clientSecret);
+    }
+
+    // Add code_verifier for PKCE (Google only)
+    if (provider === 'google') {
+      params.set('code_verifier', codeVerifier);
+    }
 
     try {
       const response = await fetch(config.tokenUrl, {
@@ -549,7 +573,8 @@ export class CloudSyncService {
       });
 
       if (!response.ok) {
-        console.error('Token exchange failed:', await response.text());
+        const errorText = await response.text();
+        console.error('Token exchange failed:', response.status, errorText);
         return null;
       }
 
