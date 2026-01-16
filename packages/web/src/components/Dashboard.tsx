@@ -7,6 +7,8 @@ import type { ServerConnection, Credential, ConnectionGroup, User, SSHSessionEve
 import { api } from '../services/api';
 import { wsService } from '../services/websocket';
 import ConnectionModal from './ConnectionModal';
+import CredentialModal from './CredentialModal';
+import GroupModal from './GroupModal';
 import ProviderPanel from './ProviderPanel';
 import BulkCommandPanel from './BulkCommandPanel';
 import ImportExportModal from './ImportExportModal';
@@ -41,6 +43,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [mainView, setMainView] = useState<MainView>('terminal');
   const [showImportExport, setShowImportExport] = useState(false);
+  const [showCredentialModal, setShowCredentialModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
 
   // Collapsible sidebar groups
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
@@ -412,16 +416,41 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         {/* Sidebar */}
         <aside className="sidebar">
           <div className="sidebar-header">
-            <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
-              + New
-            </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowImportExport(true)}
-              title="Import / Export"
-            >
-              ⇄
-            </button>
+            <div className="sidebar-buttons">
+              <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
+                + New
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowCredentialModal(true)}
+                title="Credentials"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowGroupModal(true)}
+                title="Groups"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                </svg>
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowImportExport(true)}
+                title="Import / Export"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </button>
+            </div>
             <div className="search-input">
               <input
                 type="text"
@@ -700,6 +729,23 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         <ImportExportModal
           onClose={() => setShowImportExport(false)}
           onImportComplete={loadData}
+          onNotification={showNotification}
+        />
+      )}
+
+      {/* Credential Modal */}
+      {showCredentialModal && (
+        <CredentialModal
+          onClose={() => setShowCredentialModal(false)}
+          onNotification={showNotification}
+        />
+      )}
+
+      {/* Group Modal */}
+      {showGroupModal && (
+        <GroupModal
+          onClose={() => setShowGroupModal(false)}
+          onGroupsChanged={loadData}
           onNotification={showNotification}
         />
       )}
