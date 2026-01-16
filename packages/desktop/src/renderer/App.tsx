@@ -3435,6 +3435,7 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
       setCommandName('');
       setCommandDescription('');
       setCommandCategory('');
+      setInlineCommand('');
     } catch (err) {
       onNotification('error', `Failed to save: ${(err as Error).message}`);
     }
@@ -3788,6 +3789,16 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
                     />
                   </div>
                   <div className="form-group">
+                    <label className="form-label">Command *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={inlineCommand}
+                      onChange={(e) => setInlineCommand(e.target.value)}
+                      placeholder="e.g., df -h"
+                    />
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">Description</label>
                     <input
                       type="text"
@@ -3820,7 +3831,7 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
                     <button
                       className="btn btn-primary"
                       onClick={handleSaveCommand}
-                      disabled={!commandName}
+                      disabled={!commandName || !inlineCommand}
                     >
                       {editingCommand ? 'Update' : 'Save'}
                     </button>
@@ -5313,6 +5324,13 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
   const [showAddAccountMenu, setShowAddAccountMenu] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+
+  // Load accounts from backend on mount
+  useEffect(() => {
+    window.connectty.sync.getAccounts().then((accounts) => {
+      setSyncAccounts(accounts);
+    }).catch(console.error);
+  }, []);
 
   // Config sync state
   const [showConfigPicker, setShowConfigPicker] = useState<string | null>(null); // accountId when showing picker
