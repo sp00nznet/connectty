@@ -116,21 +116,6 @@ export default function App() {
     closeToTray: false,
     startMinimized: false,
     terminalTheme: 'classic',
-    retroTerm: {
-      enabled: false,
-      preset: 'classic-crt',
-      scanlines: 0.3,
-      screenCurvature: 0.2,
-      flickering: 0.1,
-      bloom: 0.4,
-      rgbShift: 0.15,
-      noise: 0.05,
-      burnIn: 0,
-      jitter: 0.02,
-      ambientLight: 0.2,
-      phosphorGlow: true,
-      glowColor: '#00ff00',
-    }
   });
 
   // New tab menu (stores position for fixed positioning)
@@ -165,7 +150,6 @@ export default function App() {
   const commandBuffersRef = useRef<Map<string, string>>(new Map());
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
-  const terminalMountRef = useRef<HTMLDivElement>(null);
 
   // Available themes (66 themes for 22 rows × 3 columns)
   const themes = [
@@ -367,10 +351,25 @@ export default function App() {
     });
   }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
 
-  // Apply theme to document
+  // Apply theme to document and update title bar color (Windows)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('connectty-theme', theme);
+
+    // Update Windows title bar overlay color to match theme
+    // Read the computed CSS variable after theme is applied
+    requestAnimationFrame(() => {
+      const computedStyle = getComputedStyle(document.documentElement);
+      const bgColor = computedStyle.getPropertyValue('--bg-primary').trim();
+      const textColor = computedStyle.getPropertyValue('--text-primary').trim();
+
+      if (bgColor && textColor) {
+        window.connectty.app.setTitleBarOverlay({
+          color: bgColor,
+          symbolColor: textColor,
+        });
+      }
+    });
   }, [theme]);
 
   // Load data on mount
@@ -393,9 +392,9 @@ export default function App() {
   // Fit terminal on active session change (for SSH, serial, and local shell sessions)
   useEffect(() => {
     const activeSession = sessions.find(s => s.id === activeSessionId);
-    if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') && terminalMountRef.current) {
-      terminalMountRef.current.innerHTML = '';
-      activeSession.terminal.open(terminalMountRef.current);
+    if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') && terminalContainerRef.current) {
+      terminalContainerRef.current.innerHTML = '';
+      activeSession.terminal.open(terminalContainerRef.current);
       activeSession.fitAddon.fit();
     }
   }, [activeSessionId, sessions]);
@@ -1420,47 +1419,8 @@ export default function App() {
                 if (!activeSession) return null;
 
                 if (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') {
-                  const rt = appSettings.retroTerm;
-                  const isRetroEnabled = rt?.enabled;
-
-                  const retroTermClasses = isRetroEnabled ? [
-                    'retro-term-enabled',
-                    rt.flickering > 0 ? 'flickering' : '',
-                    rt.rgbShift > 0 ? 'rgb-shift' : '',
-                    rt.jitter > 0 ? 'jitter' : '',
-                    rt.ambientLight > 0 ? 'ambient-light' : '',
-                    rt.phosphorGlow ? 'phosphor-glow' : '',
-                  ].filter(Boolean).join(' ') : '';
-
-                  const retroTermStyles = isRetroEnabled ? {
-                    '--scanline-opacity': rt.scanlines,
-                    '--curvature-opacity': rt.screenCurvature,
-                    '--bloom-opacity': rt.bloom,
-                    '--rgb-shift-intensity': rt.rgbShift,
-                    '--noise-intensity': rt.noise,
-                    '--jitter-intensity': rt.jitter,
-                    '--ambient-intensity': rt.ambientLight,
-                    '--glow-color': rt.glowColor,
-                  } as React.CSSProperties : {};
-
                   return (
-                    <div
-                      className={`terminal-container ${retroTermClasses}`}
-                      style={retroTermStyles}
-                      ref={terminalContainerRef}
-                    >
-                      {/* Terminal mount point - xterm attaches here */}
-                      <div className="terminal-mount" ref={terminalMountRef} />
-                      {/* RetroTerm CRT Effect Overlays */}
-                      {isRetroEnabled && (
-                        <>
-                          {rt.scanlines > 0 && <div className="retro-term-scanlines" />}
-                          {rt.screenCurvature > 0 && <div className="retro-term-curvature" />}
-                          {rt.bloom > 0 && <div className="retro-term-bloom" />}
-                          {rt.noise > 0 && <div className="retro-term-noise" />}
-                        </>
-                      )}
-                    </div>
+                    <div className="terminal-container" ref={terminalContainerRef} />
                   );
                 } else if (activeSession.type === 'sftp') {
                   const otherSftpSessions = sessions.filter(
@@ -5391,93 +5351,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     const saved = localStorage.getItem('settings-sync-expanded');
     return saved !== null ? saved === 'true' : true;
   });
-  const [experimentalExpanded, setExperimentalExpanded] = useState(() => {
-    const saved = localStorage.getItem('settings-experimental-expanded');
-    return saved !== null ? saved === 'true' : false;
-  });
-
-  // RetroTerm settings state
-  // RetroTerm preset configurations - tuned for authentic CRT look
-  const retroTermPresets: Record<RetroTermPreset, Omit<RetroTermSettings, 'enabled' | 'preset'>> = {
-    'custom': {
-      scanlines: 0.5, screenCurvature: 0.7, flickering: 0.1, bloom: 0.6,
-      rgbShift: 0.3, noise: 0.03, burnIn: 0, jitter: 0.02,
-      ambientLight: 0.5, phosphorGlow: true, glowColor: '#00ff00',
-    },
-    'ibm-5151': {
-      // IBM 5151 green phosphor monochrome - crisp scanlines, strong glow
-      scanlines: 0.7, screenCurvature: 0.8, flickering: 0.05, bloom: 0.7,
-      rgbShift: 0, noise: 0.02, burnIn: 0.1, jitter: 0,
-      ambientLight: 0.6, phosphorGlow: true, glowColor: '#33ff33',
-    },
-    'vt220': {
-      // DEC VT220 amber phosphor - warm glow, visible scanlines
-      scanlines: 0.6, screenCurvature: 0.75, flickering: 0.08, bloom: 0.65,
-      rgbShift: 0, noise: 0.02, burnIn: 0.05, jitter: 0.01,
-      ambientLight: 0.55, phosphorGlow: true, glowColor: '#ffb000',
-    },
-    'apple-ii': {
-      // Apple II green screen - heavy scanlines, bright phosphor
-      scanlines: 0.8, screenCurvature: 0.85, flickering: 0.1, bloom: 0.8,
-      rgbShift: 0.15, noise: 0.03, burnIn: 0, jitter: 0.02,
-      ambientLight: 0.7, phosphorGlow: true, glowColor: '#00ff00',
-    },
-    'c64': {
-      // Commodore 64 - blue-tinted phosphor, softer look
-      scanlines: 0.5, screenCurvature: 0.7, flickering: 0.05, bloom: 0.6,
-      rgbShift: 0.1, noise: 0.02, burnIn: 0, jitter: 0.01,
-      ambientLight: 0.5, phosphorGlow: true, glowColor: '#8888ff',
-    },
-    'classic-crt': {
-      // Generic old CRT - all effects visible
-      scanlines: 0.65, screenCurvature: 0.8, flickering: 0.15, bloom: 0.7,
-      rgbShift: 0.25, noise: 0.05, burnIn: 0.05, jitter: 0.03,
-      ambientLight: 0.6, phosphorGlow: true, glowColor: '#00ff00',
-    },
-    'subtle': {
-      // Subtle hints of CRT without being distracting
-      scanlines: 0.25, screenCurvature: 0.4, flickering: 0.02, bloom: 0.3,
-      rgbShift: 0, noise: 0.01, burnIn: 0, jitter: 0,
-      ambientLight: 0.2, phosphorGlow: true, glowColor: '#00ff00',
-    },
-  };
-
-  const presetNames: Record<RetroTermPreset, string> = {
-    'custom': 'Custom',
-    'ibm-5151': 'IBM 5151',
-    'vt220': 'VT220 Amber',
-    'apple-ii': 'Apple II',
-    'c64': 'Commodore 64',
-    'classic-crt': 'Classic CRT',
-    'subtle': 'Subtle',
-  };
-
-  const defaultRetroTerm: RetroTermSettings = {
-    enabled: false,
-    preset: 'classic-crt',
-    scanlines: 0.3,
-    screenCurvature: 0.2,
-    flickering: 0.1,
-    bloom: 0.4,
-    rgbShift: 0.15,
-    noise: 0.05,
-    burnIn: 0,
-    jitter: 0.02,
-    ambientLight: 0.2,
-    phosphorGlow: true,
-    glowColor: '#00ff00',
-  };
-  const [retroTerm, setRetroTerm] = useState<RetroTermSettings>(settings.retroTerm || defaultRetroTerm);
-
-  // Apply preset when changed
-  const applyPreset = (preset: RetroTermPreset) => {
-    if (preset !== 'custom') {
-      const presetSettings = retroTermPresets[preset];
-      setRetroTerm(prev => ({ ...prev, preset, ...presetSettings }));
-    } else {
-      setRetroTerm(prev => ({ ...prev, preset: 'custom' }));
-    }
-  };
 
   // Save collapse states to localStorage when they change
   useEffect(() => {
@@ -5492,9 +5365,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   useEffect(() => {
     localStorage.setItem('settings-sync-expanded', String(syncExpanded));
   }, [syncExpanded]);
-  useEffect(() => {
-    localStorage.setItem('settings-experimental-expanded', String(experimentalExpanded));
-  }, [experimentalExpanded]);
 
   // Sync accounts state
   const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
@@ -5537,7 +5407,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         startMinimized,
         terminalTheme,
         syncAccounts,
-        retroTerm,
       });
       onClose();
     } finally {
@@ -6059,159 +5928,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                       >
                         + Add Account...
                       </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Experimental Features Section - Collapsible */}
-            <div className="settings-section collapsible">
-              <button
-                type="button"
-                className="settings-section-header"
-                onClick={() => setExperimentalExpanded(!experimentalExpanded)}
-              >
-                <span className="collapse-indicator">{experimentalExpanded ? '▼' : '▶'}</span>
-                <h4>Experimental Features</h4>
-              </button>
-              {experimentalExpanded && (
-                <div className="settings-section-content">
-                  <p className="settings-description">
-                    Enable experimental features that are still in development.
-                  </p>
-
-                  {/* RetroTerm Toggle */}
-                  <div className="setting-item retro-term-setting">
-                    <div className="setting-header">
-                      <label className="setting-toggle">
-                        <input
-                          type="checkbox"
-                          checked={retroTerm.enabled}
-                          onChange={(e) => setRetroTerm({ ...retroTerm, enabled: e.target.checked })}
-                        />
-                        <span className="toggle-switch"></span>
-                        <span className="setting-label">RetroTerm</span>
-                      </label>
-                      <span className="setting-badge experimental">Experimental</span>
-                    </div>
-                    <p className="setting-description">
-                      Apply CRT monitor effects to terminal windows for a retro computing aesthetic.
-                    </p>
-
-                    {/* RetroTerm Sub-options */}
-                    {retroTerm.enabled && (
-                      <div className="retro-term-options">
-                        {/* Preset Selection */}
-                        <div className="retro-presets">
-                          <label className="retro-presets-label">Terminal Style:</label>
-                          <div className="retro-preset-buttons">
-                            {(Object.keys(presetNames) as RetroTermPreset[]).filter(p => p !== 'custom').map((preset) => (
-                              <button
-                                key={preset}
-                                type="button"
-                                className={`retro-preset-btn ${retroTerm.preset === preset ? 'active' : ''}`}
-                                onClick={() => applyPreset(preset)}
-                                style={{ '--preset-color': retroTermPresets[preset].glowColor } as React.CSSProperties}
-                              >
-                                <span className="preset-glow" style={{ backgroundColor: retroTermPresets[preset].glowColor }}></span>
-                                {presetNames[preset]}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Current preset indicator with customize button */}
-                        <div className="retro-current-preset">
-                          <span>Active: <strong>{presetNames[retroTerm.preset || 'classic-crt']}</strong></span>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => setRetroTerm(prev => ({ ...prev, preset: 'custom' }))}
-                          >
-                            Customize...
-                          </button>
-                        </div>
-
-                        {/* Advanced Sliders - Only show for Custom preset */}
-                        {retroTerm.preset === 'custom' && (
-                          <>
-                            <div className="retro-term-grid">
-                              <div className="retro-option">
-                                <label>Scanlines</label>
-                                <input type="range" min="0" max="100" value={retroTerm.scanlines * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, scanlines: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.scanlines * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>Screen Curvature</label>
-                                <input type="range" min="0" max="100" value={retroTerm.screenCurvature * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, screenCurvature: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.screenCurvature * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>Bloom</label>
-                                <input type="range" min="0" max="100" value={retroTerm.bloom * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, bloom: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.bloom * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>RGB Shift</label>
-                                <input type="range" min="0" max="100" value={retroTerm.rgbShift * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, rgbShift: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.rgbShift * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>Flickering</label>
-                                <input type="range" min="0" max="100" value={retroTerm.flickering * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, flickering: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.flickering * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>Static Noise</label>
-                                <input type="range" min="0" max="100" value={retroTerm.noise * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, noise: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.noise * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>Jitter</label>
-                                <input type="range" min="0" max="100" value={retroTerm.jitter * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, jitter: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.jitter * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>Ambient Light</label>
-                                <input type="range" min="0" max="100" value={retroTerm.ambientLight * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, ambientLight: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.ambientLight * 100)}%</span>
-                              </div>
-                              <div className="retro-option">
-                                <label>Burn-in</label>
-                                <input type="range" min="0" max="100" value={retroTerm.burnIn * 100}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, burnIn: parseInt(e.target.value) / 100 })} />
-                                <span className="value">{Math.round(retroTerm.burnIn * 100)}%</span>
-                              </div>
-                            </div>
-
-                            <div className="retro-option-row">
-                              <label className="setting-toggle small">
-                                <input type="checkbox" checked={retroTerm.phosphorGlow}
-                                  onChange={(e) => setRetroTerm({ ...retroTerm, phosphorGlow: e.target.checked })} />
-                                <span className="toggle-switch"></span>
-                                <span>Phosphor Glow</span>
-                              </label>
-                              {retroTerm.phosphorGlow && (
-                                <div className="glow-color-picker">
-                                  <label>Glow Color:</label>
-                                  <input type="color" value={retroTerm.glowColor}
-                                    onChange={(e) => setRetroTerm({ ...retroTerm, glowColor: e.target.value })} />
-                                  <span className="color-preview" style={{ backgroundColor: retroTerm.glowColor }}></span>
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
                     )}
                   </div>
                 </div>

@@ -97,26 +97,6 @@ export interface SyncConfigInfo {
   credentialCount: number;
 }
 
-// RetroTerm preset types
-export type RetroTermPreset = 'custom' | 'ibm-5151' | 'vt220' | 'apple-ii' | 'c64' | 'classic-crt' | 'subtle';
-
-// RetroTerm CRT effect settings
-export interface RetroTermSettings {
-  enabled: boolean;
-  preset: RetroTermPreset;  // Selected preset profile
-  scanlines: number;        // 0-1 intensity
-  screenCurvature: number;  // 0-1 intensity
-  flickering: number;       // 0-1 intensity
-  bloom: number;            // 0-1 intensity (glow effect)
-  rgbShift: number;         // 0-1 intensity (chromatic aberration)
-  noise: number;            // 0-1 intensity (static noise)
-  burnIn: number;           // 0-1 intensity (screen burn-in)
-  jitter: number;           // 0-1 intensity (horizontal jitter)
-  ambientLight: number;     // 0-1 intensity
-  phosphorGlow: boolean;    // Enable phosphor glow color
-  glowColor: string;        // Glow color (default: green)
-}
-
 // App settings types
 export interface AppSettings {
   minimizeToTray: boolean;
@@ -124,7 +104,6 @@ export interface AppSettings {
   startMinimized: boolean;
   syncAccounts?: SyncAccount[];
   terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
-  retroTerm?: RetroTermSettings;      // Experimental CRT terminal effect
 }
 
 // Local shell types
@@ -391,6 +370,8 @@ const api = {
   app: {
     version: (): Promise<string> => ipcRenderer.invoke('app:version'),
     platform: (): Promise<string> => ipcRenderer.invoke('app:platform'),
+    setTitleBarOverlay: (options: { color: string; symbolColor: string }): Promise<boolean> =>
+      ipcRenderer.invoke('app:setTitleBarOverlay', options),
   },
 
   // Local shell operations

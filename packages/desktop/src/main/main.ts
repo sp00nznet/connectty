@@ -17,51 +17,13 @@ import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
 import { getProviderService } from './providers';
 
-// RetroTerm preset types
-type RetroTermPreset = 'custom' | 'ibm-5151' | 'vt220' | 'apple-ii' | 'c64' | 'classic-crt' | 'subtle';
-
-// RetroTerm CRT effect settings
-interface RetroTermSettings {
-  enabled: boolean;
-  preset: RetroTermPreset;
-  scanlines: number;
-  screenCurvature: number;
-  flickering: number;
-  bloom: number;
-  rgbShift: number;
-  noise: number;
-  burnIn: number;
-  jitter: number;
-  ambientLight: number;
-  phosphorGlow: boolean;
-  glowColor: string;
-}
-
 // App settings interface
 interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
   startMinimized: boolean;
   terminalTheme?: 'sync' | 'classic';
-  retroTerm?: RetroTermSettings;
 }
-
-// Default RetroTerm settings
-const defaultRetroTermSettings: RetroTermSettings = {
-  enabled: false,
-  preset: 'classic-crt',
-  scanlines: 0.3,
-  screenCurvature: 0.2,
-  flickering: 0.1,
-  bloom: 0.4,
-  rgbShift: 0.15,
-  noise: 0.05,
-  burnIn: 0,
-  jitter: 0.02,
-  ambientLight: 0.2,
-  phosphorGlow: true,
-  glowColor: '#00ff00',
-};
 
 // Initialize settings store
 const settingsStore = new Store<AppSettings>({
@@ -69,7 +31,6 @@ const settingsStore = new Store<AppSettings>({
     minimizeToTray: false,
     closeToTray: false,
     startMinimized: false,
-    retroTerm: defaultRetroTermSettings,
   },
 });
 import type {
@@ -147,7 +108,8 @@ async function createWindow(): Promise<void> {
     ? path.join(__dirname, '../../assets/icon.ico')
     : path.join(__dirname, '../../assets/icon.png');
 
-  mainWindow = new BrowserWindow({
+  // Configure platform-specific window options
+  const windowOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1200,
     height: 800,
     minWidth: 800,
@@ -159,7 +121,19 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-  });
+  };
+
+  // On Windows, use custom title bar that can match the theme
+  if (process.platform === 'win32') {
+    windowOptions.titleBarStyle = 'hidden';
+    windowOptions.titleBarOverlay = {
+      color: '#1a1a2e', // Default midnight theme color
+      symbolColor: '#ffffff',
+      height: 32,
+    };
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   // Hide menu bar on Windows
   if (process.platform === 'win32') {
@@ -699,6 +673,18 @@ function setupIpcHandlers(): void {
     return process.platform;
   });
 
+  // Title bar overlay color (Windows only)
+  ipcMain.handle('app:setTitleBarOverlay', (_event, options: { color: string; symbolColor: string }) => {
+    if (process.platform === 'win32' && mainWindow) {
+      mainWindow.setTitleBarOverlay({
+        color: options.color,
+        symbolColor: options.symbolColor,
+      });
+      return true;
+    }
+    return false;
+  });
+
   // Saved command handlers
   ipcMain.handle('commands:list', async (_event, category?: string) => {
     return db.getSavedCommands(category);
@@ -970,7 +956,6 @@ function setupIpcHandlers(): void {
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
-      retroTerm: settingsStore.get('retroTerm') || defaultRetroTermSettings,
     };
   });
 
@@ -987,15 +972,11 @@ function setupIpcHandlers(): void {
     if (settings.terminalTheme !== undefined) {
       settingsStore.set('terminalTheme', settings.terminalTheme);
     }
-    if (settings.retroTerm !== undefined) {
-      settingsStore.set('retroTerm', settings.retroTerm);
-    }
     return {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
-      retroTerm: settingsStore.get('retroTerm') || defaultRetroTermSettings,
     };
   });
 
