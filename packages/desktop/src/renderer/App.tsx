@@ -359,14 +359,12 @@ export default function App() {
 
   // Update existing terminals when theme changes
   useEffect(() => {
-    if (appSettings.terminalTheme === 'sync') {
-      const terminalTheme = getTerminalTheme();
-      sessions.forEach(session => {
-        if ('terminal' in session && session.terminal) {
-          session.terminal.options.theme = terminalTheme;
-        }
-      });
-    }
+    const terminalTheme = getTerminalTheme();
+    sessions.forEach(session => {
+      if ('terminal' in session && session.terminal) {
+        session.terminal.options.theme = terminalTheme;
+      }
+    });
   }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
 
   // Apply theme to document
