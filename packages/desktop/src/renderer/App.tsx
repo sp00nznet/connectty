@@ -1420,24 +1420,27 @@ export default function App() {
                 if (!activeSession) return null;
 
                 if (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') {
-                  const retroTermClasses = appSettings.retroTerm?.enabled ? [
+                  const rt = appSettings.retroTerm;
+                  const isRetroEnabled = rt?.enabled;
+
+                  const retroTermClasses = isRetroEnabled ? [
                     'retro-term-enabled',
-                    appSettings.retroTerm.flickering > 0 ? 'flickering' : '',
-                    appSettings.retroTerm.rgbShift > 0 ? 'rgb-shift' : '',
-                    appSettings.retroTerm.jitter > 0 ? 'jitter' : '',
-                    appSettings.retroTerm.ambientLight > 0 ? 'ambient-light' : '',
-                    appSettings.retroTerm.phosphorGlow ? 'phosphor-glow' : '',
+                    rt.flickering > 0 ? 'flickering' : '',
+                    rt.rgbShift > 0 ? 'rgb-shift' : '',
+                    rt.jitter > 0 ? 'jitter' : '',
+                    rt.ambientLight > 0 ? 'ambient-light' : '',
+                    rt.phosphorGlow ? 'phosphor-glow' : '',
                   ].filter(Boolean).join(' ') : '';
 
-                  const retroTermStyles = appSettings.retroTerm?.enabled ? {
-                    '--scanline-intensity': appSettings.retroTerm.scanlines,
-                    '--curvature-intensity': appSettings.retroTerm.screenCurvature,
-                    '--bloom-intensity': appSettings.retroTerm.bloom,
-                    '--rgb-shift-intensity': appSettings.retroTerm.rgbShift,
-                    '--noise-intensity': appSettings.retroTerm.noise,
-                    '--jitter-intensity': appSettings.retroTerm.jitter,
-                    '--ambient-intensity': appSettings.retroTerm.ambientLight,
-                    '--glow-color': appSettings.retroTerm.glowColor,
+                  const retroTermStyles = isRetroEnabled ? {
+                    '--scanline-opacity': rt.scanlines,
+                    '--curvature-opacity': rt.screenCurvature,
+                    '--bloom-opacity': rt.bloom,
+                    '--rgb-shift-intensity': rt.rgbShift,
+                    '--noise-intensity': rt.noise,
+                    '--jitter-intensity': rt.jitter,
+                    '--ambient-intensity': rt.ambientLight,
+                    '--glow-color': rt.glowColor,
                   } as React.CSSProperties : {};
 
                   return (
@@ -1446,8 +1449,14 @@ export default function App() {
                       style={retroTermStyles}
                       ref={terminalContainerRef}
                     >
-                      {appSettings.retroTerm?.enabled && appSettings.retroTerm.noise > 0 && (
-                        <div className="retro-term-noise" />
+                      {/* RetroTerm CRT Effect Overlays */}
+                      {isRetroEnabled && (
+                        <>
+                          {rt.scanlines > 0 && <div className="retro-term-scanlines" />}
+                          {rt.screenCurvature > 0 && <div className="retro-term-curvature" />}
+                          {rt.bloom > 0 && <div className="retro-term-bloom" />}
+                          {rt.noise > 0 && <div className="retro-term-noise" />}
+                        </>
                       )}
                     </div>
                   );
