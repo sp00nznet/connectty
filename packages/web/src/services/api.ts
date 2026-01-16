@@ -172,6 +172,14 @@ class ApiService {
     return response.data!;
   }
 
+  async updateGroup(id: string, data: Partial<ConnectionGroup>): Promise<ConnectionGroup> {
+    const response = await this.request<APIResponse<ConnectionGroup>>(`/groups/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
   async deleteGroup(id: string): Promise<void> {
     await this.request(`/groups/${id}`, { method: 'DELETE' });
   }
