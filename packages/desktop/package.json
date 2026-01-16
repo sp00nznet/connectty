@@ -19,7 +19,7 @@
     "dist": "npm run build && electron-builder",
     "download-gsudo": "node scripts/download-gsudo.js",
     "dist:win": "npm run download-gsudo && npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux deb",
+    "dist:linux": "npm run build && node scripts/build-linux.js",
     "dist:mac": "npm run build && electron-builder --mac",
     "clean": "rimraf dist"
   },
