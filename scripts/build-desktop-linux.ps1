@@ -262,15 +262,11 @@ if ($hasWSL -and -not $AppImage) {
         Write-Host "  fpm is already installed" -ForegroundColor Green
     }
 
-    # Run build in WSL - explicitly use Linux binaries by removing Windows PATH
-    Write-Host "  Running electron-builder in WSL..." -ForegroundColor Gray
-    $wslBuildCmd = @"
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export WSL_INTEROP=""
-cd '$wslPath/packages/desktop'
-/usr/bin/npx electron-builder --linux $buildTarget
-"@
-    wsl bash -c $wslBuildCmd
+    # Run electron-builder entirely in WSL
+    # Use --noprofile --norc to avoid loading Windows PATH, then set clean Linux PATH
+    Write-Host "  Running electron-builder in WSL (this may take a while)..." -ForegroundColor Gray
+    $wslCmd = "export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin; cd $wslPath/packages/desktop && npx electron-builder --linux $buildTarget"
+    wsl bash --noprofile --norc -c $wslCmd
     $buildResult = $LASTEXITCODE
 } else {
     # Try native build (will likely fail for .deb without fpm)
