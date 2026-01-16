@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 
+# Package files (managed locally)
+package.json
+package-lock.json
+**/package.json
+**/package-lock.json
+
 # Build outputs
 dist/
 release/
