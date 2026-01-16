@@ -5366,6 +5366,17 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [uploadingAccount, setUploadingAccount] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Sync options state - what to sync
+  const [syncOptionsAccount, setSyncOptionsAccount] = useState<string | null>(null);
+  const [syncOptions, setSyncOptions] = useState({
+    connections: true,
+    credentials: true,
+    groups: true,
+    providers: true,
+    commands: true,
+    theme: true,
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -5420,8 +5431,9 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const handleUpload = async (accountId: string) => {
     setUploadingAccount(accountId);
     setSyncMessage(null);
+    setSyncOptionsAccount(null);
     try {
-      const result = await window.connectty.sync.upload(accountId);
+      const result = await window.connectty.sync.upload(accountId, syncOptions);
       if (result.success) {
         setSyncMessage({ type: 'success', text: 'Configuration uploaded successfully!' });
       } else {
@@ -5458,8 +5470,9 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const handleImportConfig = async (accountId: string, configId: string) => {
     setImporting(true);
     setSyncMessage(null);
+    setSyncOptionsAccount(null);
     try {
-      const result = await window.connectty.sync.importConfig(accountId, configId);
+      const result = await window.connectty.sync.importConfig(accountId, configId, syncOptions);
       if (result.success && result.imported) {
         setSyncMessage({
           type: 'success',
@@ -5678,39 +5691,105 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                   {syncAccounts.length > 0 && (
                     <div className="sync-accounts-list">
                       {syncAccounts.map(account => (
-                        <div key={account.id} className="sync-account-item">
-                          <span className="sync-account-icon">{getProviderIcon(account.provider)}</span>
-                          <div className="sync-account-info">
-                            <span className="sync-account-email">{account.email}</span>
-                            <span className="sync-account-provider">{getProviderName(account.provider)}</span>
+                        <div key={account.id} className="sync-account-item-wrapper">
+                          <div className="sync-account-item">
+                            <span className="sync-account-icon">{getProviderIcon(account.provider)}</span>
+                            <div className="sync-account-info">
+                              <span className="sync-account-email">{account.email}</span>
+                              <span className="sync-account-provider">{getProviderName(account.provider)}</span>
+                            </div>
+                            <div className="sync-account-actions">
+                              <button
+                                type="button"
+                                className={`btn btn-sm ${syncOptionsAccount === account.id ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setSyncOptionsAccount(syncOptionsAccount === account.id ? null : account.id)}
+                                disabled={uploadingAccount === account.id}
+                              >
+                                {uploadingAccount === account.id ? 'Syncing...' : 'Sync'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-danger"
+                                onClick={() => handleRemoveAccount(account.id)}
+                                title="Remove account"
+                              >
+                                ×
+                              </button>
+                            </div>
                           </div>
-                          <div className="sync-account-actions">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-secondary"
-                              onClick={() => handleUpload(account.id)}
-                              disabled={uploadingAccount === account.id}
-                              title="Upload config to cloud"
-                            >
-                              {uploadingAccount === account.id ? '...' : '↑ Upload'}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-secondary"
-                              onClick={() => handleShowConfigs(account.id)}
-                              title="Download config from cloud"
-                            >
-                              ↓ Download
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-danger"
-                              onClick={() => handleRemoveAccount(account.id)}
-                              title="Remove account"
-                            >
-                              ×
-                            </button>
-                          </div>
+
+                          {/* Sync Options Panel */}
+                          {syncOptionsAccount === account.id && (
+                            <div className="sync-options-panel">
+                              <div className="sync-options-toggles">
+                                <label className="sync-option-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={syncOptions.connections}
+                                    onChange={(e) => setSyncOptions(prev => ({ ...prev, connections: e.target.checked }))}
+                                  />
+                                  <span>Connections</span>
+                                </label>
+                                <label className="sync-option-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={syncOptions.credentials}
+                                    onChange={(e) => setSyncOptions(prev => ({ ...prev, credentials: e.target.checked }))}
+                                  />
+                                  <span>Credentials</span>
+                                </label>
+                                <label className="sync-option-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={syncOptions.groups}
+                                    onChange={(e) => setSyncOptions(prev => ({ ...prev, groups: e.target.checked }))}
+                                  />
+                                  <span>Groups</span>
+                                </label>
+                                <label className="sync-option-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={syncOptions.providers}
+                                    onChange={(e) => setSyncOptions(prev => ({ ...prev, providers: e.target.checked }))}
+                                  />
+                                  <span>Providers</span>
+                                </label>
+                                <label className="sync-option-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={syncOptions.commands}
+                                    onChange={(e) => setSyncOptions(prev => ({ ...prev, commands: e.target.checked }))}
+                                  />
+                                  <span>Commands</span>
+                                </label>
+                                <label className="sync-option-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={syncOptions.theme}
+                                    onChange={(e) => setSyncOptions(prev => ({ ...prev, theme: e.target.checked }))}
+                                  />
+                                  <span>Theme</span>
+                                </label>
+                              </div>
+                              <div className="sync-options-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-secondary"
+                                  onClick={() => handleUpload(account.id)}
+                                  disabled={uploadingAccount === account.id}
+                                >
+                                  ↑ Upload to Cloud
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-secondary"
+                                  onClick={() => handleShowConfigs(account.id)}
+                                >
+                                  ↓ Download from Cloud
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

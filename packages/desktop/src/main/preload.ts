@@ -79,6 +79,15 @@ export interface SyncConfig {
   theme: boolean;
 }
 
+export interface SyncOptions {
+  connections: boolean;
+  credentials: boolean;
+  groups: boolean;
+  providers: boolean;
+  commands: boolean;
+  theme: boolean;
+}
+
 export interface SyncConfigInfo {
   id: string;
   deviceName: string;
@@ -255,15 +264,15 @@ const api = {
     connect: (provider: 'google' | 'github'): Promise<SyncAccount | null> =>
       ipcRenderer.invoke('sync:connect', provider),
     disconnect: (accountId: string): Promise<boolean> => ipcRenderer.invoke('sync:disconnect', accountId),
-    upload: (accountId: string): Promise<{ success: boolean; configId?: string; error?: string }> =>
-      ipcRenderer.invoke('sync:upload', accountId),
+    upload: (accountId: string, options?: SyncOptions): Promise<{ success: boolean; configId?: string; error?: string }> =>
+      ipcRenderer.invoke('sync:upload', accountId, options),
     download: (accountId: string): Promise<{ success: boolean; configs?: SyncConfigInfo[]; error?: string }> =>
       ipcRenderer.invoke('sync:listConfigs', accountId),
-    importConfig: (accountId: string, configId: string): Promise<{
+    importConfig: (accountId: string, configId: string, options?: SyncOptions): Promise<{
       success: boolean;
       imported?: { connections: number; credentials: number; groups: number; providers: number; commands: number };
       error?: string;
-    }> => ipcRenderer.invoke('sync:importConfig', accountId, configId),
+    }> => ipcRenderer.invoke('sync:importConfig', accountId, configId, options),
     getAccounts: (): Promise<SyncAccount[]> => ipcRenderer.invoke('sync:getAccounts'),
   },
 

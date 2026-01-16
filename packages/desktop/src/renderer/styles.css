@@ -4376,6 +4376,10 @@ body {
   margin-bottom: 16px;
 }
 
+.sync-account-item-wrapper {
+  margin-bottom: 8px;
+}
+
 .sync-account-item {
   display: flex;
   align-items: center;
@@ -4384,6 +4388,44 @@ body {
   background: var(--bg-tertiary);
   border-radius: 8px;
   border: 1px solid var(--border);
+}
+
+.sync-options-panel {
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.sync-options-toggles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.sync-option-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.sync-option-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.sync-options-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 .sync-account-icon {

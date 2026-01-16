@@ -646,7 +646,10 @@ export class CloudSyncService {
   /**
    * Upload configuration to cloud storage
    */
-  async upload(accountId: string): Promise<{ success: boolean; configId?: string; error?: string }> {
+  async upload(
+    accountId: string,
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
+  ): Promise<{ success: boolean; configId?: string; error?: string }> {
     const account = this.accounts.get(accountId);
     if (!account) {
       return { success: false, error: 'Account not found' };
@@ -656,8 +659,8 @@ export class CloudSyncService {
       // Refresh token if needed
       await this.refreshTokenIfNeeded(account);
 
-      // Build sync data
-      const syncData = this.buildSyncData();
+      // Build sync data with options
+      const syncData = this.buildSyncData(options);
       const content = JSON.stringify(syncData, null, 2);
       const filename = `connectty-config-${this.deviceId}.json`;
 
@@ -705,7 +708,8 @@ export class CloudSyncService {
    */
   async importConfig(
     accountId: string,
-    configId: string
+    configId: string,
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
   ): Promise<{
     success: boolean;
     imported?: { connections: number; credentials: number; groups: number; providers: number; commands: number };
@@ -732,17 +736,18 @@ export class CloudSyncService {
       }
 
       const data = JSON.parse(content) as ExtendedSyncData;
-      const imported = await this.importSyncData(data);
+      const imported = await this.importSyncData(data, options);
       return { success: true, imported };
     } catch (error) {
       return { success: false, error: String(error) };
     }
   }
 
-  private buildSyncData(): ExtendedSyncData {
-    const { connections, credentials, groups } = this.db.exportAll();
-    const providers = this.db.getProviders();
-    const commands = this.db.getSavedCommands();
+  private buildSyncData(
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
+  ): ExtendedSyncData {
+    const opts = options || { connections: true, credentials: true, groups: true, providers: true, commands: true, theme: true };
+    const exportData = this.db.exportAll();
     const settings = (this.db.getSettings?.() || {}) as StoredSettings;
 
     return {
@@ -751,97 +756,109 @@ export class CloudSyncService {
       exportedBy: 'desktop-client',
       deviceName: this.deviceName,
       deviceId: this.deviceId,
-      connections,
-      credentials,
-      groups,
-      providers,
-      commands,
-      theme: settings.theme,
+      connections: opts.connections ? exportData.connections : [],
+      credentials: opts.credentials ? exportData.credentials : [],
+      groups: opts.groups ? exportData.groups : [],
+      providers: opts.providers ? this.db.getProviders() : [],
+      commands: opts.commands ? this.db.getSavedCommands() : [],
+      theme: opts.theme ? settings.theme : undefined,
     };
   }
 
   private async importSyncData(
-    data: ExtendedSyncData
+    data: ExtendedSyncData,
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
   ): Promise<{ connections: number; credentials: number; groups: number; providers: number; commands: number }> {
+    const opts = options || { connections: true, credentials: true, groups: true, providers: true, commands: true, theme: true };
     const imported = { connections: 0, credentials: 0, groups: 0, providers: 0, commands: 0 };
 
-    // Import groups first
+    // Import groups first (needed for connection references)
     const groupIdMap = new Map<string, string>();
-    for (const group of data.groups || []) {
-      const newGroup = this.db.createGroup({
-        name: group.name,
-        description: group.description,
-        parentId: group.parentId ? groupIdMap.get(group.parentId) : undefined,
-        color: group.color,
-      });
-      groupIdMap.set(group.id, newGroup.id);
-      imported.groups++;
+    if (opts.groups) {
+      for (const group of data.groups || []) {
+        const newGroup = this.db.createGroup({
+          name: group.name,
+          description: group.description,
+          parentId: group.parentId ? groupIdMap.get(group.parentId) : undefined,
+          color: group.color,
+        });
+        groupIdMap.set(group.id, newGroup.id);
+        imported.groups++;
+      }
     }
 
-    // Import credentials
+    // Import credentials (needed for connection references)
     const credentialIdMap = new Map<string, string>();
-    for (const cred of data.credentials || []) {
-      const newCred = this.db.createCredential({
-        name: cred.name,
-        type: cred.type,
-        username: cred.username,
-        secret: cred.secret,
-        privateKey: cred.privateKey,
-        passphrase: cred.passphrase,
-      });
-      credentialIdMap.set(cred.id, newCred.id);
-      imported.credentials++;
+    if (opts.credentials) {
+      for (const cred of data.credentials || []) {
+        const newCred = this.db.createCredential({
+          name: cred.name,
+          type: cred.type,
+          username: cred.username,
+          secret: cred.secret,
+          privateKey: cred.privateKey,
+          passphrase: cred.passphrase,
+        });
+        credentialIdMap.set(cred.id, newCred.id);
+        imported.credentials++;
+      }
     }
 
-    // Import providers
+    // Import providers (needed for connection references)
     const providerIdMap = new Map<string, string>();
-    for (const provider of data.providers || []) {
-      const newProvider = this.db.createProvider({
-        name: provider.name,
-        type: provider.type,
-        config: provider.config,
-        enabled: provider.enabled,
-        autoDiscover: provider.autoDiscover ?? false,
-      });
-      providerIdMap.set(provider.id, newProvider.id);
-      imported.providers++;
+    if (opts.providers) {
+      for (const provider of data.providers || []) {
+        const newProvider = this.db.createProvider({
+          name: provider.name,
+          type: provider.type,
+          config: provider.config,
+          enabled: provider.enabled,
+          autoDiscover: provider.autoDiscover ?? false,
+        });
+        providerIdMap.set(provider.id, newProvider.id);
+        imported.providers++;
+      }
     }
 
     // Import connections
-    for (const conn of data.connections || []) {
-      this.db.createConnection({
-        name: conn.name,
-        hostname: conn.hostname,
-        port: conn.port,
-        connectionType: conn.connectionType || 'ssh',
-        osType: conn.osType,
-        username: conn.username,
-        credentialId: conn.credentialId ? credentialIdMap.get(conn.credentialId) : undefined,
-        providerId: conn.providerId ? providerIdMap.get(conn.providerId) : undefined,
-        tags: conn.tags,
-        group: conn.group ? groupIdMap.get(conn.group) : undefined,
-        description: conn.description,
-      });
-      imported.connections++;
+    if (opts.connections) {
+      for (const conn of data.connections || []) {
+        this.db.createConnection({
+          name: conn.name,
+          hostname: conn.hostname,
+          port: conn.port,
+          connectionType: conn.connectionType || 'ssh',
+          osType: conn.osType,
+          username: conn.username,
+          credentialId: conn.credentialId ? credentialIdMap.get(conn.credentialId) : undefined,
+          providerId: conn.providerId ? providerIdMap.get(conn.providerId) : undefined,
+          tags: conn.tags,
+          group: conn.group ? groupIdMap.get(conn.group) : undefined,
+          description: conn.description,
+        });
+        imported.connections++;
+      }
     }
 
     // Import commands
-    for (const cmd of data.commands || []) {
-      this.db.createSavedCommand({
-        name: cmd.name,
-        type: cmd.type || 'command',
-        command: cmd.command,
-        description: cmd.description,
-        category: cmd.category,
-        targetOS: cmd.targetOS,
-        tags: cmd.tags || [],
-        variables: cmd.variables || [],
-      });
-      imported.commands++;
+    if (opts.commands) {
+      for (const cmd of data.commands || []) {
+        this.db.createSavedCommand({
+          name: cmd.name,
+          type: cmd.type || 'command',
+          command: cmd.command,
+          description: cmd.description,
+          category: cmd.category,
+          targetOS: cmd.targetOS,
+          tags: cmd.tags || [],
+          variables: cmd.variables || [],
+        });
+        imported.commands++;
+      }
     }
 
     // Import theme
-    if (data.theme) {
+    if (opts.theme && data.theme) {
       const settings = this.db.getSettings?.() || {};
       this.db.setSettings?.({ ...settings, theme: data.theme });
     }
