@@ -357,8 +357,8 @@ export default function App() {
     localStorage.setItem('connectty-theme', theme);
 
     // Update Windows title bar overlay color to match theme
-    // Use modal-bg for better consistency with dialogs/panels
-    requestAnimationFrame(() => {
+    // Use setTimeout to ensure CSS variables are fully computed after theme change
+    const timeoutId = setTimeout(() => {
       const computedStyle = getComputedStyle(document.documentElement);
       const bgColor = computedStyle.getPropertyValue('--modal-bg').trim();
       const textColor = computedStyle.getPropertyValue('--text-primary').trim();
@@ -369,7 +369,9 @@ export default function App() {
           symbolColor: textColor,
         });
       }
-    });
+    }, 50);
+
+    return () => clearTimeout(timeoutId);
   }, [theme]);
 
   // Load data on mount
