@@ -1,10 +1,13 @@
 # Connectty Desktop Build Script for Linux (Debian) from Windows
 # Usage: .\scripts\build-desktop-linux.ps1 [-Clean] [-SkipInstall] [-AppImage]
+#
+# By default, builds .deb only (works without admin privileges)
+# Use -AppImage to build AppImage (requires admin or Developer Mode)
 
 param(
     [switch]$Clean,
     [switch]$SkipInstall,
-    [switch]$AppImage  # Build AppImage instead of .deb
+    [switch]$AppImage  # Build AppImage instead of .deb (requires admin)
 )
 
 $ErrorActionPreference = "Stop"
@@ -193,11 +196,13 @@ Write-Host "  Done!" -ForegroundColor Green
 Write-Host "`n[5/5] Building Linux distribution..." -ForegroundColor Yellow
 
 if ($AppImage) {
-    Write-Host "  Target: AppImage" -ForegroundColor Cyan
+    Write-Host "  Target: AppImage only" -ForegroundColor Cyan
+    Write-Host "  Note: AppImage requires admin privileges or Developer Mode on Windows" -ForegroundColor Yellow
     $buildTarget = "--linux AppImage"
 } else {
-    Write-Host "  Target: Debian (.deb) + AppImage" -ForegroundColor Cyan
-    $buildTarget = "--linux deb AppImage"
+    # Default to .deb only - AppImage has symlink issues on Windows without admin
+    Write-Host "  Target: Debian (.deb)" -ForegroundColor Cyan
+    $buildTarget = "--linux deb"
 }
 
 # Run electron-builder for Linux
@@ -208,8 +213,10 @@ Set-Location $ProjectRoot
 
 if ($buildResult -ne 0) {
     Write-Host "`nLinux build failed!" -ForegroundColor Red
-    Write-Host "If .deb build fails, try running with -AppImage flag:" -ForegroundColor Yellow
-    Write-Host "  .\scripts\build-desktop-linux.ps1 -AppImage" -ForegroundColor Yellow
+    Write-Host "`nCommon fixes:" -ForegroundColor Yellow
+    Write-Host "  1. Run PowerShell as Administrator" -ForegroundColor White
+    Write-Host "  2. Enable Windows Developer Mode (Settings > Privacy & Security > For developers)" -ForegroundColor White
+    Write-Host "  3. Use WSL: wsl npm run dist:linux" -ForegroundColor White
     exit 1
 }
 
