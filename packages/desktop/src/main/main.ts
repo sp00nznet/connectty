@@ -23,6 +23,8 @@ interface AppSettings {
   closeToTray: boolean;
   startMinimized: boolean;
   terminalTheme?: 'sync' | 'classic';
+  titleBarColor?: string;
+  titleBarSymbolColor?: string;
 }
 
 // Initialize settings store
@@ -125,10 +127,14 @@ async function createWindow(): Promise<void> {
 
   // On Windows, use custom title bar that can match the theme
   if (process.platform === 'win32') {
+    // Use saved colors if available, otherwise default to midnight theme
+    const savedColor = settingsStore.get('titleBarColor') || '#1e293b';
+    const savedSymbolColor = settingsStore.get('titleBarSymbolColor') || '#edf2f4';
+
     windowOptions.titleBarStyle = 'hidden';
     windowOptions.titleBarOverlay = {
-      color: '#1e293b', // Default midnight theme modal-bg color
-      symbolColor: '#edf2f4',
+      color: savedColor,
+      symbolColor: savedSymbolColor,
       height: 32,
     };
   }
@@ -677,11 +683,15 @@ function setupIpcHandlers(): void {
   ipcMain.handle('app:setTitleBarOverlay', (_event, options: { color: string; symbolColor: string }) => {
     if (process.platform === 'win32' && mainWindow) {
       try {
+        // Save colors for next startup
+        settingsStore.set('titleBarColor', options.color);
+        settingsStore.set('titleBarSymbolColor', options.symbolColor);
+
+        // Apply to current window
         mainWindow.setTitleBarOverlay({
           color: options.color,
           symbolColor: options.symbolColor,
         });
-        console.log('Title bar overlay updated:', options);
         return true;
       } catch (err) {
         console.error('Failed to set title bar overlay:', err);
