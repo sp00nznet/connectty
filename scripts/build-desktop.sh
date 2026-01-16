@@ -168,13 +168,22 @@ else
     echo -e "\n[2/4] Skipping install"
 fi
 
+# Generate icons from gfx/screen.png
+echo -e "\n[3/5] Generating application icons..."
+if [ -f "$PROJECT_ROOT/scripts/generate-icons.sh" ]; then
+    "$PROJECT_ROOT/scripts/generate-icons.sh"
+    echo "  Icons generated!"
+else
+    echo "  Warning: generate-icons.sh not found, skipping icon generation"
+fi
+
 # Build shared package first
-echo -e "\n[3/4] Building shared package..."
+echo -e "\n[4/5] Building shared package..."
 npm run build -w @connectty/shared
 echo "  Shared package built!"
 
 # Build desktop distribution
-echo -e "\n[4/4] Building desktop distribution for $PLATFORM..."
+echo -e "\n[5/5] Building desktop distribution for $PLATFORM..."
 if [ "$PLATFORM" = "mac" ]; then
     npm run dist -w @connectty/desktop -- --mac
 elif [ "$PLATFORM" = "linux" ]; then

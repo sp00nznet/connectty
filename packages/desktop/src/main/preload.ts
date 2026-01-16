@@ -97,6 +97,22 @@ export interface SyncConfigInfo {
   credentialCount: number;
 }
 
+// RetroTerm CRT effect settings
+export interface RetroTermSettings {
+  enabled: boolean;
+  scanlines: number;        // 0-1 intensity
+  screenCurvature: number;  // 0-1 intensity
+  flickering: number;       // 0-1 intensity
+  bloom: number;            // 0-1 intensity (glow effect)
+  rgbShift: number;         // 0-1 intensity (chromatic aberration)
+  noise: number;            // 0-1 intensity (static noise)
+  burnIn: number;           // 0-1 intensity (screen burn-in)
+  jitter: number;           // 0-1 intensity (horizontal jitter)
+  ambientLight: number;     // 0-1 intensity
+  phosphorGlow: boolean;    // Enable phosphor glow color
+  glowColor: string;        // Glow color (default: green)
+}
+
 // App settings types
 export interface AppSettings {
   minimizeToTray: boolean;
@@ -104,6 +120,7 @@ export interface AppSettings {
   startMinimized: boolean;
   syncAccounts?: SyncAccount[];
   terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
+  retroTerm?: RetroTermSettings;      // Experimental CRT terminal effect
 }
 
 // Local shell types

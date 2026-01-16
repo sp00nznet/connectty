@@ -17,12 +17,45 @@ import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
 import { getProviderService } from './providers';
 
+// RetroTerm CRT effect settings
+interface RetroTermSettings {
+  enabled: boolean;
+  scanlines: number;
+  screenCurvature: number;
+  flickering: number;
+  bloom: number;
+  rgbShift: number;
+  noise: number;
+  burnIn: number;
+  jitter: number;
+  ambientLight: number;
+  phosphorGlow: boolean;
+  glowColor: string;
+}
+
 // App settings interface
 interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
   startMinimized: boolean;
+  retroTerm?: RetroTermSettings;
 }
+
+// Default RetroTerm settings
+const defaultRetroTermSettings: RetroTermSettings = {
+  enabled: false,
+  scanlines: 0.3,
+  screenCurvature: 0.2,
+  flickering: 0.1,
+  bloom: 0.4,
+  rgbShift: 0.15,
+  noise: 0.05,
+  burnIn: 0,
+  jitter: 0.02,
+  ambientLight: 0.2,
+  phosphorGlow: true,
+  glowColor: '#00ff00',
+};
 
 // Initialize settings store
 const settingsStore = new Store<AppSettings>({
@@ -30,6 +63,7 @@ const settingsStore = new Store<AppSettings>({
     minimizeToTray: false,
     closeToTray: false,
     startMinimized: false,
+    retroTerm: defaultRetroTermSettings,
   },
 });
 import type {
