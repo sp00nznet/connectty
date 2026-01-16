@@ -5314,6 +5314,13 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [showAddAccountMenu, setShowAddAccountMenu] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
 
+  // Load accounts from backend on mount
+  useEffect(() => {
+    window.connectty.sync.getAccounts().then((accounts) => {
+      setSyncAccounts(accounts);
+    }).catch(console.error);
+  }, []);
+
   // Config sync state
   const [showConfigPicker, setShowConfigPicker] = useState<string | null>(null); // accountId when showing picker
   const [availableConfigs, setAvailableConfigs] = useState<SyncConfigInfo[]>([]);

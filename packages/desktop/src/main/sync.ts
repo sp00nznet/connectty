@@ -319,6 +319,7 @@ export class CloudSyncService {
   private accounts: Map<string, SyncAccount> = new Map();
   private deviceId: string;
   private deviceName: string;
+  private currentOAuthServer: http.Server | null = null;
 
   // OAuth configuration
   private readonly OAUTH_CONFIG = {
@@ -439,16 +440,42 @@ export class CloudSyncService {
    * Start a local HTTP server to receive OAuth callback and open the browser
    */
   private startOAuthCallbackAndOpenBrowser(expectedState: string, authUrl: string): Promise<string | null> {
+    // Close any existing OAuth server first
+    if (this.currentOAuthServer) {
+      try {
+        this.currentOAuthServer.close();
+      } catch {
+        // Ignore errors closing old server
+      }
+      this.currentOAuthServer = null;
+    }
+
     return new Promise((resolve) => {
+      let resolved = false;
+      const cleanup = () => {
+        if (!resolved) {
+          resolved = true;
+          if (this.currentOAuthServer) {
+            try {
+              this.currentOAuthServer.close();
+            } catch {
+              // Ignore
+            }
+            this.currentOAuthServer = null;
+          }
+        }
+      };
+
       const server = http.createServer((req, res) => {
         const url = new URL(req.url || '', `http://localhost:19283`);
         const code = url.searchParams.get('code');
         const state = url.searchParams.get('state');
 
         if (state !== expectedState) {
+          console.error(`OAuth state mismatch: expected ${expectedState}, got ${state}`);
           res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end('<html><body><h1>Error: State mismatch</h1></body></html>');
-          server.close();
+          res.end('<html><body><h1>Error: State mismatch</h1><p>Please close this window and try again in the app.</p></body></html>');
+          cleanup();
           resolve(null);
           return;
         }
@@ -456,14 +483,25 @@ export class CloudSyncService {
         if (code) {
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end('<html><body><h1>Authorization successful!</h1><p>You can close this window and return to Connectty.</p><script>window.close();</script></body></html>');
-          server.close();
+          cleanup();
           resolve(code);
         } else {
           res.writeHead(400, { 'Content-Type': 'text/html' });
           res.end('<html><body><h1>Error: No authorization code received</h1></body></html>');
-          server.close();
+          cleanup();
           resolve(null);
         }
+      });
+
+      this.currentOAuthServer = server;
+
+      server.on('error', (err: NodeJS.ErrnoException) => {
+        console.error('OAuth callback server error:', err);
+        if (err.code === 'EADDRINUSE') {
+          console.error('Port 19283 is already in use');
+        }
+        cleanup();
+        resolve(null);
       });
 
       server.listen(19283, '127.0.0.1', () => {
@@ -473,8 +511,11 @@ export class CloudSyncService {
 
       // Timeout after 5 minutes
       setTimeout(() => {
-        server.close();
-        resolve(null);
+        if (!resolved) {
+          console.log('OAuth callback timeout');
+          cleanup();
+          resolve(null);
+        }
       }, 5 * 60 * 1000);
     });
   }
