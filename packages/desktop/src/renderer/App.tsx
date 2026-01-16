@@ -146,26 +146,85 @@ export default function App() {
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
-  // Available themes
+  // Available themes (66 themes for 22 rows × 3 columns)
   const themes = [
+    // Dark themes - Blues
     { id: 'midnight', name: 'Midnight', description: 'Default dark blue theme' },
-    { id: 'light', name: 'Light', description: 'Clean light theme' },
+    { id: 'cobalt', name: 'Cobalt', description: 'Deep blue coding classic' },
+    { id: 'oceanic', name: 'Oceanic', description: 'Deep sea inspired' },
+    { id: 'night-owl', name: 'Night Owl', description: 'For night owls and low light' },
+    { id: 'deep-blue', name: 'Deep Blue', description: 'Rich navy tones' },
+    { id: 'winter-dark', name: 'Winter Dark', description: 'Cold blue palette' },
+    // Dark themes - Purples
     { id: 'dracula', name: 'Dracula', description: 'Popular dark purple theme' },
-    { id: 'nord', name: 'Nord', description: 'Arctic, north-bluish palette' },
-    { id: 'solarized', name: 'Solarized Dark', description: 'Precision colors for machines and people' },
-    { id: 'solarized-light', name: 'Solarized Light', description: 'Solarized light variant' },
-    { id: 'monokai', name: 'Monokai', description: 'Sublime Text inspired' },
-    { id: 'github', name: 'GitHub Dark', description: 'GitHub\'s dark mode' },
-    { id: 'github-light', name: 'GitHub Light', description: 'GitHub\'s light mode' },
-    { id: 'one-dark', name: 'One Dark', description: 'Atom\'s iconic dark theme' },
-    { id: 'tokyo-night', name: 'Tokyo Night', description: 'Clean dark theme inspired by Tokyo lights' },
-    { id: 'catppuccin', name: 'Catppuccin Mocha', description: 'Soothing pastel dark theme' },
-    { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
-    { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
-    { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
+    { id: 'synthwave', name: 'Synthwave', description: '80s retro neon vibes' },
+    { id: 'shades-purple', name: 'Shades of Purple', description: 'Epic purple variant' },
+    { id: 'cyberpunk', name: 'Cyberpunk', description: 'Neon future aesthetic' },
+    { id: 'laserwave', name: 'Laserwave', description: 'Retro-futuristic synthwave' },
+    { id: 'andromeda', name: 'Andromeda', description: 'Dark with purple accents' },
+    // Dark themes - Greens
     { id: 'everforest', name: 'Everforest', description: 'Nature-inspired green theme' },
+    { id: 'forest', name: 'Forest', description: 'Deep woodland greens' },
+    { id: 'matrix', name: 'Matrix', description: 'Digital rain aesthetic' },
+    { id: 'sublime-monokai', name: 'Monokai', description: 'Sublime Text inspired' },
+    { id: 'palenight', name: 'Palenight', description: 'Soft dark with green hints' },
+    { id: 'vue', name: 'Vue', description: 'Vue.js inspired greens' },
+    // Dark themes - Reds/Oranges
+    { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
+    { id: 'ayu-mirage', name: 'Ayu Mirage', description: 'Ayu with deeper tones' },
+    { id: 'tokyo-night', name: 'Tokyo Night', description: 'Clean dark theme inspired by Tokyo lights' },
+    { id: 'panda', name: 'Panda', description: 'Superminimal dark syntax' },
+    { id: 'nord', name: 'Nord', description: 'Arctic, north-bluish palette' },
+    { id: 'aurora', name: 'Aurora', description: 'Northern lights inspired' },
+    // Dark themes - Neutrals
+    { id: 'one-dark', name: 'One Dark', description: 'Atom\'s iconic dark theme' },
+    { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
+    { id: 'github', name: 'GitHub Dark', description: 'GitHub\'s dark mode' },
+    { id: 'vs-dark', name: 'VS Dark', description: 'Visual Studio Code dark' },
+    { id: 'sublime', name: 'Sublime', description: 'Sublime Text default' },
+    { id: 'atom', name: 'Atom One', description: 'Atom editor default' },
+    // Dark themes - Warm
+    { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
+    { id: 'gruvbox-hard', name: 'Gruvbox Hard', description: 'Higher contrast Gruvbox' },
+    { id: 'solarized', name: 'Solarized Dark', description: 'Precision colors for machines and people' },
+    { id: 'monokai', name: 'Monokai Pro', description: 'Modern Monokai variant' },
+    { id: 'tomorrow-night', name: 'Tomorrow Night', description: 'Tomorrow theme dark' },
+    { id: 'horizon', name: 'Horizon', description: 'Warm dark theme' },
+    // Dark themes - Pastels
+    { id: 'catppuccin', name: 'Catppuccin Mocha', description: 'Soothing pastel dark theme' },
+    { id: 'catppuccin-macchiato', name: 'Catppuccin Macchiato', description: 'Medium dark pastel' },
     { id: 'rose-pine', name: 'Rosé Pine', description: 'Elegant, dark soho vibes' },
+    { id: 'rose-pine-moon', name: 'Rosé Pine Moon', description: 'Rosé Pine variant' },
+    { id: 'kanagawa', name: 'Kanagawa', description: 'Wave-inspired Japanese theme' },
+    { id: 'fairy-floss', name: 'Fairy Floss', description: 'Sweet pastel candy' },
+    // Light themes - Clean
+    { id: 'light', name: 'Light', description: 'Clean light theme' },
+    { id: 'github-light', name: 'GitHub Light', description: 'GitHub\'s light mode' },
+    { id: 'vs-light', name: 'VS Light', description: 'Visual Studio Code light' },
+    { id: 'atom-light', name: 'Atom Light', description: 'Atom One Light' },
+    { id: 'xcode', name: 'Xcode', description: 'Apple Xcode default' },
+    { id: 'intellij', name: 'IntelliJ', description: 'JetBrains light theme' },
+    // Light themes - Warm
+    { id: 'solarized-light', name: 'Solarized Light', description: 'Solarized light variant' },
+    { id: 'gruvbox-light', name: 'Gruvbox Light', description: 'Retro light variant' },
+    { id: 'ayu-light', name: 'Ayu Light', description: 'Ayu bright variant' },
+    { id: 'tomorrow', name: 'Tomorrow', description: 'Tomorrow theme light' },
+    { id: 'paper', name: 'Paper', description: 'Minimal paper-like theme' },
+    { id: 'sepia', name: 'Sepia', description: 'Warm reading theme' },
+    // Light themes - Cool
+    { id: 'catppuccin-latte', name: 'Catppuccin Latte', description: 'Light pastel theme' },
+    { id: 'rose-pine-dawn', name: 'Rosé Pine Dawn', description: 'Rosé Pine light' },
+    { id: 'winter-light', name: 'Winter Light', description: 'Cool light palette' },
+    { id: 'quiet-light', name: 'Quiet Light', description: 'Soft muted light' },
+    { id: 'notion', name: 'Notion', description: 'Notion-inspired minimal' },
+    { id: 'slack', name: 'Slack Light', description: 'Slack workspace theme' },
+    // Special themes
     { id: 'high-contrast', name: 'High Contrast', description: 'Maximum visibility' },
+    { id: 'hc-light', name: 'HC Light', description: 'High contrast light' },
+    { id: 'retro', name: 'Retro', description: 'Classic terminal green' },
+    { id: 'amber', name: 'Amber', description: 'Classic amber CRT' },
+    { id: 'blue-screen', name: 'Blue Screen', description: 'DOS-era inspired' },
+    { id: 'newspaper', name: 'Newspaper', description: 'Print-inspired minimal' },
   ];
 
   // Apply theme to document
