@@ -490,9 +490,14 @@ export default function App() {
 
     // Update Windows title bar overlay color to match theme
     const colors = themeColors[theme] || themeColors['midnight'];
+    console.log('Setting title bar colors for theme:', theme, colors);
     window.connectty.app.setTitleBarOverlay({
       color: colors.bg,
       symbolColor: colors.text,
+    }).then(result => {
+      console.log('Title bar overlay result:', result);
+    }).catch(err => {
+      console.error('Title bar overlay error:', err);
     });
   }, [theme]);
 

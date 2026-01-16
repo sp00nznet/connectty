@@ -676,11 +676,17 @@ function setupIpcHandlers(): void {
   // Title bar overlay color (Windows only)
   ipcMain.handle('app:setTitleBarOverlay', (_event, options: { color: string; symbolColor: string }) => {
     if (process.platform === 'win32' && mainWindow) {
-      mainWindow.setTitleBarOverlay({
-        color: options.color,
-        symbolColor: options.symbolColor,
-      });
-      return true;
+      try {
+        mainWindow.setTitleBarOverlay({
+          color: options.color,
+          symbolColor: options.symbolColor,
+        });
+        console.log('Title bar overlay updated:', options);
+        return true;
+      } catch (err) {
+        console.error('Failed to set title bar overlay:', err);
+        return false;
+      }
     }
     return false;
   });
