@@ -4429,7 +4429,18 @@ body {
 }
 
 .sync-account-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   font-size: 1.5rem;
+}
+
+.sync-account-icon .provider-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .sync-account-info {
@@ -4498,7 +4509,17 @@ body {
 }
 
 .sync-provider-icon {
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.sync-provider-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .sync-connecting {
