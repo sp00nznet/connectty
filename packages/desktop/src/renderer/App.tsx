@@ -5314,11 +5314,37 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [terminalTheme, setTerminalTheme] = useState<'sync' | 'classic'>(settings.terminalTheme || 'classic');
   const [saving, setSaving] = useState(false);
 
-  // Collapsible section states
-  const [themesExpanded, setThemesExpanded] = useState(true);
-  const [terminalExpanded, setTerminalExpanded] = useState(true);
-  const [trayExpanded, setTrayExpanded] = useState(true);
-  const [syncExpanded, setSyncExpanded] = useState(true);
+  // Collapsible section states - load from localStorage
+  const [themesExpanded, setThemesExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-themes-expanded');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [terminalExpanded, setTerminalExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-terminal-expanded');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [trayExpanded, setTrayExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-tray-expanded');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [syncExpanded, setSyncExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-sync-expanded');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // Save collapse states to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem('settings-themes-expanded', String(themesExpanded));
+  }, [themesExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-terminal-expanded', String(terminalExpanded));
+  }, [terminalExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-tray-expanded', String(trayExpanded));
+  }, [trayExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-sync-expanded', String(syncExpanded));
+  }, [syncExpanded]);
 
   // Sync accounts state
   const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
@@ -5362,11 +5388,21 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     setConnectingProvider(provider);
     try {
       const account = await window.connectty.sync.connect(provider);
-      if (account) {
-        setSyncAccounts(prev => [...prev, account]);
+      // Always refresh accounts from backend to ensure we have the latest
+      const accounts = await window.connectty.sync.getAccounts();
+      setSyncAccounts(accounts);
+      if (!account) {
+        console.log('OAuth flow was cancelled or failed');
       }
     } catch (error) {
       console.error('Failed to connect account:', error);
+      // Still try to refresh accounts in case it was saved
+      try {
+        const accounts = await window.connectty.sync.getAccounts();
+        setSyncAccounts(accounts);
+      } catch {
+        // Ignore
+      }
     } finally {
       setConnectingProvider(null);
     }
