@@ -279,6 +279,19 @@ if ($Clean) {
     Get-ChildItem -Path "packages" -Directory | ForEach-Object {
         $dist = Join-Path $_.FullName "dist"
         if (Test-Path $dist) { Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue }
+        $release = Join-Path $_.FullName "release"
+        if (Test-Path $release) { Remove-Item -Recurse -Force $release -ErrorAction SilentlyContinue }
+    }
+    # Clear electron-builder cache
+    $electronBuilderCache = Join-Path $env:LOCALAPPDATA "electron-builder\Cache"
+    if (Test-Path $electronBuilderCache) {
+        Write-Host "  Clearing electron-builder cache..." -ForegroundColor Gray
+        Remove-Item -Recurse -Force $electronBuilderCache -ErrorAction SilentlyContinue
+    }
+    $electronCache = Join-Path $env:LOCALAPPDATA "electron\Cache"
+    if (Test-Path $electronCache) {
+        Write-Host "  Clearing electron cache..." -ForegroundColor Gray
+        Remove-Item -Recurse -Force $electronCache -ErrorAction SilentlyContinue
     }
     Write-Host "  Done!" -ForegroundColor Green
 } else {
