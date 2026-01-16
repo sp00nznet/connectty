@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { User } from '@connectty/shared';
 import { api } from './services/api';
 import { wsService } from './services/websocket';

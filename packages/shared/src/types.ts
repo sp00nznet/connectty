@@ -63,6 +63,8 @@ export interface Credential {
   username: string;
   // For domain credentials (DOMAIN\username)
   domain?: string;
+  // Password (for create/update operations)
+  password?: string;
   // Password or private key (encrypted in storage)
   secret?: string;
   // For key-based auth
@@ -243,7 +245,7 @@ export interface SSHSessionOptions {
 }
 
 export interface SSHSessionEvent {
-  type: 'data' | 'close' | 'error' | 'resize';
+  type: 'data' | 'close' | 'error' | 'resize' | 'connected';
   data?: string;
   code?: number;
   message?: string;
