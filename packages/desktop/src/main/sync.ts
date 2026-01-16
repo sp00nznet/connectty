@@ -327,7 +327,7 @@ export class CloudSyncService {
   private readonly OAUTH_CONFIG = {
     google: {
       clientId: '1081959577053-rfp12bd9ikrjhl3ptgk03a8v0ofr7ri6.apps.googleusercontent.com',
-      clientSecret: '', // Add your client secret here if using Web application type
+      clientSecret: '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',
       authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       scope: 'openid email profile https://www.googleapis.com/auth/drive.appdata',
@@ -335,7 +335,7 @@ export class CloudSyncService {
     },
     github: {
       clientId: 'Ov23liqvNVMDWijyAPNT',
-      clientSecret: '', // GitHub OAuth apps also need a secret
+      clientSecret: 'e65d46e950750d2044cde256668065ff87933ded',
       authUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
       scope: 'gist read:user user:email',
