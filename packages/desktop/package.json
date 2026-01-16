@@ -2,7 +2,11 @@
   "name": "@connectty/desktop",
   "version": "1.0.0",
   "description": "Connectty Desktop SSH Client",
-  "author": "Connectty",
+  "author": {
+    "name": "Connectty",
+    "email": "support@connectty.app"
+  },
+  "homepage": "https://github.com/sp00nznet/connectty",
   "main": "dist/main/main.js",
   "scripts": {
     "start": "npm run build:main && electron .",
@@ -51,7 +55,8 @@
         "AppImage"
       ],
       "icon": "assets/icon.png",
-      "category": "Network"
+      "category": "Network",
+      "maintainer": "Connectty <support@connectty.app>"
     },
     "mac": {
       "target": [
