@@ -848,7 +848,9 @@ export class CloudSyncService {
     if (data.refresh_token) {
       account.refreshToken = data.refresh_token;
     }
-    account.expiresAt = Date.now() + data.expires_in * 1000;
+    if (data.expires_in) {
+      account.expiresAt = Date.now() + data.expires_in * 1000;
+    }
     this.saveAccounts();
   }
 
