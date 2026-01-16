@@ -233,6 +233,22 @@ if ($hasWSL -and -not $AppImage) {
     # Convert Windows path to WSL path
     $wslPath = "/mnt/" + $ProjectRoot.Substring(0,1).ToLower() + $ProjectRoot.Substring(2).Replace('\', '/')
 
+    # Check if Node.js is installed in WSL
+    Write-Host "  Checking for Node.js in WSL..." -ForegroundColor Gray
+    $nodeCheck = wsl bash -c "command -v node" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Node.js not found, installing via NodeSource..." -ForegroundColor Yellow
+        wsl bash -c "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install Node.js in WSL!" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "  Node.js installed successfully!" -ForegroundColor Green
+    } else {
+        $nodeVersion = wsl bash -c "node --version" 2>&1
+        Write-Host "  Node.js: $nodeVersion" -ForegroundColor Green
+    }
+
     # Check if fpm is installed in WSL, install if not
     Write-Host "  Checking for fpm in WSL..." -ForegroundColor Gray
     $fpmCheck = wsl bash -c "command -v fpm" 2>&1
@@ -262,11 +278,9 @@ if ($hasWSL -and -not $AppImage) {
         Write-Host "  fpm is already installed" -ForegroundColor Green
     }
 
-    # Run electron-builder entirely in WSL
-    # Use --noprofile --norc to avoid loading Windows PATH, then set clean Linux PATH
+    # Run electron-builder in WSL
     Write-Host "  Running electron-builder in WSL (this may take a while)..." -ForegroundColor Gray
-    $wslCmd = "export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin; cd $wslPath/packages/desktop && npx electron-builder --linux $buildTarget"
-    wsl bash --noprofile --norc -c $wslCmd
+    wsl bash -c "cd $wslPath/packages/desktop && npx electron-builder --linux $buildTarget"
     $buildResult = $LASTEXITCODE
 } else {
     # Try native build (will likely fail for .deb without fpm)
