@@ -370,6 +370,8 @@ const api = {
   app: {
     version: (): Promise<string> => ipcRenderer.invoke('app:version'),
     platform: (): Promise<string> => ipcRenderer.invoke('app:platform'),
+    setTitleBarOverlay: (options: { color: string; symbolColor: string }): Promise<boolean> =>
+      ipcRenderer.invoke('app:setTitleBarOverlay', options),
   },
 
   // Local shell operations

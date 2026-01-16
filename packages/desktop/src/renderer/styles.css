@@ -2295,6 +2295,18 @@ body {
 .sidebar-header {
   padding: 20px;
   border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag; /* Allow window dragging on custom title bar */
+}
+
+/* Ensure buttons and interactive elements are not draggable */
+.sidebar-actions button,
+.sidebar-actions a,
+.search-input,
+input,
+select,
+button,
+a {
+  -webkit-app-region: no-drag;
 }
 
 .sidebar-header .header-row {

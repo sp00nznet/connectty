@@ -108,7 +108,8 @@ async function createWindow(): Promise<void> {
     ? path.join(__dirname, '../../assets/icon.ico')
     : path.join(__dirname, '../../assets/icon.png');
 
-  mainWindow = new BrowserWindow({
+  // Configure platform-specific window options
+  const windowOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1200,
     height: 800,
     minWidth: 800,
@@ -120,7 +121,19 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-  });
+  };
+
+  // On Windows, use custom title bar that can match the theme
+  if (process.platform === 'win32') {
+    windowOptions.titleBarStyle = 'hidden';
+    windowOptions.titleBarOverlay = {
+      color: '#1a1a2e', // Default midnight theme color
+      symbolColor: '#ffffff',
+      height: 32,
+    };
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   // Hide menu bar on Windows
   if (process.platform === 'win32') {
@@ -658,6 +671,18 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('app:platform', () => {
     return process.platform;
+  });
+
+  // Title bar overlay color (Windows only)
+  ipcMain.handle('app:setTitleBarOverlay', (_event, options: { color: string; symbolColor: string }) => {
+    if (process.platform === 'win32' && mainWindow) {
+      mainWindow.setTitleBarOverlay({
+        color: options.color,
+        symbolColor: options.symbolColor,
+      });
+      return true;
+    }
+    return false;
   });
 
   // Saved command handlers

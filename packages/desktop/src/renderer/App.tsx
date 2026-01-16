@@ -351,10 +351,25 @@ export default function App() {
     });
   }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
 
-  // Apply theme to document
+  // Apply theme to document and update title bar color (Windows)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('connectty-theme', theme);
+
+    // Update Windows title bar overlay color to match theme
+    // Read the computed CSS variable after theme is applied
+    requestAnimationFrame(() => {
+      const computedStyle = getComputedStyle(document.documentElement);
+      const bgColor = computedStyle.getPropertyValue('--bg-primary').trim();
+      const textColor = computedStyle.getPropertyValue('--text-primary').trim();
+
+      if (bgColor && textColor) {
+        window.connectty.app.setTitleBarOverlay({
+          color: bgColor,
+          symbolColor: textColor,
+        });
+      }
+    });
   }, [theme]);
 
   // Load data on mount
