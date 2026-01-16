@@ -313,8 +313,21 @@ if ((Test-Path $sevenZipExe) -and (-not (Test-Path $sevenZipBinExe))) {
     }
 }
 
+# Sync version
+Write-Host "`n[3/5] Syncing version..." -ForegroundColor Yellow
+$versionFile = Join-Path $ProjectRoot "version.json"
+if (Test-Path $versionFile) {
+    $versionData = Get-Content $versionFile | ConvertFrom-Json
+    $fullVersion = $versionData.version
+    Write-Host "  Version: $fullVersion" -ForegroundColor Cyan
+    node (Join-Path $ProjectRoot "scripts\sync-version.js")
+} else {
+    Write-Host "  Warning: version.json not found, using package.json version" -ForegroundColor Yellow
+    $fullVersion = "1.0.0.0"
+}
+
 # Build shared
-Write-Host "`n[3/4] Building shared package..." -ForegroundColor Yellow
+Write-Host "`n[4/5] Building shared package..." -ForegroundColor Yellow
 npm run build -w @connectty/shared
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed!" -ForegroundColor Red
@@ -323,7 +336,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "  Done!" -ForegroundColor Green
 
 # Build desktop
-Write-Host "`n[4/4] Building Windows distribution..." -ForegroundColor Yellow
+Write-Host "`n[5/5] Building Windows distribution..." -ForegroundColor Yellow
 npm run dist:win -w @connectty/desktop
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed!" -ForegroundColor Red
@@ -331,7 +344,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Copy final binaries to releases folder
-Write-Host "`n[5/5] Copying to releases folder..." -ForegroundColor Yellow
+Write-Host "`n[6/6] Copying to releases folder..." -ForegroundColor Yellow
 $ReleasesDir = Join-Path $ProjectRoot "releases"
 if (-not (Test-Path $ReleasesDir)) {
     New-Item -ItemType Directory -Force -Path $ReleasesDir | Out-Null
