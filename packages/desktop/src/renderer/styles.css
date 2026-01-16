@@ -5543,13 +5543,13 @@ body {
   pointer-events: none;
   z-index: 9;
   border-radius: 15px;
-  /* Subtle vignette - darkens edges slightly */
+  /* Very subtle vignette - just hints at CRT edges */
   background: radial-gradient(
     ellipse at center,
     transparent 0%,
-    transparent 60%,
-    rgba(0, 0, 0, 0.15) 80%,
-    rgba(0, 0, 0, 0.4) 100%
+    transparent 70%,
+    rgba(0, 0, 0, 0.1) 85%,
+    rgba(0, 0, 0, 0.2) 100%
   );
   opacity: var(--curvature-opacity, 1);
 }
