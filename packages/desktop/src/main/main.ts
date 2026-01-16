@@ -127,8 +127,8 @@ async function createWindow(): Promise<void> {
   if (process.platform === 'win32') {
     windowOptions.titleBarStyle = 'hidden';
     windowOptions.titleBarOverlay = {
-      color: '#1a1a2e', // Default midnight theme color
-      symbolColor: '#ffffff',
+      color: '#1e293b', // Default midnight theme modal-bg color
+      symbolColor: '#edf2f4',
       height: 32,
     };
   }
