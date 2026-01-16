@@ -64,8 +64,9 @@ function Refresh-Path {
 # Function to check if WSL is available
 function Test-WSL {
     try {
-        $wslOutput = wsl --status 2>&1
-        return $LASTEXITCODE -eq 0
+        # Use a simple command to verify WSL actually works
+        $wslOutput = wsl echo "wsl-ok" 2>&1
+        return ($wslOutput -eq "wsl-ok")
     } catch {
         return $false
     }
@@ -218,13 +219,8 @@ if ($AppImage) {
 }
 
 # Check if WSL is available (required for .deb builds on Windows)
-$hasWSL = $false
-try {
-    $wslCheck = wsl --status 2>&1
-    $hasWSL = $LASTEXITCODE -eq 0
-} catch {
-    $hasWSL = $false
-}
+$hasWSL = Test-WSL
+Write-Host "  WSL detected: $hasWSL" -ForegroundColor Gray
 
 # Run electron-builder for Linux
 Set-Location "$ProjectRoot\packages\desktop"
