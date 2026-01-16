@@ -351,27 +351,149 @@ export default function App() {
     });
   }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
 
+  // Theme colors for Windows title bar overlay
+  const themeColors: Record<string, { bg: string; text: string }> = {
+    'amber': { bg: '#050400', text: '#ffb000' },
+    'amethyst': { bg: '#281e3a', text: '#f5f0ff' },
+    'andromeda': { bg: '#1e2127', text: '#d5ced9' },
+    'apple-ii': { bg: '#0a0a0a', text: '#33ff33' },
+    'arcade': { bg: '#141418', text: '#ffffff' },
+    'arctic': { bg: '#1e293b', text: '#f1f5f9' },
+    'atom': { bg: '#21252b', text: '#abb2bf' },
+    'atom-light': { bg: '#ffffff', text: '#383a42' },
+    'aurora': { bg: '#181a28', text: '#e0e0e8' },
+    'autumn': { bg: '#281e18', text: '#fff8f0' },
+    'ayu-dark': { bg: '#0b0e14', text: '#bfbdb6' },
+    'ayu-light': { bg: '#ffffff', text: '#575f66' },
+    'ayu-mirage': { bg: '#191e28', text: '#cbccc6' },
+    'blue-screen': { bg: '#000088', text: '#ffffff' },
+    'blueberry': { bg: '#1f1f3d', text: '#e8e8ff' },
+    'breeze': { bg: '#f0fdff', text: '#134e5a' },
+    'bubblegum': { bg: '#261c30', text: '#fff0f8' },
+    'campfire': { bg: '#241810', text: '#fff8e8' },
+    'catppuccin': { bg: '#181825', text: '#cdd6f4' },
+    'catppuccin-latte': { bg: '#e6e9ef', text: '#4c4f69' },
+    'catppuccin-macchiato': { bg: '#1e2030', text: '#cad3f5' },
+    'charcoal': { bg: '#242424', text: '#e8e8e8' },
+    'cherry': { bg: '#241010', text: '#fff0f0' },
+    'chocolate': { bg: '#241610', text: '#fff0e8' },
+    'cloud': { bg: '#ffffff', text: '#1e293b' },
+    'cobalt': { bg: '#001b33', text: '#ffffff' },
+    'coffee': { bg: '#261e16', text: '#f8f0e8' },
+    'commodore': { bg: '#4040a0', text: '#a0a0ff' },
+    'cotton-candy': { bg: '#261c2a', text: '#fff8ff' },
+    'crimson': { bg: '#201010', text: '#ffe8e8' },
+    'cyberpunk': { bg: '#080810', text: '#00fff9' },
+    'daylight': { bg: '#ffffff', text: '#1c1917' },
+    'deep-blue': { bg: '#071320', text: '#e7ebf0' },
+    'disco': { bg: '#181018', text: '#fff0ff' },
+    'dracula': { bg: '#21222c', text: '#f8f8f2' },
+    'eggshell': { bg: '#ffffff', text: '#2d2a24' },
+    'emerald': { bg: '#04281c', text: '#e8fff4' },
+    'everforest': { bg: '#343f44', text: '#d3c6aa' },
+    'fairy-floss': { bg: '#4d456a', text: '#f8f8f2' },
+    'firefly': { bg: '#1e180e', text: '#fff8e8' },
+    'forest': { bg: '#141c13', text: '#d4e5d0' },
+    'github': { bg: '#161b22', text: '#c9d1d9' },
+    'github-light': { bg: '#ffffff', text: '#24292f' },
+    'glacier': { bg: '#f0f8ff', text: '#1a3040' },
+    'grape': { bg: '#2a1040', text: '#f0e8ff' },
+    'gruvbox': { bg: '#1d2021', text: '#ebdbb2' },
+    'gruvbox-hard': { bg: '#141617', text: '#fbf1c7' },
+    'gruvbox-light': { bg: '#f2e5bc', text: '#3c3836' },
+    'hacker': { bg: '#0a0a0a', text: '#00ff00' },
+    'hc-light': { bg: '#ffffff', text: '#000000' },
+    'high-contrast': { bg: '#0a0a0a', text: '#ffffff' },
+    'honey': { bg: '#fffbf0', text: '#3a3020' },
+    'horizon': { bg: '#16181f', text: '#d5d8da' },
+    'ibm': { bg: '#0a0a0a', text: '#aaaaaa' },
+    'intellij': { bg: '#ffffff', text: '#000000' },
+    'jungle': { bg: '#102810', text: '#e8ffe8' },
+    'kanagawa': { bg: '#181820', text: '#dcd7ba' },
+    'laserwave': { bg: '#201b26', text: '#ffffff' },
+    'latte': { bg: '#ffffff', text: '#3d3129' },
+    'lavender': { bg: '#201c28', text: '#f8f0ff' },
+    'light': { bg: '#ffffff', text: '#1e293b' },
+    'material': { bg: '#1a1a1a', text: '#eeffff' },
+    'matrix': { bg: '#050505', text: '#00ff00' },
+    'miami': { bg: '#10141e', text: '#ffe8f8' },
+    'midnight': { bg: '#1e293b', text: '#edf2f4' },
+    'mint-dark': { bg: '#142824', text: '#e8fff8' },
+    'mint-light': { bg: '#f0fdf8', text: '#14352a' },
+    'monokai': { bg: '#1e1f1c', text: '#f8f8f2' },
+    'moss': { bg: '#1c261c', text: '#e8f0e8' },
+    'navy': { bg: '#101828', text: '#f0f4f8' },
+    'nebula': { bg: '#1a1a33', text: '#e8e8ff' },
+    'neon-blue': { bg: '#0e0e1e', text: '#e8e8ff' },
+    'neon-city': { bg: '#12121f', text: '#f0f0ff' },
+    'neon-green': { bg: '#0e1e10', text: '#e8ffe8' },
+    'neon-orange': { bg: '#1e100e', text: '#fff0e8' },
+    'neon-pink': { bg: '#1e0e1e', text: '#ffe8ff' },
+    'newspaper': { bg: '#f0ebe4', text: '#1a1a1a' },
+    'night-owl': { bg: '#001122', text: '#d6deeb' },
+    'nord': { bg: '#3b4252', text: '#eceff4' },
+    'notion': { bg: '#ffffff', text: '#37352f' },
+    'obsidian': { bg: '#101010', text: '#f0f0f0' },
+    'oceanic': { bg: '#162228', text: '#d8dee9' },
+    'one-dark': { bg: '#21252b', text: '#abb2bf' },
+    'onyx': { bg: '#0a0a0a', text: '#ffffff' },
+    'pacific': { bg: '#0f2133', text: '#e0f0ff' },
+    'palenight': { bg: '#232635', text: '#a6accd' },
+    'panda': { bg: '#242526', text: '#e6e6e6' },
+    'paper': { bg: '#ffffff', text: '#212121' },
+    'parchment': { bg: '#f8f4e8', text: '#3a3428' },
+    'peach': { bg: '#2a201c', text: '#fff8f4' },
+    'plum': { bg: '#2a182a', text: '#ffe8f0' },
+    'quiet-light': { bg: '#ffffff', text: '#333333' },
+    'rave': { bg: '#0a0a10', text: '#ffffff' },
+    'retro': { bg: '#050505', text: '#33ff00' },
+    'rose-pine': { bg: '#1f1d2e', text: '#e0def4' },
+    'rose-pine-dawn': { bg: '#f2e9de', text: '#575279' },
+    'rose-pine-moon': { bg: '#1c1b2a', text: '#e0def4' },
+    'ruby': { bg: '#2a0f0f', text: '#fff0f0' },
+    'sand': { bg: '#ffffff', text: '#3a3530' },
+    'sapphire': { bg: '#0d1f3c', text: '#e8f4ff' },
+    'sepia': { bg: '#ece4d0', text: '#5b4636' },
+    'shades-purple': { bg: '#252347', text: '#fad000' },
+    'shamrock': { bg: '#0f240f', text: '#e0ffe0' },
+    'sky': { bg: '#f0f9ff', text: '#0c4a6e' },
+    'slack': { bg: '#ffffff', text: '#1d1c1d' },
+    'slate': { bg: '#1e293b', text: '#f1f5f9' },
+    'snow': { bg: '#ffffff', text: '#212529' },
+    'solarized': { bg: '#073642', text: '#fdf6e3' },
+    'solarized-light': { bg: '#eee8d5', text: '#657b83' },
+    'sublime': { bg: '#282c33', text: '#f8f8f2' },
+    'sublime-monokai': { bg: '#1e1f1a', text: '#f8f8f2' },
+    'sunset': { bg: '#281810', text: '#fff8f0' },
+    'synthwave': { bg: '#241b31', text: '#f0e6ff' },
+    'tokyo-night': { bg: '#16161e', text: '#c0caf5' },
+    'tomorrow': { bg: '#ffffff', text: '#4d4d4c' },
+    'tomorrow-night': { bg: '#161819', text: '#c5c8c6' },
+    'twilight': { bg: '#1c1c30', text: '#e8e0f0' },
+    'ultraviolet': { bg: '#140028', text: '#f0e0ff' },
+    'vegas': { bg: '#141010', text: '#fff8e8' },
+    'violet': { bg: '#1e0e2e', text: '#f8f0ff' },
+    'volcanic': { bg: '#2a1200', text: '#fff4e8' },
+    'vs-dark': { bg: '#181818', text: '#d4d4d4' },
+    'vs-light': { bg: '#ffffff', text: '#333333' },
+    'vt220': { bg: '#0a0800', text: '#ffaa00' },
+    'vue': { bg: '#181b20', text: '#d4d4d4' },
+    'winter-dark': { bg: '#15212e', text: '#e8eef4' },
+    'winter-light': { bg: '#e8ecf0', text: '#3d4752' },
+    'xcode': { bg: '#ffffff', text: '#000000' },
+  };
+
   // Apply theme to document and update title bar color (Windows)
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('connectty-theme', theme);
 
     // Update Windows title bar overlay color to match theme
-    // Use setTimeout to ensure CSS variables are fully computed after theme change
-    const timeoutId = setTimeout(() => {
-      const computedStyle = getComputedStyle(document.documentElement);
-      const bgColor = computedStyle.getPropertyValue('--modal-bg').trim();
-      const textColor = computedStyle.getPropertyValue('--text-primary').trim();
-
-      if (bgColor && textColor) {
-        window.connectty.app.setTitleBarOverlay({
-          color: bgColor,
-          symbolColor: textColor,
-        });
-      }
-    }, 50);
-
-    return () => clearTimeout(timeoutId);
+    const colors = themeColors[theme] || themeColors['midnight'];
+    window.connectty.app.setTitleBarOverlay({
+      color: colors.bg,
+      symbolColor: colors.text,
+    });
   }, [theme]);
 
   // Load data on mount
