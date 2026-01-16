@@ -634,16 +634,16 @@ function setupIpcHandlers(): void {
     return cloudSyncService.disconnect(accountId);
   });
 
-  ipcMain.handle('sync:upload', async (_event, accountId: string) => {
-    return cloudSyncService.upload(accountId);
+  ipcMain.handle('sync:upload', async (_event, accountId: string, options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }) => {
+    return cloudSyncService.upload(accountId, options);
   });
 
   ipcMain.handle('sync:listConfigs', async (_event, accountId: string) => {
     return cloudSyncService.listConfigs(accountId);
   });
 
-  ipcMain.handle('sync:importConfig', async (_event, accountId: string, configId: string) => {
-    return cloudSyncService.importConfig(accountId, configId);
+  ipcMain.handle('sync:importConfig', async (_event, accountId: string, configId: string, options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }) => {
+    return cloudSyncService.importConfig(accountId, configId, options);
   });
 
   ipcMain.handle('sync:getAccounts', async () => {
