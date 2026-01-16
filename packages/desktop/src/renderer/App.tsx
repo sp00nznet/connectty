@@ -165,6 +165,7 @@ export default function App() {
   const commandBuffersRef = useRef<Map<string, string>>(new Map());
 
   const terminalContainerRef = useRef<HTMLDivElement>(null);
+  const terminalMountRef = useRef<HTMLDivElement>(null);
 
   // Available themes (66 themes for 22 rows × 3 columns)
   const themes = [
@@ -394,9 +395,9 @@ export default function App() {
   // Fit terminal on active session change (for SSH, serial, and local shell sessions)
   useEffect(() => {
     const activeSession = sessions.find(s => s.id === activeSessionId);
-    if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') && terminalContainerRef.current) {
-      terminalContainerRef.current.innerHTML = '';
-      activeSession.terminal.open(terminalContainerRef.current);
+    if (activeSession && (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') && terminalMountRef.current) {
+      terminalMountRef.current.innerHTML = '';
+      activeSession.terminal.open(terminalMountRef.current);
       activeSession.fitAddon.fit();
     }
   }, [activeSessionId, sessions]);
@@ -1450,6 +1451,8 @@ export default function App() {
                       style={retroTermStyles}
                       ref={terminalContainerRef}
                     >
+                      {/* Terminal mount point - xterm attaches here */}
+                      <div className="terminal-mount" ref={terminalMountRef} />
                       {/* RetroTerm CRT Effect Overlays */}
                       {isRetroEnabled && (
                         <>

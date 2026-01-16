@@ -968,6 +968,7 @@ function setupIpcHandlers(): void {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
+      terminalTheme: settingsStore.get('terminalTheme') || 'classic',
       retroTerm: settingsStore.get('retroTerm') || defaultRetroTermSettings,
     };
   });
@@ -982,6 +983,9 @@ function setupIpcHandlers(): void {
     if (settings.startMinimized !== undefined) {
       settingsStore.set('startMinimized', settings.startMinimized);
     }
+    if (settings.terminalTheme !== undefined) {
+      settingsStore.set('terminalTheme', settings.terminalTheme);
+    }
     if (settings.retroTerm !== undefined) {
       settingsStore.set('retroTerm', settings.retroTerm);
     }
@@ -989,6 +993,7 @@ function setupIpcHandlers(): void {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
+      terminalTheme: settingsStore.get('terminalTheme') || 'classic',
       retroTerm: settingsStore.get('retroTerm') || defaultRetroTermSettings,
     };
   });
