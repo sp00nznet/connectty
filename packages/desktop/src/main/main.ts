@@ -120,6 +120,11 @@ async function createWindow(): Promise<void> {
     },
   });
 
+  // Hide menu bar on Windows
+  if (process.platform === 'win32') {
+    mainWindow.setMenuBarVisibility(false);
+  }
+
   // Handle minimize to tray
   mainWindow.on('minimize', (event: Electron.Event) => {
     if (settingsStore.get('minimizeToTray')) {
