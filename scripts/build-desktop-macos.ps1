@@ -1,16 +1,18 @@
-# Connectty Desktop Build Script for Linux (Debian) from Windows
-# Usage: .\scripts\build-desktop-linux.ps1 [-Clean] [-SkipInstall] [-AppImage]
+# Connectty Desktop Build Script for macOS (cross-compile from Windows)
+# Usage: .\scripts\build-desktop-macos.ps1 [-Clean] [-SkipInstall]
+#
+# Note: Cross-compiling to macOS from Windows has limitations.
+# For best results, build on a Mac or use a CI service.
 
 param(
     [switch]$Clean,
-    [switch]$SkipInstall,
-    [switch]$AppImage  # Build AppImage instead of .deb
+    [switch]$SkipInstall
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 
-Write-Host "=== Connectty Desktop Build Script (Linux/Debian) ===" -ForegroundColor Cyan
+Write-Host "=== Connectty Desktop Build Script (macOS) ===" -ForegroundColor Cyan
 Write-Host "Project root: $ProjectRoot"
 
 Set-Location $ProjectRoot
@@ -58,31 +60,11 @@ function Refresh-Path {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 }
 
-# Function to check if WSL is available
-function Test-WSL {
-    try {
-        $wslOutput = wsl --status 2>&1
-        return $LASTEXITCODE -eq 0
-    } catch {
-        return $false
-    }
-}
-
-# Function to check if Docker is available
-function Test-Docker {
-    try {
-        $dockerOutput = docker --version 2>&1
-        return $LASTEXITCODE -eq 0
-    } catch {
-        return $false
-    }
-}
-
 # ============================================
 # MAIN SCRIPT
 # ============================================
 
-Write-Host "`n[0/5] Checking prerequisites..." -ForegroundColor Yellow
+Write-Host "`n[0/6] Checking prerequisites..." -ForegroundColor Yellow
 
 # First, refresh PATH and try to find Node.js
 Refresh-Path
@@ -105,32 +87,14 @@ $npmVersion = npm --version
 Write-Host "  Node.js: $nodeVersion" -ForegroundColor Green
 Write-Host "  npm: $npmVersion" -ForegroundColor Green
 
-# Check cross-compilation capabilities
-$hasWSL = Test-WSL
-$hasDocker = Test-Docker
-
-if ($hasWSL) {
-    Write-Host "  WSL: Available" -ForegroundColor Green
-} else {
-    Write-Host "  WSL: Not available" -ForegroundColor Yellow
-}
-
-if ($hasDocker) {
-    Write-Host "  Docker: Available" -ForegroundColor Green
-} else {
-    Write-Host "  Docker: Not available" -ForegroundColor Yellow
-}
-
 # Warn about cross-compilation limitations
-if (-not $hasWSL -and -not $hasDocker) {
-    Write-Host "`n  Note: Building .deb packages on Windows works best with WSL or Docker." -ForegroundColor Yellow
-    Write-Host "  AppImage builds are more reliable for cross-compilation." -ForegroundColor Yellow
-    Write-Host "  Use -AppImage flag if you encounter issues with .deb builds." -ForegroundColor Yellow
-}
+Write-Host "`n  Note: Cross-compiling to macOS from Windows creates unsigned builds." -ForegroundColor Yellow
+Write-Host "  The .dmg/.zip will work but users may see security warnings." -ForegroundColor Yellow
+Write-Host "  For signed builds, use a Mac or CI service with Apple certificates." -ForegroundColor Yellow
 
 # Clean
 if ($Clean) {
-    Write-Host "`n[1/5] Cleaning..." -ForegroundColor Yellow
+    Write-Host "`n[1/6] Cleaning..." -ForegroundColor Yellow
     @("node_modules", "packages\desktop\node_modules", "packages\server\node_modules", "packages\shared\node_modules", "packages\web\node_modules") | ForEach-Object {
         if (Test-Path $_) { Remove-Item -Recurse -Force $_ -ErrorAction SilentlyContinue }
     }
@@ -140,12 +104,12 @@ if ($Clean) {
     }
     Write-Host "  Done!" -ForegroundColor Green
 } else {
-    Write-Host "`n[1/5] Skipping clean (use -Clean flag)" -ForegroundColor Gray
+    Write-Host "`n[1/6] Skipping clean (use -Clean flag)" -ForegroundColor Gray
 }
 
 # Install dependencies
 if (-not $SkipInstall) {
-    Write-Host "`n[2/5] Installing dependencies..." -ForegroundColor Yellow
+    Write-Host "`n[2/6] Installing dependencies..." -ForegroundColor Yellow
     npm install
     if ($LASTEXITCODE -ne 0) {
         Write-Host "npm install failed!" -ForegroundColor Red
@@ -153,7 +117,7 @@ if (-not $SkipInstall) {
     }
     Write-Host "  Done!" -ForegroundColor Green
 } else {
-    Write-Host "`n[2/5] Skipping npm install" -ForegroundColor Gray
+    Write-Host "`n[2/6] Skipping npm install" -ForegroundColor Gray
 }
 
 # Fix 7zip-bin if system 7-Zip is available
@@ -172,7 +136,7 @@ if ((Test-Path $sevenZipExe) -and (-not (Test-Path $sevenZipBinExe))) {
 }
 
 # Build shared
-Write-Host "`n[3/5] Building shared package..." -ForegroundColor Yellow
+Write-Host "`n[3/6] Building shared package..." -ForegroundColor Yellow
 npm run build -w @connectty/shared
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Shared package build failed!" -ForegroundColor Red
@@ -181,7 +145,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "  Done!" -ForegroundColor Green
 
 # Build desktop main and renderer
-Write-Host "`n[4/5] Building desktop package..." -ForegroundColor Yellow
+Write-Host "`n[4/6] Building desktop package..." -ForegroundColor Yellow
 npm run build -w @connectty/desktop
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Desktop build failed!" -ForegroundColor Red
@@ -189,27 +153,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "  Done!" -ForegroundColor Green
 
-# Build Linux distribution
-Write-Host "`n[5/5] Building Linux distribution..." -ForegroundColor Yellow
+# Build macOS distribution
+Write-Host "`n[5/6] Building macOS distribution..." -ForegroundColor Yellow
+Write-Host "  Target: DMG + ZIP (x64 and arm64)" -ForegroundColor Cyan
 
-if ($AppImage) {
-    Write-Host "  Target: AppImage" -ForegroundColor Cyan
-    $buildTarget = "--linux AppImage"
-} else {
-    Write-Host "  Target: Debian (.deb) + AppImage" -ForegroundColor Cyan
-    $buildTarget = "--linux deb AppImage"
-}
-
-# Run electron-builder for Linux
+# Run electron-builder for macOS
 Set-Location "$ProjectRoot\packages\desktop"
-npx electron-builder $buildTarget.Split(' ')
+npx electron-builder --mac dmg zip --x64 --arm64
 $buildResult = $LASTEXITCODE
 Set-Location $ProjectRoot
 
 if ($buildResult -ne 0) {
-    Write-Host "`nLinux build failed!" -ForegroundColor Red
-    Write-Host "If .deb build fails, try running with -AppImage flag:" -ForegroundColor Yellow
-    Write-Host "  .\scripts\build-desktop-linux.ps1 -AppImage" -ForegroundColor Yellow
+    Write-Host "`nmacOS build failed!" -ForegroundColor Red
+    Write-Host "Cross-compilation issues are common. Consider building on a Mac." -ForegroundColor Yellow
     exit 1
 }
 
@@ -224,9 +180,10 @@ $SourceDir = Join-Path $ProjectRoot "packages\desktop\release"
 $CopiedFiles = @()
 
 if (Test-Path $SourceDir) {
-    # Copy Linux binaries (.deb, .AppImage)
+    # Copy macOS binaries (.dmg, .zip for mac)
     Get-ChildItem $SourceDir -File | Where-Object {
-        $_.Extension -in @(".deb", ".AppImage")
+        ($_.Extension -eq ".dmg") -or
+        ($_.Extension -eq ".zip" -and $_.Name -match "mac|darwin")
     } | ForEach-Object {
         $destPath = Join-Path $ReleasesDir $_.Name
         Copy-Item $_.FullName $destPath -Force
@@ -238,12 +195,13 @@ Write-Host "`n=== BUILD COMPLETE ===" -ForegroundColor Green
 Write-Host "Output: releases\" -ForegroundColor Cyan
 
 if ($CopiedFiles.Count -gt 0) {
-    Write-Host "`nLinux Release Files:"
+    Write-Host "`nmacOS Release Files:"
     $CopiedFiles | ForEach-Object { Write-Host "  - $_" -ForegroundColor White }
 } else {
     Write-Host "`nNo files were copied to releases folder" -ForegroundColor Yellow
 }
 
-Write-Host "`nTo install on Debian/Ubuntu:" -ForegroundColor Cyan
-Write-Host "  sudo dpkg -i releases/connectty_1.0.0_amd64.deb" -ForegroundColor White
-Write-Host "  sudo apt-get install -f  # Fix dependencies if needed" -ForegroundColor Gray
+Write-Host "`nTo install on macOS:" -ForegroundColor Cyan
+Write-Host "  1. Open the .dmg file" -ForegroundColor White
+Write-Host "  2. Drag Connectty to Applications" -ForegroundColor White
+Write-Host "  3. Right-click and select 'Open' (first time only, for unsigned builds)" -ForegroundColor Gray
