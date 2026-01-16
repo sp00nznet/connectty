@@ -174,8 +174,21 @@ if ((Test-Path $sevenZipExe) -and (-not (Test-Path $sevenZipBinExe))) {
     }
 }
 
+# Sync version
+Write-Host "`n[3/6] Syncing version..." -ForegroundColor Yellow
+$versionFile = Join-Path $ProjectRoot "version.json"
+if (Test-Path $versionFile) {
+    $versionData = Get-Content $versionFile | ConvertFrom-Json
+    $fullVersion = $versionData.version
+    Write-Host "  Version: $fullVersion" -ForegroundColor Cyan
+    node (Join-Path $ProjectRoot "scripts\sync-version.js")
+} else {
+    Write-Host "  Warning: version.json not found, using package.json version" -ForegroundColor Yellow
+    $fullVersion = "1.0.0.0"
+}
+
 # Build shared
-Write-Host "`n[3/5] Building shared package..." -ForegroundColor Yellow
+Write-Host "`n[4/6] Building shared package..." -ForegroundColor Yellow
 npm run build -w @connectty/shared
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Shared package build failed!" -ForegroundColor Red
@@ -184,7 +197,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "  Done!" -ForegroundColor Green
 
 # Build desktop main and renderer
-Write-Host "`n[4/5] Building desktop package..." -ForegroundColor Yellow
+Write-Host "`n[5/6] Building desktop package..." -ForegroundColor Yellow
 npm run build -w @connectty/desktop
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Desktop build failed!" -ForegroundColor Red
@@ -193,7 +206,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "  Done!" -ForegroundColor Green
 
 # Build Linux distribution
-Write-Host "`n[5/5] Building Linux distribution..." -ForegroundColor Yellow
+Write-Host "`n[6/6] Building Linux distribution..." -ForegroundColor Yellow
 
 if ($AppImage) {
     Write-Host "  Target: AppImage only" -ForegroundColor Cyan
@@ -221,7 +234,7 @@ if ($buildResult -ne 0) {
 }
 
 # Copy final binaries to releases folder
-Write-Host "`n[6/6] Copying to releases folder..." -ForegroundColor Yellow
+Write-Host "`n[7/7] Copying to releases folder..." -ForegroundColor Yellow
 $ReleasesDir = Join-Path $ProjectRoot "releases"
 if (-not (Test-Path $ReleasesDir)) {
     New-Item -ItemType Directory -Force -Path $ReleasesDir | Out-Null
