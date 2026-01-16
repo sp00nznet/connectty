@@ -176,7 +176,7 @@ if ((Test-Path $sevenZipExe) -and (-not (Test-Path $sevenZipBinExe))) {
 }
 
 # Sync version
-Write-Host "`n[3/6] Syncing version..." -ForegroundColor Yellow
+Write-Host "`n[3/5] Syncing version..." -ForegroundColor Yellow
 $versionFile = Join-Path $ProjectRoot "version.json"
 if (Test-Path $versionFile) {
     $versionData = Get-Content $versionFile | ConvertFrom-Json
@@ -188,26 +188,33 @@ if (Test-Path $versionFile) {
     $fullVersion = "1.0.0.0"
 }
 
-# Build shared
-Write-Host "`n[4/6] Building shared package..." -ForegroundColor Yellow
-npm run build -w @connectty/shared
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Shared package build failed!" -ForegroundColor Red
-    exit 1
-}
-Write-Host "  Done!" -ForegroundColor Green
+# Check if WSL is available early - we'll do the full build there
+$hasWSL = Test-WSL
+$useWSL = $hasWSL -and -not $AppImage
 
-# Build desktop main and renderer
-Write-Host "`n[5/6] Building desktop package..." -ForegroundColor Yellow
-npm run build -w @connectty/desktop
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Desktop build failed!" -ForegroundColor Red
-    exit 1
+if (-not $useWSL) {
+    # Only build on Windows if NOT using WSL (WSL does full build itself)
+    # Build shared
+    Write-Host "`n[4/5] Building shared package..." -ForegroundColor Yellow
+    npm run build -w @connectty/shared
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Shared package build failed!" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "  Done!" -ForegroundColor Green
+
+    # Build desktop main and renderer
+    Write-Host "`n[5/5] Building desktop package..." -ForegroundColor Yellow
+    npm run build -w @connectty/desktop
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Desktop build failed!" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "  Done!" -ForegroundColor Green
 }
-Write-Host "  Done!" -ForegroundColor Green
 
 # Build Linux distribution
-Write-Host "`n[6/6] Building Linux distribution..." -ForegroundColor Yellow
+Write-Host "`n[4/5] Building Linux distribution..." -ForegroundColor Yellow
 
 if ($AppImage) {
     Write-Host "  Target: AppImage only" -ForegroundColor Cyan
@@ -218,8 +225,7 @@ if ($AppImage) {
     $buildTarget = "deb"
 }
 
-# Check if WSL is available (required for .deb builds on Windows)
-$hasWSL = Test-WSL
+# Show WSL status
 Write-Host "  WSL detected: $hasWSL" -ForegroundColor Gray
 
 # Run electron-builder for Linux
@@ -232,6 +238,22 @@ if ($hasWSL -and -not $AppImage) {
 
     # Convert Windows path to WSL path
     $wslPath = "/mnt/" + $ProjectRoot.Substring(0,1).ToLower() + $ProjectRoot.Substring(2).Replace('\', '/')
+
+    # Check if Node.js is installed in WSL
+    Write-Host "  Checking for Node.js in WSL..." -ForegroundColor Gray
+    $nodeCheck = wsl bash -c "command -v node" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Node.js not found, installing via NodeSource..." -ForegroundColor Yellow
+        wsl bash -c "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install Node.js in WSL!" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "  Node.js installed successfully!" -ForegroundColor Green
+    } else {
+        $nodeVersion = wsl bash -c "node --version" 2>&1
+        Write-Host "  Node.js: $nodeVersion" -ForegroundColor Green
+    }
 
     # Check if fpm is installed in WSL, install if not
     Write-Host "  Checking for fpm in WSL..." -ForegroundColor Gray
@@ -262,12 +284,40 @@ if ($hasWSL -and -not $AppImage) {
         Write-Host "  fpm is already installed" -ForegroundColor Green
     }
 
-    # Run electron-builder entirely in WSL
-    # Use --noprofile --norc to avoid loading Windows PATH, then set clean Linux PATH
-    Write-Host "  Running electron-builder in WSL (this may take a while)..." -ForegroundColor Gray
-    $wslCmd = "export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin; cd $wslPath/packages/desktop && npx electron-builder --linux $buildTarget"
-    wsl bash --noprofile --norc -c $wslCmd
+    # Run FULL build in WSL (npm install + build + electron-builder)
+    # This is required because native modules need Linux binaries
+    Write-Host "  Running full build in WSL (this may take a while)..." -ForegroundColor Gray
+    Write-Host "    - npm install (Linux native modules)" -ForegroundColor Gray
+    Write-Host "    - TypeScript compilation" -ForegroundColor Gray
+    Write-Host "    - electron-builder packaging" -ForegroundColor Gray
+
+    # Write build script to temp file (avoids PowerShell string escaping issues)
+    $tempScript = Join-Path $env:TEMP "connectty-build-linux.sh"
+    $scriptContent = @"
+#!/bin/bash
+set -e
+cd '$wslPath'
+echo '=== Installing dependencies with Linux native modules ==='
+npm install
+echo '=== Building shared package ==='
+npm run build -w @connectty/shared
+echo '=== Building desktop package ==='
+npm run build -w @connectty/desktop
+echo '=== Running electron-builder ==='
+cd packages/desktop
+npx electron-builder --linux $buildTarget
+"@
+    # Write with Unix line endings (LF, not CRLF)
+    $scriptContent = $scriptContent -replace "`r`n", "`n"
+    [System.IO.File]::WriteAllText($tempScript, $scriptContent)
+
+    # Convert temp script path to WSL path and execute
+    $wslTempScript = "/mnt/" + $tempScript.Substring(0,1).ToLower() + $tempScript.Substring(2).Replace('\', '/')
+    wsl bash $wslTempScript
     $buildResult = $LASTEXITCODE
+
+    # Cleanup temp script
+    Remove-Item $tempScript -ErrorAction SilentlyContinue
 } else {
     # Try native build (will likely fail for .deb without fpm)
     npx electron-builder --linux $buildTarget
