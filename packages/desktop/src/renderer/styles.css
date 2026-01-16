@@ -2488,8 +2488,7 @@ body {
 /* Terminal */
 .terminal-container {
   flex: 1;
-  padding: 8px;
-  background-color: #000;
+  overflow: hidden;
 }
 
 .terminal-container .xterm {
