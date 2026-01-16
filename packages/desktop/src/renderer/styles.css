@@ -4600,6 +4600,55 @@ body {
   margin-bottom: 12px;
 }
 
+/* Radio Group Styles */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.radio-label:hover {
+  border-color: var(--accent);
+}
+
+.radio-label input[type="radio"] {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+
+.radio-label input[type="radio"]:checked + .radio-text strong {
+  color: var(--accent);
+}
+
+.radio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.radio-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.radio-description {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 /* Theme Grid in Settings */
 .theme-grid {
   display: grid;

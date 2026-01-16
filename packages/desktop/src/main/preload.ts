@@ -94,6 +94,7 @@ export interface AppSettings {
   closeToTray: boolean;
   startMinimized: boolean;
   syncAccounts?: SyncAccount[];
+  terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
 }
 
 // Local shell types

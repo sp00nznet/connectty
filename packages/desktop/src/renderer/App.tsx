@@ -111,7 +111,7 @@ export default function App() {
   const [fxpSourceSession, setFxpSourceSession] = useState<string | null>(null);
   // Settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [appSettings, setAppSettings] = useState<AppSettings>({ minimizeToTray: false, closeToTray: false, startMinimized: false });
+  const [appSettings, setAppSettings] = useState<AppSettings>({ minimizeToTray: false, closeToTray: false, startMinimized: false, terminalTheme: 'classic' });
 
   // New tab menu (stores position for fixed positioning)
   const [newTabMenuPos, setNewTabMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -289,6 +289,64 @@ export default function App() {
     { id: 'ibm', name: 'IBM', description: 'PC-DOS classic' },
     { id: 'vt220', name: 'VT220', description: 'DEC terminal amber' },
   ];
+
+  // Get terminal theme colors based on current theme and settings
+  const getTerminalTheme = useCallback(() => {
+    // Classic mode: always black background
+    if (appSettings.terminalTheme === 'classic') {
+      return {
+        background: '#000000',
+        foreground: '#ffffff',
+        cursor: '#ffffff',
+        cursorAccent: '#000000',
+        selectionBackground: 'rgba(255, 255, 255, 0.3)',
+      };
+    }
+
+    // Sync mode: use CSS variables from current theme
+    const style = getComputedStyle(document.documentElement);
+    const bgPrimary = style.getPropertyValue('--bg-primary').trim() || '#1a1a2e';
+    const bgSecondary = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
+    const textPrimary = style.getPropertyValue('--text-primary').trim() || '#edf2f4';
+    const textSecondary = style.getPropertyValue('--text-secondary').trim() || '#8d99ae';
+    const accent = style.getPropertyValue('--accent').trim() || '#e94560';
+
+    return {
+      background: bgSecondary,
+      foreground: textPrimary,
+      cursor: accent,
+      cursorAccent: bgSecondary,
+      selectionBackground: 'rgba(255, 255, 255, 0.2)',
+      black: bgPrimary,
+      brightBlack: textSecondary,
+      white: textPrimary,
+      brightWhite: '#ffffff',
+      red: '#ff5555',
+      brightRed: '#ff6e6e',
+      green: '#50fa7b',
+      brightGreen: '#69ff94',
+      yellow: '#f1fa8c',
+      brightYellow: '#ffffa5',
+      blue: '#bd93f9',
+      brightBlue: '#d6acff',
+      magenta: '#ff79c6',
+      brightMagenta: '#ff92df',
+      cyan: '#8be9fd',
+      brightCyan: '#a4ffff',
+    };
+  }, [theme, appSettings.terminalTheme]);
+
+  // Update existing terminals when theme changes
+  useEffect(() => {
+    if (appSettings.terminalTheme === 'sync') {
+      const terminalTheme = getTerminalTheme();
+      sessions.forEach(session => {
+        if ('terminal' in session && session.terminal) {
+          session.terminal.options.theme = terminalTheme;
+        }
+      });
+    }
+  }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
 
   // Apply theme to document
   useEffect(() => {
@@ -599,11 +657,7 @@ export default function App() {
           cursorBlink: true,
           fontFamily: 'Menlo, Monaco, "Courier New", monospace',
           fontSize: 14,
-          theme: {
-            background: '#000000',
-            foreground: '#ffffff',
-            cursor: '#ffffff',
-          },
+          theme: getTerminalTheme(),
         });
 
         const fitAddon = new FitAddon();
@@ -646,11 +700,7 @@ export default function App() {
         cursorBlink: true,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         fontSize: 14,
-        theme: {
-          background: '#000000',
-          foreground: '#ffffff',
-          cursor: '#ffffff',
-        },
+        theme: getTerminalTheme(),
       });
 
       const fitAddon = new FitAddon();
@@ -783,11 +833,7 @@ export default function App() {
         cursorBlink: true,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         fontSize: 14,
-        theme: {
-          background: '#000000',
-          foreground: '#ffffff',
-          cursor: '#ffffff',
-        },
+        theme: getTerminalTheme(),
       });
 
       const fitAddon = new FitAddon();
@@ -5254,10 +5300,12 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
+  const [terminalTheme, setTerminalTheme] = useState<'sync' | 'classic'>(settings.terminalTheme || 'classic');
   const [saving, setSaving] = useState(false);
 
   // Collapsible section states
   const [themesExpanded, setThemesExpanded] = useState(true);
+  const [terminalExpanded, setTerminalExpanded] = useState(true);
   const [trayExpanded, setTrayExpanded] = useState(true);
   const [syncExpanded, setSyncExpanded] = useState(true);
 
@@ -5282,6 +5330,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         minimizeToTray,
         closeToTray,
         startMinimized,
+        terminalTheme,
         syncAccounts,
       });
       onClose();
@@ -5441,6 +5490,57 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           <span className="theme-name">{t.name}</span>
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Terminal Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setTerminalExpanded(!terminalExpanded)}
+              >
+                <span className={`collapse-icon ${terminalExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Terminal</h4>
+              </button>
+              {terminalExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Customize terminal appearance for SSH, serial, and local shells.
+                  </p>
+
+                  <div className="form-group">
+                    <label className="form-label">Terminal Theme</label>
+                    <div className="radio-group">
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          name="terminalTheme"
+                          value="classic"
+                          checked={terminalTheme === 'classic'}
+                          onChange={() => setTerminalTheme('classic')}
+                        />
+                        <span className="radio-text">
+                          <strong>Classic</strong>
+                          <span className="radio-description">Traditional black background with white text</span>
+                        </span>
+                      </label>
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          name="terminalTheme"
+                          value="sync"
+                          checked={terminalTheme === 'sync'}
+                          onChange={() => setTerminalTheme('sync')}
+                        />
+                        <span className="radio-text">
+                          <strong>Sync with App Theme</strong>
+                          <span className="radio-description">Terminal colors match the current application theme</span>
+                        </span>
+                      </label>
                     </div>
                   </div>
                 </div>
