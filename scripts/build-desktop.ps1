@@ -14,13 +14,6 @@ Write-Host "Project root: $ProjectRoot"
 
 Set-Location $ProjectRoot
 
-# Use system 7-Zip if available (fixes 7zip-bin issues)
-$sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
-if (Test-Path $sevenZipPath) {
-    $env:ELECTRON_BUILDER_7Z_PATH = $sevenZipPath
-    Write-Host "Using system 7-Zip" -ForegroundColor Gray
-}
-
 # Common Node.js installation paths
 $NodePaths = @(
     "$env:ProgramFiles\nodejs",
@@ -126,6 +119,48 @@ function Test-VCBuildTools {
         if (Test-Path $p) { return $true }
     }
     return $false
+}
+
+# Function to check if 7-Zip is installed
+function Test-7Zip {
+    $paths = @(
+        "C:\Program Files\7-Zip\7z.exe",
+        "C:\Program Files (x86)\7-Zip\7z.exe"
+    )
+    foreach ($p in $paths) {
+        if (Test-Path $p) { return $p }
+    }
+    return $null
+}
+
+# Function to install 7-Zip
+function Install-7Zip {
+    Write-Host "`n7-Zip not found. Installing..." -ForegroundColor Yellow
+
+    $installerUrl = "https://www.7-zip.org/a/7z2409-x64.exe"
+    $installerPath = "$env:TEMP\7z-installer.exe"
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Write-Host "  Downloading 7-Zip..." -ForegroundColor Gray
+        (New-Object System.Net.WebClient).DownloadFile($installerUrl, $installerPath)
+
+        Write-Host "  Installing 7-Zip..." -ForegroundColor Gray
+        $process = Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -PassThru
+
+        if ($process.ExitCode -eq 0) {
+            Write-Host "  7-Zip installed!" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "  7-Zip installer failed with exit code: $($process.ExitCode)" -ForegroundColor Red
+            return $false
+        }
+    } catch {
+        Write-Host "  Failed to install 7-Zip: $_" -ForegroundColor Red
+        return $false
+    } finally {
+        Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # Function to install Visual Studio Build Tools
@@ -263,6 +298,21 @@ if (-not (Test-VCBuildTools)) {
     exit 0
 }
 
+# Check/Install 7-Zip (required by electron-builder)
+$sevenZipPath = Test-7Zip
+if (-not $sevenZipPath) {
+    if (-not (Install-7Zip)) {
+        Write-Host "7-Zip is required for electron-builder. Please install from https://www.7-zip.org/" -ForegroundColor Red
+        exit 1
+    }
+    $sevenZipPath = Test-7Zip
+}
+
+if ($sevenZipPath) {
+    $env:ELECTRON_BUILDER_7Z_PATH = $sevenZipPath
+    Write-Host "  7-Zip: OK ($sevenZipPath)" -ForegroundColor Green
+}
+
 # Display versions
 $nodeVersion = node --version
 $npmVersion = npm --version
@@ -311,16 +361,16 @@ if (-not $SkipInstall) {
     Write-Host "`n[2/4] Skipping npm install" -ForegroundColor Gray
 }
 
-# Fix 7zip-bin if system 7-Zip is available (npm sometimes fails to download 7za.exe)
-$sevenZipExe = "C:\Program Files\7-Zip\7z.exe"
-$sevenZipDll = "C:\Program Files\7-Zip\7z.dll"
+# Fix 7zip-bin if npm failed to download 7za.exe (common Windows issue)
 $sevenZipBinDir = Join-Path $ProjectRoot "node_modules\7zip-bin\win\x64"
 $sevenZipBinExe = Join-Path $sevenZipBinDir "7za.exe"
 
-if ((Test-Path $sevenZipExe) -and (-not (Test-Path $sevenZipBinExe))) {
+if ($sevenZipPath -and (-not (Test-Path $sevenZipBinExe))) {
     Write-Host "  Fixing 7zip-bin with system 7-Zip..." -ForegroundColor Gray
+    $sevenZipDir = Split-Path $sevenZipPath -Parent
+    $sevenZipDll = Join-Path $sevenZipDir "7z.dll"
     New-Item -ItemType Directory -Force -Path $sevenZipBinDir | Out-Null
-    Copy-Item $sevenZipExe $sevenZipBinExe -Force
+    Copy-Item $sevenZipPath $sevenZipBinExe -Force
     if (Test-Path $sevenZipDll) {
         Copy-Item $sevenZipDll (Join-Path $sevenZipBinDir "7z.dll") -Force
     }
