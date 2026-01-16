@@ -111,7 +111,7 @@ export default function App() {
   const [fxpSourceSession, setFxpSourceSession] = useState<string | null>(null);
   // Settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [appSettings, setAppSettings] = useState<AppSettings>({ minimizeToTray: false, closeToTray: false, startMinimized: false });
+  const [appSettings, setAppSettings] = useState<AppSettings>({ minimizeToTray: false, closeToTray: false, startMinimized: false, terminalTheme: 'classic' });
 
   // New tab menu (stores position for fixed positioning)
   const [newTabMenuPos, setNewTabMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -148,84 +148,205 @@ export default function App() {
 
   // Available themes (66 themes for 22 rows × 3 columns)
   const themes = [
-    // Dark themes - Blues
+    // Dark themes - Blues (12)
     { id: 'midnight', name: 'Midnight', description: 'Default dark blue theme' },
     { id: 'cobalt', name: 'Cobalt', description: 'Deep blue coding classic' },
     { id: 'oceanic', name: 'Oceanic', description: 'Deep sea inspired' },
     { id: 'night-owl', name: 'Night Owl', description: 'For night owls and low light' },
     { id: 'deep-blue', name: 'Deep Blue', description: 'Rich navy tones' },
     { id: 'winter-dark', name: 'Winter Dark', description: 'Cold blue palette' },
-    // Dark themes - Purples
+    { id: 'sapphire', name: 'Sapphire', description: 'Brilliant blue gem tones' },
+    { id: 'pacific', name: 'Pacific', description: 'Deep ocean vibes' },
+    { id: 'blueberry', name: 'Blueberry', description: 'Sweet dark berry blue' },
+    { id: 'twilight', name: 'Twilight', description: 'Dusk sky colors' },
+    { id: 'navy', name: 'Navy', description: 'Classic dark navy' },
+    { id: 'arctic', name: 'Arctic', description: 'Icy blue darkness' },
+    // Dark themes - Purples (12)
     { id: 'dracula', name: 'Dracula', description: 'Popular dark purple theme' },
     { id: 'synthwave', name: 'Synthwave', description: '80s retro neon vibes' },
     { id: 'shades-purple', name: 'Shades of Purple', description: 'Epic purple variant' },
     { id: 'cyberpunk', name: 'Cyberpunk', description: 'Neon future aesthetic' },
     { id: 'laserwave', name: 'Laserwave', description: 'Retro-futuristic synthwave' },
     { id: 'andromeda', name: 'Andromeda', description: 'Dark with purple accents' },
-    // Dark themes - Greens
+    { id: 'grape', name: 'Grape', description: 'Rich grape purple' },
+    { id: 'amethyst', name: 'Amethyst', description: 'Crystal purple gem' },
+    { id: 'violet', name: 'Violet', description: 'Deep violet night' },
+    { id: 'nebula', name: 'Nebula', description: 'Cosmic purple clouds' },
+    { id: 'ultraviolet', name: 'Ultraviolet', description: 'Bold UV purple' },
+    { id: 'plum', name: 'Plum', description: 'Dark fruity purple' },
+    // Dark themes - Greens (12)
     { id: 'everforest', name: 'Everforest', description: 'Nature-inspired green theme' },
     { id: 'forest', name: 'Forest', description: 'Deep woodland greens' },
     { id: 'matrix', name: 'Matrix', description: 'Digital rain aesthetic' },
     { id: 'sublime-monokai', name: 'Monokai', description: 'Sublime Text inspired' },
     { id: 'palenight', name: 'Palenight', description: 'Soft dark with green hints' },
     { id: 'vue', name: 'Vue', description: 'Vue.js inspired greens' },
-    // Dark themes - Reds/Oranges
+    { id: 'emerald', name: 'Emerald', description: 'Precious green gem' },
+    { id: 'jungle', name: 'Jungle', description: 'Tropical dark greens' },
+    { id: 'mint-dark', name: 'Mint Dark', description: 'Cool mint chocolate' },
+    { id: 'shamrock', name: 'Shamrock', description: 'Lucky Irish green' },
+    { id: 'moss', name: 'Moss', description: 'Soft forest moss' },
+    { id: 'hacker', name: 'Hacker', description: 'Classic green terminal' },
+    // Dark themes - Reds/Oranges (12)
     { id: 'ayu-dark', name: 'Ayu Dark', description: 'Simple, bright colors' },
     { id: 'ayu-mirage', name: 'Ayu Mirage', description: 'Ayu with deeper tones' },
     { id: 'tokyo-night', name: 'Tokyo Night', description: 'Clean dark theme inspired by Tokyo lights' },
     { id: 'panda', name: 'Panda', description: 'Superminimal dark syntax' },
     { id: 'nord', name: 'Nord', description: 'Arctic, north-bluish palette' },
     { id: 'aurora', name: 'Aurora', description: 'Northern lights inspired' },
-    // Dark themes - Neutrals
+    { id: 'ruby', name: 'Ruby', description: 'Deep red gem tones' },
+    { id: 'crimson', name: 'Crimson', description: 'Bold dark red' },
+    { id: 'sunset', name: 'Sunset', description: 'Warm evening colors' },
+    { id: 'firefly', name: 'Firefly', description: 'Glowing warm accents' },
+    { id: 'volcanic', name: 'Volcanic', description: 'Molten lava tones' },
+    { id: 'cherry', name: 'Cherry', description: 'Dark cherry red' },
+    // Dark themes - Neutrals (10)
     { id: 'one-dark', name: 'One Dark', description: 'Atom\'s iconic dark theme' },
     { id: 'material', name: 'Material Dark', description: 'Material Design inspired' },
     { id: 'github', name: 'GitHub Dark', description: 'GitHub\'s dark mode' },
     { id: 'vs-dark', name: 'VS Dark', description: 'Visual Studio Code dark' },
     { id: 'sublime', name: 'Sublime', description: 'Sublime Text default' },
     { id: 'atom', name: 'Atom One', description: 'Atom editor default' },
-    // Dark themes - Warm
+    { id: 'obsidian', name: 'Obsidian', description: 'Deep black stone' },
+    { id: 'charcoal', name: 'Charcoal', description: 'Soft dark gray' },
+    { id: 'onyx', name: 'Onyx', description: 'Pure black elegance' },
+    { id: 'slate', name: 'Slate', description: 'Neutral dark gray' },
+    // Dark themes - Warm (10)
     { id: 'gruvbox', name: 'Gruvbox Dark', description: 'Retro groove color scheme' },
     { id: 'gruvbox-hard', name: 'Gruvbox Hard', description: 'Higher contrast Gruvbox' },
     { id: 'solarized', name: 'Solarized Dark', description: 'Precision colors for machines and people' },
     { id: 'monokai', name: 'Monokai Pro', description: 'Modern Monokai variant' },
     { id: 'tomorrow-night', name: 'Tomorrow Night', description: 'Tomorrow theme dark' },
     { id: 'horizon', name: 'Horizon', description: 'Warm dark theme' },
-    // Dark themes - Pastels
+    { id: 'coffee', name: 'Coffee', description: 'Rich espresso tones' },
+    { id: 'chocolate', name: 'Chocolate', description: 'Dark cocoa warmth' },
+    { id: 'autumn', name: 'Autumn', description: 'Fall foliage colors' },
+    { id: 'campfire', name: 'Campfire', description: 'Cozy warm glow' },
+    // Dark themes - Pastels (10)
     { id: 'catppuccin', name: 'Catppuccin Mocha', description: 'Soothing pastel dark theme' },
     { id: 'catppuccin-macchiato', name: 'Catppuccin Macchiato', description: 'Medium dark pastel' },
     { id: 'rose-pine', name: 'Rosé Pine', description: 'Elegant, dark soho vibes' },
     { id: 'rose-pine-moon', name: 'Rosé Pine Moon', description: 'Rosé Pine variant' },
     { id: 'kanagawa', name: 'Kanagawa', description: 'Wave-inspired Japanese theme' },
     { id: 'fairy-floss', name: 'Fairy Floss', description: 'Sweet pastel candy' },
-    // Light themes - Clean
+    { id: 'bubblegum', name: 'Bubblegum', description: 'Sweet pink pastels' },
+    { id: 'cotton-candy', name: 'Cotton Candy', description: 'Fluffy pastel colors' },
+    { id: 'lavender', name: 'Lavender', description: 'Soft purple pastels' },
+    { id: 'peach', name: 'Peach', description: 'Warm peachy pastels' },
+    // Light themes - Clean (10)
     { id: 'light', name: 'Light', description: 'Clean light theme' },
     { id: 'github-light', name: 'GitHub Light', description: 'GitHub\'s light mode' },
     { id: 'vs-light', name: 'VS Light', description: 'Visual Studio Code light' },
     { id: 'atom-light', name: 'Atom Light', description: 'Atom One Light' },
     { id: 'xcode', name: 'Xcode', description: 'Apple Xcode default' },
     { id: 'intellij', name: 'IntelliJ', description: 'JetBrains light theme' },
-    // Light themes - Warm
+    { id: 'snow', name: 'Snow', description: 'Pure white clean' },
+    { id: 'cloud', name: 'Cloud', description: 'Soft airy white' },
+    { id: 'eggshell', name: 'Eggshell', description: 'Warm off-white' },
+    { id: 'daylight', name: 'Daylight', description: 'Bright natural light' },
+    // Light themes - Warm (10)
     { id: 'solarized-light', name: 'Solarized Light', description: 'Solarized light variant' },
     { id: 'gruvbox-light', name: 'Gruvbox Light', description: 'Retro light variant' },
     { id: 'ayu-light', name: 'Ayu Light', description: 'Ayu bright variant' },
     { id: 'tomorrow', name: 'Tomorrow', description: 'Tomorrow theme light' },
     { id: 'paper', name: 'Paper', description: 'Minimal paper-like theme' },
     { id: 'sepia', name: 'Sepia', description: 'Warm reading theme' },
-    // Light themes - Cool
+    { id: 'latte', name: 'Latte', description: 'Creamy coffee light' },
+    { id: 'sand', name: 'Sand', description: 'Warm beach tones' },
+    { id: 'parchment', name: 'Parchment', description: 'Aged paper warmth' },
+    { id: 'honey', name: 'Honey', description: 'Sweet golden light' },
+    // Light themes - Cool (10)
     { id: 'catppuccin-latte', name: 'Catppuccin Latte', description: 'Light pastel theme' },
     { id: 'rose-pine-dawn', name: 'Rosé Pine Dawn', description: 'Rosé Pine light' },
     { id: 'winter-light', name: 'Winter Light', description: 'Cool light palette' },
     { id: 'quiet-light', name: 'Quiet Light', description: 'Soft muted light' },
     { id: 'notion', name: 'Notion', description: 'Notion-inspired minimal' },
     { id: 'slack', name: 'Slack Light', description: 'Slack workspace theme' },
-    // Special themes
+    { id: 'glacier', name: 'Glacier', description: 'Icy blue light' },
+    { id: 'mint-light', name: 'Mint Light', description: 'Fresh mint green' },
+    { id: 'sky', name: 'Sky', description: 'Clear blue sky' },
+    { id: 'breeze', name: 'Breeze', description: 'Light airy blue' },
+    // Colorful themes - Neon (10)
+    { id: 'neon-city', name: 'Neon City', description: 'Bright neon cityscape' },
+    { id: 'neon-pink', name: 'Neon Pink', description: 'Hot pink neon glow' },
+    { id: 'neon-green', name: 'Neon Green', description: 'Electric green neon' },
+    { id: 'neon-blue', name: 'Neon Blue', description: 'Electric blue neon' },
+    { id: 'neon-orange', name: 'Neon Orange', description: 'Blazing orange neon' },
+    { id: 'miami', name: 'Miami', description: 'Vice city vibes' },
+    { id: 'arcade', name: 'Arcade', description: 'Retro arcade colors' },
+    { id: 'disco', name: 'Disco', description: '70s disco lights' },
+    { id: 'rave', name: 'Rave', description: 'EDM party colors' },
+    { id: 'vegas', name: 'Vegas', description: 'Sin city lights' },
+    // Special themes (10)
     { id: 'high-contrast', name: 'High Contrast', description: 'Maximum visibility' },
     { id: 'hc-light', name: 'HC Light', description: 'High contrast light' },
     { id: 'retro', name: 'Retro', description: 'Classic terminal green' },
     { id: 'amber', name: 'Amber', description: 'Classic amber CRT' },
     { id: 'blue-screen', name: 'Blue Screen', description: 'DOS-era inspired' },
     { id: 'newspaper', name: 'Newspaper', description: 'Print-inspired minimal' },
+    { id: 'commodore', name: 'Commodore', description: 'C64 blue and white' },
+    { id: 'apple-ii', name: 'Apple II', description: 'Classic Apple green' },
+    { id: 'ibm', name: 'IBM', description: 'PC-DOS classic' },
+    { id: 'vt220', name: 'VT220', description: 'DEC terminal amber' },
   ];
+
+  // Get terminal theme colors based on current theme and settings
+  const getTerminalTheme = useCallback(() => {
+    // Classic mode: always black background
+    if (appSettings.terminalTheme === 'classic') {
+      return {
+        background: '#000000',
+        foreground: '#ffffff',
+        cursor: '#ffffff',
+        cursorAccent: '#000000',
+        selectionBackground: 'rgba(255, 255, 255, 0.3)',
+      };
+    }
+
+    // Sync mode: use CSS variables from current theme
+    const style = getComputedStyle(document.documentElement);
+    const bgPrimary = style.getPropertyValue('--bg-primary').trim() || '#1a1a2e';
+    const bgSecondary = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
+    const textPrimary = style.getPropertyValue('--text-primary').trim() || '#edf2f4';
+    const textSecondary = style.getPropertyValue('--text-secondary').trim() || '#8d99ae';
+    const accent = style.getPropertyValue('--accent').trim() || '#e94560';
+
+    return {
+      background: bgSecondary,
+      foreground: textPrimary,
+      cursor: accent,
+      cursorAccent: bgSecondary,
+      selectionBackground: 'rgba(255, 255, 255, 0.2)',
+      black: bgPrimary,
+      brightBlack: textSecondary,
+      white: textPrimary,
+      brightWhite: '#ffffff',
+      red: '#ff5555',
+      brightRed: '#ff6e6e',
+      green: '#50fa7b',
+      brightGreen: '#69ff94',
+      yellow: '#f1fa8c',
+      brightYellow: '#ffffa5',
+      blue: '#bd93f9',
+      brightBlue: '#d6acff',
+      magenta: '#ff79c6',
+      brightMagenta: '#ff92df',
+      cyan: '#8be9fd',
+      brightCyan: '#a4ffff',
+    };
+  }, [theme, appSettings.terminalTheme]);
+
+  // Update existing terminals when theme changes
+  useEffect(() => {
+    if (appSettings.terminalTheme === 'sync') {
+      const terminalTheme = getTerminalTheme();
+      sessions.forEach(session => {
+        if ('terminal' in session && session.terminal) {
+          session.terminal.options.theme = terminalTheme;
+        }
+      });
+    }
+  }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
 
   // Apply theme to document
   useEffect(() => {
@@ -536,11 +657,7 @@ export default function App() {
           cursorBlink: true,
           fontFamily: 'Menlo, Monaco, "Courier New", monospace',
           fontSize: 14,
-          theme: {
-            background: '#000000',
-            foreground: '#ffffff',
-            cursor: '#ffffff',
-          },
+          theme: getTerminalTheme(),
         });
 
         const fitAddon = new FitAddon();
@@ -583,11 +700,7 @@ export default function App() {
         cursorBlink: true,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         fontSize: 14,
-        theme: {
-          background: '#000000',
-          foreground: '#ffffff',
-          cursor: '#ffffff',
-        },
+        theme: getTerminalTheme(),
       });
 
       const fitAddon = new FitAddon();
@@ -720,11 +833,7 @@ export default function App() {
         cursorBlink: true,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         fontSize: 14,
-        theme: {
-          background: '#000000',
-          foreground: '#ffffff',
-          cursor: '#ffffff',
-        },
+        theme: getTerminalTheme(),
       });
 
       const fitAddon = new FitAddon();
@@ -5191,10 +5300,12 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
+  const [terminalTheme, setTerminalTheme] = useState<'sync' | 'classic'>(settings.terminalTheme || 'classic');
   const [saving, setSaving] = useState(false);
 
   // Collapsible section states
   const [themesExpanded, setThemesExpanded] = useState(true);
+  const [terminalExpanded, setTerminalExpanded] = useState(true);
   const [trayExpanded, setTrayExpanded] = useState(true);
   const [syncExpanded, setSyncExpanded] = useState(true);
 
@@ -5219,6 +5330,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         minimizeToTray,
         closeToTray,
         startMinimized,
+        terminalTheme,
         syncAccounts,
       });
       onClose();
@@ -5227,7 +5339,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     }
   };
 
-  const handleAddAccount = async (provider: 'microsoft' | 'google' | 'github') => {
+  const handleAddAccount = async (provider: 'google' | 'github') => {
     setShowAddAccountMenu(false);
     setConnectingProvider(provider);
     try {
@@ -5323,7 +5435,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
 
   const getProviderIcon = (provider: string) => {
     switch (provider) {
-      case 'microsoft': return '🔷';
       case 'google': return '🔴';
       case 'github': return '⬛';
       default: return '☁️';
@@ -5332,7 +5443,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
 
   const getProviderName = (provider: string) => {
     switch (provider) {
-      case 'microsoft': return 'Microsoft OneDrive';
       case 'google': return 'Google Drive';
       case 'github': return 'GitHub Gists';
       default: return provider;
@@ -5378,6 +5488,57 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           <span className="theme-name">{t.name}</span>
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Terminal Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setTerminalExpanded(!terminalExpanded)}
+              >
+                <span className={`collapse-icon ${terminalExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Terminal</h4>
+              </button>
+              {terminalExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Customize terminal appearance for SSH, serial, and local shells.
+                  </p>
+
+                  <div className="form-group">
+                    <label className="form-label">Terminal Theme</label>
+                    <div className="radio-group">
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          name="terminalTheme"
+                          value="classic"
+                          checked={terminalTheme === 'classic'}
+                          onChange={() => setTerminalTheme('classic')}
+                        />
+                        <span className="radio-text">
+                          <strong>Classic</strong>
+                          <span className="radio-description">Traditional black background with white text</span>
+                        </span>
+                      </label>
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          name="terminalTheme"
+                          value="sync"
+                          checked={terminalTheme === 'sync'}
+                          onChange={() => setTerminalTheme('sync')}
+                        />
+                        <span className="radio-text">
+                          <strong>Sync with App Theme</strong>
+                          <span className="radio-description">Terminal colors match the current application theme</span>
+                        </span>
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -5555,14 +5716,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                       </div>
                     ) : showAddAccountMenu ? (
                       <div className="sync-provider-menu">
-                        <button
-                          type="button"
-                          className="sync-provider-option"
-                          onClick={() => handleAddAccount('microsoft')}
-                        >
-                          <span className="sync-provider-icon">🔷</span>
-                          <span>Microsoft OneDrive</span>
-                        </button>
                         <button
                           type="button"
                           className="sync-provider-option"

@@ -626,7 +626,7 @@ function setupIpcHandlers(): void {
   });
 
   // Cloud sync handlers
-  ipcMain.handle('sync:connect', async (_event, provider: 'microsoft' | 'google' | 'github') => {
+  ipcMain.handle('sync:connect', async (_event, provider: 'google' | 'github') => {
     return cloudSyncService.connect(provider);
   });
 

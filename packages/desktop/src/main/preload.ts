@@ -58,7 +58,7 @@ export interface TransferProgress {
 // Sync account types
 export interface SyncAccount {
   id: string;
-  provider: 'microsoft' | 'google' | 'github';
+  provider: 'google' | 'github';
   email: string;
   displayName?: string;
   accessToken?: string;
@@ -94,6 +94,7 @@ export interface AppSettings {
   closeToTray: boolean;
   startMinimized: boolean;
   syncAccounts?: SyncAccount[];
+  terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
 }
 
 // Local shell types
@@ -251,7 +252,7 @@ const api = {
       ipcRenderer.invoke('sync:pull', serverUrl, token),
 
     // Cloud sync via OAuth providers
-    connect: (provider: 'microsoft' | 'google' | 'github'): Promise<SyncAccount | null> =>
+    connect: (provider: 'google' | 'github'): Promise<SyncAccount | null> =>
       ipcRenderer.invoke('sync:connect', provider),
     disconnect: (accountId: string): Promise<boolean> => ipcRenderer.invoke('sync:disconnect', accountId),
     upload: (accountId: string): Promise<{ success: boolean; configId?: string; error?: string }> =>
