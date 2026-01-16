@@ -1004,10 +1004,10 @@ export class DatabaseService {
     }
 
     // Use pre-loaded usedBy if available, otherwise query (for single credential lookups)
-    const usedBy = preloadedUsedBy ?? this.db
+    const usedBy = preloadedUsedBy ?? (this.db
       .prepare('SELECT id FROM connections WHERE credential_id = ?')
-      .all(row.id)
-      .map((r: { id: string }) => r.id);
+      .all(row.id) as Array<{ id: string }>)
+      .map((r) => r.id);
 
     return {
       id: row.id,
