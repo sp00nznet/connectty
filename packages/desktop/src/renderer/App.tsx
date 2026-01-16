@@ -1762,7 +1762,7 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete, 
 
       {showMenu && (
         <>
-          <div className="modal-overlay" style={{ background: 'transparent' }} />
+          <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowMenu(false)} />
           <div className="context-menu" style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y }}>
             <div className="context-menu-item" onClick={() => { onConnect(); setShowMenu(false); }}>
               Connect

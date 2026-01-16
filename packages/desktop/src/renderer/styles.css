@@ -5533,7 +5533,7 @@ body {
   animation: scanline-move 0.5s linear infinite;
 }
 
-/* Screen curvature - vignette + slight bulge illusion */
+/* Screen curvature - subtle vignette for CRT tube effect */
 .retro-term-curvature {
   position: absolute;
   top: 0;
@@ -5543,33 +5543,15 @@ body {
   pointer-events: none;
   z-index: 9;
   border-radius: 15px;
-  /* Heavy vignette for CRT tube effect */
+  /* Subtle vignette - darkens edges slightly */
   background: radial-gradient(
     ellipse at center,
     transparent 0%,
-    transparent 50%,
-    rgba(0, 0, 0, 0.2) 70%,
-    rgba(0, 0, 0, 0.6) 85%,
-    rgba(0, 0, 0, 0.9) 100%
+    transparent 60%,
+    rgba(0, 0, 0, 0.15) 80%,
+    rgba(0, 0, 0, 0.4) 100%
   );
   opacity: var(--curvature-opacity, 1);
-}
-
-/* Screen reflection/glare overlay */
-.retro-term-curvature::before {
-  content: '';
-  position: absolute;
-  top: 5%;
-  left: 10%;
-  width: 40%;
-  height: 20%;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 50%
-  );
-  border-radius: 50%;
-  opacity: var(--curvature-opacity, 0.5);
 }
 
 /* Bloom glow effect - screen glow */
