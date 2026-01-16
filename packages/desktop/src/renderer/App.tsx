@@ -1445,7 +1445,7 @@ export default function App() {
 
       {/* Rename Tab Modal */}
       {renamingTab && (
-        <div className="modal-overlay" onClick={() => setRenamingTab(null)}>
+        <div className="modal-overlay">
           <div className="modal rename-tab-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Rename Tab</h2>
@@ -1534,7 +1534,7 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete, 
 
       {showMenu && (
         <>
-          <div className="modal-overlay" style={{ background: 'transparent' }} onClick={() => setShowMenu(false)} />
+          <div className="modal-overlay" style={{ background: 'transparent' }} />
           <div className="context-menu" style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y }}>
             <div className="context-menu-item" onClick={() => { onConnect(); setShowMenu(false); }}>
               Connect
@@ -1579,7 +1579,7 @@ function PasswordPrompt({ connection, onSubmit, onCancel }: PasswordPromptProps)
   };
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay">
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Enter Password</h3>
@@ -1695,7 +1695,7 @@ function ConnectionModal({ connection, credentials, groups, onClose, onSave }: C
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{connection ? 'Edit Connection' : 'New Connection'}</h3>
@@ -1995,7 +1995,7 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
 
   if (!showForm) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>Credentials</h3>
@@ -2048,7 +2048,7 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{credential ? 'Edit Credential' : 'New Credential'}</h3>
@@ -2389,7 +2389,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
 
   if (!showForm) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>Providers (Hypervisors)</h3>
@@ -2462,7 +2462,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{provider ? 'Edit Provider' : 'Add Provider'}</h3>
@@ -2795,7 +2795,7 @@ function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupM
 
   if (!showForm) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>Groups</h3>
@@ -2855,7 +2855,7 @@ function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupM
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{group ? 'Edit Group' : 'New Group'}</h3>
@@ -3283,7 +3283,7 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
   const filteredConnections = getFilteredConnections();
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Repeated Actions</h3>
@@ -4879,7 +4879,7 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
 
   if (isConnecting) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>SFTP - {connection.name}</h3>
@@ -4898,7 +4898,7 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
 
   if (error) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>SFTP - {connection.name}</h3>
@@ -4919,7 +4919,7 @@ function SFTPModal({ connection, credential, onClose, onNotification }: SFTPModa
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-fullscreen" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>SFTP - {connection.name}</h3>
@@ -5150,7 +5150,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Settings</h3>
@@ -5294,7 +5294,7 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Import Hosts from {provider.name}</h3>

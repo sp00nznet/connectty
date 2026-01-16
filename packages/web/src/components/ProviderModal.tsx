@@ -389,7 +389,7 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{provider ? 'Edit Provider' : 'Add Provider'}</h2>
