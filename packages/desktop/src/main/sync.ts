@@ -255,6 +255,76 @@ interface ExtendedSyncData extends SyncData {
 }
 
 /**
+ * Settings stored in the database
+ */
+interface StoredSettings {
+  deviceId?: string;
+  syncAccounts?: SyncAccount[];
+  theme?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * OAuth token response
+ */
+interface TokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+}
+
+/**
+ * GitHub email response
+ */
+interface GitHubEmail {
+  email: string;
+  primary: boolean;
+}
+
+/**
+ * OneDrive file response
+ */
+interface OneDriveFile {
+  id: string;
+  name: string;
+  lastModifiedDateTime: string;
+}
+
+interface OneDriveListResponse {
+  value: OneDriveFile[];
+}
+
+/**
+ * Google Drive file response
+ */
+interface GoogleDriveFile {
+  id: string;
+  name: string;
+  modifiedTime: string;
+}
+
+interface GoogleDriveListResponse {
+  files: GoogleDriveFile[];
+}
+
+interface GoogleDriveSearchResponse {
+  files?: GoogleDriveFile[];
+}
+
+interface GoogleDriveCreateResponse {
+  id: string;
+}
+
+/**
+ * GitHub Gist response
+ */
+interface GitHubGist {
+  id: string;
+  files: Record<string, { content?: string }>;
+  updated_at: string;
+}
+
+/**
  * Cloud Sync Service - OAuth-based sync with Microsoft, Google, and GitHub
  */
 export class CloudSyncService {
@@ -297,7 +367,7 @@ export class CloudSyncService {
 
   private getOrCreateDeviceId(): string {
     // Try to load existing device ID from settings
-    const settings = this.db.getSettings?.() || {};
+    const settings = (this.db.getSettings?.() || {}) as StoredSettings;
     if (settings.deviceId) {
       return settings.deviceId;
     }
@@ -308,7 +378,7 @@ export class CloudSyncService {
   }
 
   private loadAccounts(): void {
-    const settings = this.db.getSettings?.() || {};
+    const settings = (this.db.getSettings?.() || {}) as StoredSettings;
     const accounts = settings.syncAccounts || [];
     for (const account of accounts) {
       this.accounts.set(account.id, account);
@@ -317,7 +387,7 @@ export class CloudSyncService {
 
   private saveAccounts(): void {
     const accounts = Array.from(this.accounts.values());
-    const settings = this.db.getSettings?.() || {};
+    const settings = (this.db.getSettings?.() || {}) as StoredSettings;
     this.db.setSettings?.({ ...settings, syncAccounts: accounts });
   }
 
@@ -462,7 +532,7 @@ export class CloudSyncService {
         return null;
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as TokenResponse;
       return {
         accessToken: data.access_token,
         refreshToken: data.refresh_token,
@@ -506,15 +576,15 @@ export class CloudSyncService {
           });
           data = await response.json();
           // Get email separately if not public
-          let email = data.email;
+          let email = data.email as string | null;
           if (!email) {
             const emailResponse = await fetch('https://api.github.com/user/emails', {
               headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github.v3+json' },
             });
-            const emails = await emailResponse.json();
-            email = emails.find((e: any) => e.primary)?.email || emails[0]?.email;
+            const emails = (await emailResponse.json()) as GitHubEmail[];
+            email = emails.find((e) => e.primary)?.email || emails[0]?.email;
           }
-          return { email, displayName: data.name || data.login };
+          return { email: email || '', displayName: data.name || data.login };
       }
     } catch (error) {
       console.error('Get user info error:', error);
@@ -641,7 +711,7 @@ export class CloudSyncService {
     const { connections, credentials, groups } = this.db.exportAll();
     const providers = this.db.getProviders();
     const commands = this.db.getSavedCommands();
-    const settings = this.db.getSettings?.() || {};
+    const settings = (this.db.getSettings?.() || {}) as StoredSettings;
 
     return {
       version: '1.0.0',
@@ -699,6 +769,7 @@ export class CloudSyncService {
         type: provider.type,
         config: provider.config,
         enabled: provider.enabled,
+        autoDiscover: provider.autoDiscover ?? false,
       });
       providerIdMap.set(provider.id, newProvider.id);
       imported.providers++;
@@ -726,11 +797,13 @@ export class CloudSyncService {
     for (const cmd of data.commands || []) {
       this.db.createSavedCommand({
         name: cmd.name,
+        type: cmd.type || 'command',
         command: cmd.command,
         description: cmd.description,
         category: cmd.category,
         targetOS: cmd.targetOS,
-        variables: cmd.variables,
+        tags: cmd.tags || [],
+        variables: cmd.variables || [],
       });
       imported.commands++;
     }
@@ -770,7 +843,7 @@ export class CloudSyncService {
       throw new Error('Failed to refresh token');
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as TokenResponse;
     account.accessToken = data.access_token;
     if (data.refresh_token) {
       account.refreshToken = data.refresh_token;
@@ -801,7 +874,7 @@ export class CloudSyncService {
       return { success: false, error: await response.text() };
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as OneDriveFile;
     return { success: true, configId: data.id };
   }
 
@@ -817,7 +890,7 @@ export class CloudSyncService {
       return { success: false, error: await response.text() };
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as OneDriveListResponse;
     const configs: SyncConfigInfo[] = [];
 
     for (const item of data.value || []) {
@@ -865,7 +938,7 @@ export class CloudSyncService {
       }
     );
 
-    const searchData = await searchResponse.json();
+    const searchData = (await searchResponse.json()) as GoogleDriveSearchResponse;
     const existingFile = searchData.files?.[0];
 
     if (existingFile) {
@@ -911,7 +984,7 @@ export class CloudSyncService {
         return { success: false, error: await response.text() };
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GoogleDriveCreateResponse;
       return { success: true, configId: data.id };
     }
   }
@@ -928,7 +1001,7 @@ export class CloudSyncService {
       return { success: false, error: await response.text() };
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as GoogleDriveListResponse;
     const configs: SyncConfigInfo[] = [];
 
     for (const item of data.files || []) {
@@ -975,8 +1048,8 @@ export class CloudSyncService {
       },
     });
 
-    const gists = await gistsResponse.json();
-    const existingGist = gists.find((g: any) => g.files[filename]);
+    const gists = (await gistsResponse.json()) as GitHubGist[];
+    const existingGist = gists.find((g) => g.files[filename]);
 
     if (existingGist) {
       // Update existing gist
@@ -1017,7 +1090,7 @@ export class CloudSyncService {
         return { success: false, error: await response.text() };
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GitHubGist;
       return { success: true, configId: data.id };
     }
   }
@@ -1034,7 +1107,7 @@ export class CloudSyncService {
       return { success: false, error: await response.text() };
     }
 
-    const gists = await response.json();
+    const gists = (await response.json()) as GitHubGist[];
     const configs: SyncConfigInfo[] = [];
 
     for (const gist of gists) {
@@ -1067,12 +1140,12 @@ export class CloudSyncService {
       throw new Error('Failed to download from GitHub Gists');
     }
 
-    const gist = await response.json();
+    const gist = (await response.json()) as GitHubGist;
     const configFile = Object.entries(gist.files).find(([name]) => name.startsWith('connectty-config-'));
     if (!configFile) {
       throw new Error('Config file not found in gist');
     }
 
-    return (configFile[1] as any).content;
+    return configFile[1].content || '';
   }
 }
