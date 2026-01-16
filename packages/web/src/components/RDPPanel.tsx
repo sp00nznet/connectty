@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { api, RDPConnectionInfo } from '../services/api';
 import type { ServerConnection } from '@connectty/shared';
 

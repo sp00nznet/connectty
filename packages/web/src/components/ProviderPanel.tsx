@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { api, Provider, DiscoveredHost } from '../services/api';
 import type { Credential, ConnectionGroup } from '@connectty/shared';
 import ProviderModal from './ProviderModal';

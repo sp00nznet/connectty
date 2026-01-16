@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api, SavedCommand, CommandExecution, CommandExecutionWithResults } from '../services/api';
 import type { ServerConnection } from '@connectty/shared';
 
