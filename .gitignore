@@ -44,6 +44,13 @@ temp/
 # Electron builder output
 packages/desktop/release/
 
+# Final release artifacts
+releases/*
+!releases/.gitkeep
+!releases/server/
+releases/server/*
+!releases/server/.gitkeep
+
 # Downloaded external tools (gsudo for admin shells)
 packages/desktop/resources/gsudo/*.exe
 packages/desktop/resources/gsudo/*.dll

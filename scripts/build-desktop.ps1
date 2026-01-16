@@ -330,10 +330,33 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "`n=== BUILD COMPLETE ===" -ForegroundColor Green
-Write-Host "Output: packages\desktop\release\" -ForegroundColor Cyan
+# Copy final binaries to releases folder
+Write-Host "`n[5/5] Copying to releases folder..." -ForegroundColor Yellow
+$ReleasesDir = Join-Path $ProjectRoot "releases"
+if (-not (Test-Path $ReleasesDir)) {
+    New-Item -ItemType Directory -Force -Path $ReleasesDir | Out-Null
+}
 
-if (Test-Path "packages\desktop\release") {
-    Write-Host "`nFiles:"
-    Get-ChildItem "packages\desktop\release" -File | ForEach-Object { Write-Host "  - $($_.Name)" }
+$SourceDir = Join-Path $ProjectRoot "packages\desktop\release"
+$CopiedFiles = @()
+
+if (Test-Path $SourceDir) {
+    # Copy Windows binaries (exe files and blockmap)
+    Get-ChildItem $SourceDir -File | Where-Object {
+        $_.Extension -in @(".exe", ".blockmap") -or $_.Name -like "*.exe.blockmap"
+    } | ForEach-Object {
+        $destPath = Join-Path $ReleasesDir $_.Name
+        Copy-Item $_.FullName $destPath -Force
+        $CopiedFiles += $_.Name
+    }
+}
+
+Write-Host "`n=== BUILD COMPLETE ===" -ForegroundColor Green
+Write-Host "Output: releases\" -ForegroundColor Cyan
+
+if ($CopiedFiles.Count -gt 0) {
+    Write-Host "`nWindows Release Files:"
+    $CopiedFiles | ForEach-Object { Write-Host "  - $_" -ForegroundColor White }
+} else {
+    Write-Host "`nNo files were copied to releases folder" -ForegroundColor Yellow
 }
