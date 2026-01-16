@@ -357,10 +357,10 @@ export default function App() {
     localStorage.setItem('connectty-theme', theme);
 
     // Update Windows title bar overlay color to match theme
-    // Read the computed CSS variable after theme is applied
+    // Use modal-bg for better consistency with dialogs/panels
     requestAnimationFrame(() => {
       const computedStyle = getComputedStyle(document.documentElement);
-      const bgColor = computedStyle.getPropertyValue('--bg-primary').trim();
+      const bgColor = computedStyle.getPropertyValue('--modal-bg').trim();
       const textColor = computedStyle.getPropertyValue('--text-primary').trim();
 
       if (bgColor && textColor) {
