@@ -235,9 +235,36 @@ if ($hasWSL -and -not $AppImage) {
     Write-Host "  Using WSL for .deb build..." -ForegroundColor Green
 
     # Convert Windows path to WSL path
-    $wslPath = $ProjectRoot -replace '\\', '/' -replace '^([A-Za-z]):', '/mnt/$1'.ToLower()
-    $wslPath = $wslPath.Substring(0,5) + $wslPath.Substring(5).ToLower().Substring(0,1) + $wslPath.Substring(6)
     $wslPath = "/mnt/" + $ProjectRoot.Substring(0,1).ToLower() + $ProjectRoot.Substring(2).Replace('\', '/')
+
+    # Check if fpm is installed in WSL, install if not
+    Write-Host "  Checking for fpm in WSL..." -ForegroundColor Gray
+    $fpmCheck = wsl bash -c "command -v fpm" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  fpm not found, installing prerequisites in WSL..." -ForegroundColor Yellow
+
+        # Install Ruby and build tools
+        Write-Host "    Installing ruby, ruby-dev, build-essential..." -ForegroundColor Gray
+        wsl bash -c "sudo apt-get update && sudo apt-get install -y ruby ruby-dev build-essential"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install Ruby prerequisites in WSL!" -ForegroundColor Red
+            Write-Host "Please run manually: wsl sudo apt-get install -y ruby ruby-dev build-essential" -ForegroundColor Yellow
+            exit 1
+        }
+
+        # Install fpm via gem
+        Write-Host "    Installing fpm via gem..." -ForegroundColor Gray
+        wsl bash -c "sudo gem install fpm"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to install fpm in WSL!" -ForegroundColor Red
+            Write-Host "Please run manually: wsl sudo gem install fpm" -ForegroundColor Yellow
+            exit 1
+        }
+
+        Write-Host "  fpm installed successfully!" -ForegroundColor Green
+    } else {
+        Write-Host "  fpm is already installed" -ForegroundColor Green
+    }
 
     # Run build in WSL
     wsl bash -c "cd '$wslPath/packages/desktop' && npm run build && npx electron-builder --linux $buildTarget"
