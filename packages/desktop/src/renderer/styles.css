@@ -2723,6 +2723,7 @@ body {
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   min-height: 41px; /* Match session-tab height (10px padding * 2 + line height) */
+  -webkit-app-region: drag; /* Allow dragging window from tab bar */
 }
 
 .session-tab {
@@ -2737,6 +2738,7 @@ body {
   cursor: pointer;
   white-space: nowrap;
   border-right: 1px solid var(--border);
+  -webkit-app-region: no-drag; /* Make tabs clickable, not draggable */
 }
 
 .session-tab:hover {
@@ -2764,6 +2766,7 @@ body {
   position: relative;
   display: flex;
   align-items: stretch;
+  -webkit-app-region: no-drag; /* Make button clickable, not draggable */
 }
 
 .new-tab-btn {
@@ -2777,6 +2780,7 @@ body {
   font-size: 1.25rem;
   cursor: pointer;
   transition: background-color 0.15s;
+  -webkit-app-region: no-drag; /* Make button clickable, not draggable */
 }
 
 .new-tab-btn:hover {
