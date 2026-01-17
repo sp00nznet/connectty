@@ -2481,8 +2481,14 @@ body {
   padding: 8px 12px;
 }
 
+.profile-create-form .btn {
+  flex-shrink: 0;
+  min-width: 50px;
+}
+
 .profile-create-input {
   flex: 1;
+  min-width: 0;
   padding: 6px 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
