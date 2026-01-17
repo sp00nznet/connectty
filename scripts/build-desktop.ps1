@@ -391,20 +391,26 @@ if (Test-Path $versionFile) {
 
 # Build shared
 Write-Host "`n[4/5] Building shared package..." -ForegroundColor Yellow
-npm run build -w @connectty/shared
+Set-Location (Join-Path $ProjectRoot "packages\shared")
+npm run build
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed!" -ForegroundColor Red
+    Set-Location $ProjectRoot
     exit 1
 }
+Set-Location $ProjectRoot
 Write-Host "  Done!" -ForegroundColor Green
 
 # Build desktop
 Write-Host "`n[5/5] Building Windows distribution..." -ForegroundColor Yellow
-npm run dist:win -w @connectty/desktop
+Set-Location (Join-Path $ProjectRoot "packages\desktop")
+npm run dist:win
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed!" -ForegroundColor Red
+    Set-Location $ProjectRoot
     exit 1
 }
+Set-Location $ProjectRoot
 
 # Copy final binaries to releases folder
 Write-Host "`n[6/6] Copying to releases folder..." -ForegroundColor Yellow
