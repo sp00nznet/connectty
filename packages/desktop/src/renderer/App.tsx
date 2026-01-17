@@ -1572,27 +1572,6 @@ export default function App() {
               +
             </button>
           </div>
-
-          {/* Plugin Panel Toggle - only show when a plugin is active */}
-          {getAppActivePlugin() !== 'none' && (
-            <button
-              className={`plugin-panel-toggle ${showPluginPanel ? 'active' : ''}`}
-              onClick={() => setShowPluginPanel(!showPluginPanel)}
-              title={`${showPluginPanel ? 'Hide' : 'Show'} ${
-                getAppActivePlugin() === 'hostStats' ? 'Host Stats' :
-                getAppActivePlugin() === 'boxAnalyzer' ? 'Box Analyzer' :
-                getAppActivePlugin() === 'datadogHealth' ? 'Datadog Health' :
-                'Matrix Rain'
-              } panel`}
-            >
-              <span className="plugin-toggle-icon">
-                {getAppActivePlugin() === 'hostStats' ? '📊' :
-                 getAppActivePlugin() === 'boxAnalyzer' ? '🔍' :
-                 getAppActivePlugin() === 'datadogHealth' ? '🐕' : '🟢'}
-              </span>
-              <span className="plugin-toggle-arrow">{showPluginPanel ? '▶' : '◀'}</span>
-            </button>
-          )}
         </div>
 
         {/* Shell Context Menu (right-click on + button) */}
@@ -1802,22 +1781,43 @@ export default function App() {
           </div>
         )}
 
-        {/* Plugin Slide-out Panel */}
-        <div className={`plugin-panel ${showPluginPanel ? 'open' : ''}`}>
-          <div className="plugin-panel-header">
-            <h3>
-              {getAppActivePlugin() === 'hostStats' ? '📊 Host Stats' :
-               getAppActivePlugin() === 'boxAnalyzer' ? '🔍 Box Analyzer' :
-               getAppActivePlugin() === 'datadogHealth' ? '🐕 Datadog Health' :
-               getAppActivePlugin() === 'matrixRain' ? '🟢 Matrix Rain' : 'Plugin'}
-            </h3>
-            <button
-              className="plugin-panel-close"
-              onClick={() => setShowPluginPanel(false)}
+        {/* Plugin Slide-out Panel with Tab Handle */}
+        {getAppActivePlugin() !== 'none' && (
+          <div className={`plugin-panel-container ${showPluginPanel ? 'open' : ''}`}>
+            {/* Tab Handle - appears on right edge of terminal */}
+            <div
+              className="plugin-panel-tab"
+              onClick={() => setShowPluginPanel(!showPluginPanel)}
+              title={`${showPluginPanel ? 'Hide' : 'Show'} ${
+                getAppActivePlugin() === 'hostStats' ? 'Host Stats' :
+                getAppActivePlugin() === 'boxAnalyzer' ? 'Box Analyzer' :
+                getAppActivePlugin() === 'datadogHealth' ? 'Datadog Health' : 'Matrix Rain'
+              }`}
             >
-              &times;
-            </button>
-          </div>
+              <span className="plugin-tab-icon">
+                {getAppActivePlugin() === 'hostStats' ? '📊' :
+                 getAppActivePlugin() === 'boxAnalyzer' ? '🔍' :
+                 getAppActivePlugin() === 'datadogHealth' ? '🐕' : '🟢'}
+              </span>
+              <span className="plugin-tab-arrow">{showPluginPanel ? '▶' : '◀'}</span>
+            </div>
+
+            {/* Panel Content */}
+            <div className="plugin-panel">
+              <div className="plugin-panel-header">
+                <h3>
+                  {getAppActivePlugin() === 'hostStats' ? '📊 Host Stats' :
+                   getAppActivePlugin() === 'boxAnalyzer' ? '🔍 Box Analyzer' :
+                   getAppActivePlugin() === 'datadogHealth' ? '🐕 Datadog Health' :
+                   getAppActivePlugin() === 'matrixRain' ? '🟢 Matrix Rain' : 'Plugin'}
+                </h3>
+                <button
+                  className="plugin-panel-close"
+                  onClick={() => setShowPluginPanel(false)}
+                >
+                  &times;
+                </button>
+              </div>
           <div className="plugin-panel-content">
             {getAppActivePlugin() === 'hostStats' && (
               <div className="plugin-output">
@@ -1893,15 +1893,10 @@ export default function App() {
                 </div>
               </div>
             )}
-            {getAppActivePlugin() === 'none' && (
-              <div className="plugin-output">
-                <p className="plugin-output-empty">
-                  No plugin is active. Enable a plugin in Settings.
-                </p>
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Connection Modal */}
@@ -6460,7 +6455,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
 
                   <div className="plugin-list">
                     {/* None - Disable all plugins */}
-                    <div className={`plugin-item ${activePlugin === 'none' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'none' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('none')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">⭕</span>
@@ -6470,7 +6468,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Disable all plugins. No additional UI overlays will be shown.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6482,7 +6480,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Host Stats Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'hostStats' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'hostStats' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('hostStats')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">📊</span>
@@ -6492,7 +6493,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Shows real-time CPU, memory, and disk usage for connected SSH sessions.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6504,7 +6505,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Box Analyzer Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'boxAnalyzer' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'boxAnalyzer' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('boxAnalyzer')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🔍</span>
@@ -6514,7 +6518,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           "What Does This Box Do?" - Analyzes running processes, services, and connections to determine system purpose.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6526,7 +6530,16 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Datadog Health Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'datadogHealth' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'datadogHealth' ? 'active' : ''}`}
+                      onClick={() => {
+                        // If no API keys configured, show config modal
+                        if (!datadogApiKey || !datadogAppKey) {
+                          setShowDatadogConfig(true);
+                        }
+                        setActivePlugin('datadogHealth');
+                      }}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🐕</span>
@@ -6539,14 +6552,14 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           <button
                             type="button"
                             className="btn btn-sm btn-secondary"
-                            onClick={() => setShowDatadogConfig(true)}
+                            onClick={(e) => { e.stopPropagation(); setShowDatadogConfig(true); }}
                             style={{ marginTop: '8px' }}
                           >
                             Configure API Keys
                           </button>
                         )}
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6564,7 +6577,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Matrix Rain Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'matrixRain' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'matrixRain' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('matrixRain')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🟢</span>
@@ -6574,7 +6590,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Displays the classic Matrix falling code effect when no session is active.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
