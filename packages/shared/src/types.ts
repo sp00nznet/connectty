@@ -204,6 +204,35 @@ export interface DiscoveryResult {
   discoveredAt: Date;
 }
 
+export interface ProviderSyncResult {
+  providerId: string;
+  providerName: string;
+  success: boolean;
+  error?: string;
+  syncedAt: Date;
+  // New hosts discovered (not seen before or previously removed)
+  newHosts: DiscoveredHost[];
+  // Hosts that are no longer present (were in last discovery, not in current)
+  removedHosts: DiscoveredHost[];
+  // Hosts that were already known and still present
+  existingHosts: DiscoveredHost[];
+  // Hosts that changed state (running -> stopped, etc.)
+  changedHosts: Array<{
+    host: DiscoveredHost;
+    previousState: HostState;
+    currentState: HostState;
+  }>;
+  // Summary counts
+  summary: {
+    total: number;
+    new: number;
+    removed: number;
+    existing: number;
+    changed: number;
+    imported: number;  // How many were already imported as connections
+  };
+}
+
 export type GroupMembershipType = 'static' | 'dynamic';
 
 export interface GroupRule {

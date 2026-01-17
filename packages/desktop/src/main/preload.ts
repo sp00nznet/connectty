@@ -10,6 +10,7 @@ import type {
   Provider,
   DiscoveredHost,
   DiscoveryResult,
+  ProviderSyncResult,
   ImportOptions,
   ExportOptions,
   SSHSessionEvent,
@@ -177,6 +178,7 @@ const api = {
     test: (id: string): Promise<boolean> => ipcRenderer.invoke('providers:test', id),
     testConfig: (providerData: Partial<Provider>): Promise<boolean> => ipcRenderer.invoke('providers:testConfig', providerData),
     discover: (id: string): Promise<DiscoveryResult> => ipcRenderer.invoke('providers:discover', id),
+    sync: (id: string): Promise<ProviderSyncResult> => ipcRenderer.invoke('providers:sync', id),
   },
 
   // Discovered hosts operations

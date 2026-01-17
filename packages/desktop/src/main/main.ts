@@ -332,6 +332,53 @@ function setupIpcHandlers(): void {
     return result;
   });
 
+  ipcMain.handle('providers:sync', async (_event, id: string) => {
+    const provider = db.getProvider(id);
+    if (!provider) {
+      throw new Error('Provider not found');
+    }
+
+    const service = getProviderService(provider.type);
+
+    try {
+      // Discover hosts from provider
+      const discoveryResult = await service.discoverHosts(provider);
+
+      // Sync with database and get diff
+      const syncResult = db.syncDiscoveredHosts(
+        provider.id,
+        provider.name,
+        discoveryResult.hosts
+      );
+
+      // Update last discovery time
+      db.updateProvider(id, { lastDiscoveryAt: new Date() });
+
+      return syncResult;
+    } catch (error) {
+      // Return error result
+      return {
+        providerId: provider.id,
+        providerName: provider.name,
+        success: false,
+        error: String(error),
+        syncedAt: new Date(),
+        newHosts: [],
+        removedHosts: [],
+        existingHosts: [],
+        changedHosts: [],
+        summary: {
+          total: 0,
+          new: 0,
+          removed: 0,
+          existing: 0,
+          changed: 0,
+          imported: 0,
+        },
+      };
+    }
+  });
+
   // Discovered hosts handlers
   ipcMain.handle('discovered:list', async (_event, providerId?: string) => {
     return db.getDiscoveredHosts(providerId);

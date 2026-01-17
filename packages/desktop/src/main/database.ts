@@ -879,6 +879,86 @@ export class DatabaseService {
     stmt.run(providerId);
   }
 
+  // Sync discovered hosts - compares current state with new discovery
+  syncDiscoveredHosts(
+    providerId: string,
+    providerName: string,
+    newlyDiscoveredHosts: DiscoveredHost[]
+  ): import('@connectty/shared').ProviderSyncResult {
+    // Get all previously discovered hosts for this provider
+    const previousHosts = this.getDiscoveredHosts(providerId);
+
+    // Create maps for quick lookup
+    const previousMap = new Map(previousHosts.map(h => [h.providerHostId, h]));
+    const newMap = new Map(newlyDiscoveredHosts.map(h => [h.providerHostId, h]));
+
+    const newHosts: DiscoveredHost[] = [];
+    const removedHosts: DiscoveredHost[] = [];
+    const existingHosts: DiscoveredHost[] = [];
+    const changedHosts: Array<{
+      host: DiscoveredHost;
+      previousState: import('@connectty/shared').HostState;
+      currentState: import('@connectty/shared').HostState;
+    }> = [];
+
+    // Find new and existing hosts
+    for (const newHost of newlyDiscoveredHosts) {
+      const previous = previousMap.get(newHost.providerHostId);
+
+      if (!previous) {
+        // This is a new host (never seen before)
+        newHosts.push(newHost);
+        this.upsertDiscoveredHost(newHost);
+      } else {
+        // This is an existing host
+        existingHosts.push(newHost);
+
+        // Check if state changed
+        if (previous.state !== newHost.state) {
+          changedHosts.push({
+            host: newHost,
+            previousState: previous.state as import('@connectty/shared').HostState,
+            currentState: newHost.state as import('@connectty/shared').HostState,
+          });
+        }
+
+        // Update the host (updates last_seen_at and any changed info)
+        this.upsertDiscoveredHost(newHost);
+      }
+    }
+
+    // Find removed hosts (in previous but not in new)
+    for (const previous of previousHosts) {
+      if (!newMap.has(previous.providerHostId)) {
+        removedHosts.push(previous);
+        // Note: We keep removed hosts in the database but mark them as not recently seen
+        // This allows users to see what disappeared
+      }
+    }
+
+    // Count imported hosts
+    const imported = newlyDiscoveredHosts.filter(h => h.imported).length;
+
+    return {
+      providerId,
+      providerName,
+      success: true,
+      syncedAt: new Date(),
+      newHosts,
+      removedHosts,
+      existingHosts,
+      changedHosts,
+      summary: {
+        total: newlyDiscoveredHosts.length,
+        new: newHosts.length,
+        removed: removedHosts.length,
+        existing: existingHosts.length,
+        changed: changedHosts.length,
+        imported,
+      },
+    };
+  }
+
   // Saved command methods
   getSavedCommands(category?: string): SavedCommand[] {
     const sql = category
