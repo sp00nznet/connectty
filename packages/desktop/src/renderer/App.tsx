@@ -6455,7 +6455,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
 
                   <div className="plugin-list">
                     {/* None - Disable all plugins */}
-                    <div className={`plugin-item ${activePlugin === 'none' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'none' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('none')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">⭕</span>
@@ -6465,7 +6468,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Disable all plugins. No additional UI overlays will be shown.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6477,7 +6480,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Host Stats Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'hostStats' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'hostStats' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('hostStats')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">📊</span>
@@ -6487,7 +6493,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Shows real-time CPU, memory, and disk usage for connected SSH sessions.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6499,7 +6505,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Box Analyzer Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'boxAnalyzer' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'boxAnalyzer' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('boxAnalyzer')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🔍</span>
@@ -6509,7 +6518,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           "What Does This Box Do?" - Analyzes running processes, services, and connections to determine system purpose.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6521,7 +6530,16 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Datadog Health Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'datadogHealth' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'datadogHealth' ? 'active' : ''}`}
+                      onClick={() => {
+                        // If no API keys configured, show config modal
+                        if (!datadogApiKey || !datadogAppKey) {
+                          setShowDatadogConfig(true);
+                        }
+                        setActivePlugin('datadogHealth');
+                      }}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🐕</span>
@@ -6534,14 +6552,14 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           <button
                             type="button"
                             className="btn btn-sm btn-secondary"
-                            onClick={() => setShowDatadogConfig(true)}
+                            onClick={(e) => { e.stopPropagation(); setShowDatadogConfig(true); }}
                             style={{ marginTop: '8px' }}
                           >
                             Configure API Keys
                           </button>
                         )}
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
@@ -6559,7 +6577,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     </div>
 
                     {/* Matrix Rain Plugin */}
-                    <div className={`plugin-item ${activePlugin === 'matrixRain' ? 'active' : ''}`}>
+                    <div
+                      className={`plugin-item ${activePlugin === 'matrixRain' ? 'active' : ''}`}
+                      onClick={() => setActivePlugin('matrixRain')}
+                    >
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🟢</span>
@@ -6569,7 +6590,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Displays the classic Matrix falling code effect when no session is active.
                         </p>
                       </div>
-                      <label className="plugin-radio">
+                      <label className="plugin-radio" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="radio"
                           name="activePlugin"
