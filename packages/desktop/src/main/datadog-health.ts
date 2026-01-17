@@ -161,7 +161,8 @@ export class DatadogHealthService {
 
       // Calculate average values
       const cpuUsage = this.calculateAverage(cpuData);
-      const memoryUsage = memoryData ? 100 - this.calculateAverage(memoryData) : undefined;
+      const memoryAvg = this.calculateAverage(memoryData);
+      const memoryUsage = memoryAvg !== undefined ? 100 - memoryAvg : undefined;
       const diskUsage = this.calculateAverage(diskData);
 
       // Determine overall health status
@@ -267,12 +268,12 @@ export class DatadogHealthService {
 
       if (response.data.series && response.data.series.length > 0) {
         // Extract values from points
-        const values = response.data.series[0].points.map(point => point[1]);
-        return values.filter(v => v !== null && !isNaN(v));
+        const values = response.data.series[0].points.map((point: [number, number]) => point[1]);
+        return values.filter((v: number) => v !== null && !isNaN(v));
       }
 
       return undefined;
-    } catch (error) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         // Host not found in Datadog
         return undefined;

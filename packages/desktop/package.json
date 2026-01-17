@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "@connectty/shared": "1.0.0",
+    "axios": "^1.6.5",
     "better-sqlite3": "^9.3.0",
     "electron-store": "^8.1.0",
     "node-pty": "^1.0.0",

@@ -133,6 +133,7 @@ export class SyncService {
         description: group.description,
         parentId: group.parentId ? groupIdMap.get(group.parentId) : undefined,
         color: group.color,
+        membershipType: group.membershipType || 'static',
       });
       groupIdMap.set(group.id, newGroup.id);
       imported.groups++;
@@ -784,6 +785,7 @@ export class CloudSyncService {
           description: group.description,
           parentId: group.parentId ? groupIdMap.get(group.parentId) : undefined,
           color: group.color,
+          membershipType: group.membershipType || 'static',
         });
         groupIdMap.set(group.id, newGroup.id);
         imported.groups++;
