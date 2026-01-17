@@ -124,10 +124,11 @@ async function createWindow(): Promise<void> {
   };
 
   // On Windows, use title bar overlay for theme-matching title bar
+  // Initial color matches --bg-secondary of default midnight theme
   if (process.platform === 'win32') {
     windowOptions.titleBarStyle = 'hidden';
     windowOptions.titleBarOverlay = {
-      color: '#1a1a2e',
+      color: '#16213e',
       symbolColor: '#edf2f4',
       height: 32,
     };
