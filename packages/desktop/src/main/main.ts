@@ -17,6 +17,7 @@ import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
 import { PluginService } from './plugins';
 import { BoxAnalyzerService } from './box-analyzer';
+import { MatrixPluginService } from './matrix-plugin';
 import { getProviderService } from './providers';
 
 // App settings interface
@@ -69,6 +70,7 @@ let sftpService: SFTPService;
 let localShellService: LocalShellService;
 let pluginService: PluginService;
 let boxAnalyzerService: BoxAnalyzerService;
+let matrixPluginService: MatrixPluginService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -1104,6 +1106,19 @@ function setupIpcHandlers(): void {
     boxAnalyzerService.initializeDatadog(settings);
     return true;
   });
+
+  // Matrix plugin handlers
+  ipcMain.handle('matrix:getDefaultConfig', async () => {
+    return matrixPluginService.getDefaultConfig();
+  });
+
+  ipcMain.handle('matrix:validateConfig', async (_event, config: import('@connectty/shared').MatrixConfig) => {
+    return matrixPluginService.validateConfig(config);
+  });
+
+  ipcMain.handle('matrix:getCharacterSet', async (_event, useJapanese: boolean) => {
+    return matrixPluginService.getCharacterSet(useJapanese);
+  });
 }
 
 /**
@@ -1209,6 +1224,7 @@ app.whenReady().then(async () => {
     });
     pluginService = new PluginService();
     boxAnalyzerService = new BoxAnalyzerService();
+    matrixPluginService = new MatrixPluginService();
 
     setupIpcHandlers();
   } catch (err) {

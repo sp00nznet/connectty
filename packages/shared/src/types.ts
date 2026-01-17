@@ -413,7 +413,7 @@ export interface ActionTemplate {
 // Plugin System Types
 // ============================================================================
 
-export type PluginType = 'host-stats' | 'script-manager' | 'box-analyzer' | 'custom';
+export type PluginType = 'host-stats' | 'script-manager' | 'box-analyzer' | 'matrix' | 'custom';
 
 export interface PluginDefinition {
   id: string;
@@ -516,6 +516,14 @@ export interface BoxAnalysisSettings {
   datadogSite?: string; // e.g., 'datadoghq.com', 'datadoghq.eu'
 }
 
+export interface MatrixConfig {
+  speed: number;        // Animation speed (1-10, default: 5)
+  density: number;      // Character density (1-10, default: 5)
+  fontSize: number;     // Font size in pixels (default: 14)
+  color: string;        // Color of characters (default: '#0F0')
+  useJapanese: boolean; // Use Japanese katakana characters (default: true)
+}
+
 export interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
@@ -527,4 +535,6 @@ export interface AppSettings {
   enabledPlugins: string[]; // Plugin IDs
   // Box analysis settings
   boxAnalysis?: BoxAnalysisSettings;
+  // Matrix plugin settings
+  matrixConfig?: MatrixConfig;
 }

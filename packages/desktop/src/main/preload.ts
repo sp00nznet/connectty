@@ -21,6 +21,7 @@ import type {
   HostStats,
   SystemTheory,
   BoxAnalysisSettings,
+  MatrixConfig,
 } from '@connectty/shared';
 
 // SFTP types (matching the types in sftp.ts)
@@ -445,6 +446,16 @@ const api = {
       ipcRenderer.on('boxAnalyzer:theory', handler);
       return () => ipcRenderer.removeListener('boxAnalyzer:theory', handler);
     },
+  },
+
+  // Matrix plugin operations
+  matrix: {
+    getDefaultConfig: (): Promise<MatrixConfig> =>
+      ipcRenderer.invoke('matrix:getDefaultConfig'),
+    validateConfig: (config: Partial<MatrixConfig>): Promise<MatrixConfig> =>
+      ipcRenderer.invoke('matrix:validateConfig', config),
+    getCharacterSet: (useJapanese: boolean): Promise<string> =>
+      ipcRenderer.invoke('matrix:getCharacterSet', useJapanese),
   },
 };
 
