@@ -21,6 +21,8 @@ import type {
   SerialStopBits,
   SerialParity,
   SerialFlowControl,
+  Profile,
+  ProviderSyncResult,
 } from '@connectty/shared';
 import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, RetroTermSettings, RetroTermPreset } from '../main/preload';
 import { Terminal } from 'xterm';
@@ -103,6 +105,14 @@ export default function App() {
   const [showHostSelectionModal, setShowHostSelectionModal] = useState(false);
   const [discoveredHosts, setDiscoveredHosts] = useState<DiscoveredHost[]>([]);
   const [hostSelectionProvider, setHostSelectionProvider] = useState<Provider | null>(null);
+  // Provider sync state
+  const [isSyncing, setIsSyncing] = useState<string | null>(null);
+  const [lastSyncResult, setLastSyncResult] = useState<ProviderSyncResult | null>(null);
+  // Profile state
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
   const [showRepeatedActionsModal, setShowRepeatedActionsModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -507,8 +517,22 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [tabContextMenu]);
 
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showProfileMenu]);
+
   const loadData = async () => {
-    const [conns, creds, grps, provs, settings, plat, shells] = await Promise.all([
+    const [conns, creds, grps, provs, settings, plat, shells, profileList, activeProf] = await Promise.all([
       window.connectty.connections.list(),
       window.connectty.credentials.list(),
       window.connectty.groups.list(),
@@ -516,6 +540,8 @@ export default function App() {
       window.connectty.settings.get(),
       window.connectty.app.platform(),
       window.connectty.localShell.getAvailable(),
+      window.connectty.profiles.list(),
+      window.connectty.profiles.getActive(),
     ]);
     setConnections(conns);
     setCredentials(creds);
@@ -524,6 +550,8 @@ export default function App() {
     setAppSettings(settings);
     setPlatform(plat);
     setAvailableShells(shells);
+    setProfiles(profileList);
+    setActiveProfile(activeProf);
   };
 
   const handleSSHEvent = useCallback((sessionId: string, event: SSHSessionEvent) => {
@@ -1127,6 +1155,80 @@ export default function App() {
     }
   };
 
+  const handleSyncProvider = async (provider: Provider) => {
+    setIsSyncing(provider.id);
+    try {
+      const result = await window.connectty.providers.sync(provider.id);
+      setLastSyncResult(result);
+
+      const messages: string[] = [];
+      if (result.summary.new > 0) messages.push(`${result.summary.new} new`);
+      if (result.summary.removed > 0) messages.push(`${result.summary.removed} removed`);
+      if (result.summary.changed > 0) messages.push(`${result.summary.changed} changed`);
+
+      if (messages.length > 0) {
+        showNotification('success', `Sync complete: ${messages.join(', ')}`);
+      } else {
+        showNotification('success', 'Sync complete: No changes detected');
+      }
+
+      // Refresh the discovered hosts list
+      const hosts = await window.connectty.discovered.list(provider.id);
+      setDiscoveredHosts(hosts);
+    } catch (err) {
+      showNotification('error', `Sync failed: ${(err as Error).message}`);
+    }
+    setIsSyncing(null);
+  };
+
+  const handleSwitchProfile = async (profileId: string) => {
+    if (profileId === activeProfile?.id) {
+      setShowProfileMenu(false);
+      return;
+    }
+    try {
+      await window.connectty.profiles.switch(profileId);
+      await loadData();
+      setShowProfileMenu(false);
+      showNotification('success', 'Switched profile');
+    } catch (err) {
+      showNotification('error', `Failed to switch profile: ${(err as Error).message}`);
+    }
+  };
+
+  const handleCreateProfile = async (name: string) => {
+    try {
+      const newProfile = await window.connectty.profiles.create({ name });
+      await handleSwitchProfile(newProfile.id);
+    } catch (err) {
+      showNotification('error', `Failed to create profile: ${(err as Error).message}`);
+    }
+  };
+
+  const handleDeleteProfile = async (profileId: string) => {
+    const profile = profiles.find(p => p.id === profileId);
+    if (profile?.isDefault) {
+      showNotification('error', 'Cannot delete the default profile');
+      return;
+    }
+    if (!window.confirm(`Delete profile "${profile?.name}"? This will delete all data in this profile.`)) {
+      return;
+    }
+    try {
+      await window.connectty.profiles.delete(profileId);
+      if (activeProfile?.id === profileId) {
+        const defaultProfile = profiles.find(p => p.isDefault);
+        if (defaultProfile) {
+          await handleSwitchProfile(defaultProfile.id);
+        }
+      } else {
+        await loadData();
+      }
+    } catch (err) {
+      showNotification('error', `Failed to delete profile: ${(err as Error).message}`);
+    }
+  };
+
   const handleProviderContextMenu = (e: React.MouseEvent, provider: Provider) => {
     e.preventDefault();
     setProviderContextMenu({ x: e.clientX, y: e.clientY, provider });
@@ -1174,6 +1276,65 @@ export default function App() {
         <div className="sidebar-header">
           <h1>Connectty</h1>
           <p className="subtitle">SSH &amp; RDP Connection Manager</p>
+        </div>
+
+        {/* Profile Selector */}
+        <div className="profile-selector" ref={profileMenuRef}>
+          <button
+            className="profile-selector-button"
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <span className="profile-name">{activeProfile?.name || 'Default'}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={showProfileMenu ? 'rotate' : ''}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {showProfileMenu && (
+            <div className="profile-menu">
+              <div className="profile-menu-header">Workspace Profiles</div>
+              {profiles.map(profile => (
+                <div
+                  key={profile.id}
+                  className={`profile-menu-item ${profile.id === activeProfile?.id ? 'active' : ''}`}
+                  onClick={() => handleSwitchProfile(profile.id)}
+                >
+                  {profile.id === activeProfile?.id && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                    </svg>
+                  )}
+                  <span className={profile.id !== activeProfile?.id ? 'indent' : ''}>{profile.name}</span>
+                  {profile.isDefault && <span className="profile-default-badge">default</span>}
+                  {!profile.isDefault && (
+                    <button
+                      className="profile-delete-btn"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteProfile(profile.id); }}
+                      title="Delete profile"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div className="profile-menu-divider" />
+              <button
+                className="profile-menu-item profile-add-btn"
+                onClick={() => {
+                  const name = window.prompt('Enter profile name:');
+                  if (name?.trim()) handleCreateProfile(name.trim());
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                New Profile
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="sidebar-actions sidebar-actions-grid">
@@ -1610,8 +1771,10 @@ export default function App() {
           onEdit={(prov) => { setEditingProvider(prov); }}
           onDelete={handleDeleteProvider}
           onDiscover={handleDiscoverAndImport}
+          onSync={handleSyncProvider}
           onDeleteConnections={handleDeleteProviderConnections}
           isDiscovering={isDiscovering}
+          isSyncing={isSyncing}
         />
       )}
 
@@ -2424,11 +2587,13 @@ interface ProviderModalProps {
   onEdit: (provider: Provider) => void;
   onDelete: (id: string) => void;
   onDiscover: (provider: Provider) => void;
+  onSync: (provider: Provider) => void;
   onDeleteConnections: (providerId: string) => Promise<void>;
   isDiscovering: string | null;
+  isSyncing: string | null;
 }
 
-function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete, onDiscover, onDeleteConnections, isDiscovering }: ProviderModalProps) {
+function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete, onDiscover, onSync, onDeleteConnections, isDiscovering, isSyncing }: ProviderModalProps) {
   const [showForm, setShowForm] = useState(!!provider);
   const [name, setName] = useState(provider?.name || '');
   const [type, setType] = useState<ProviderType>(provider?.type || 'esxi');
@@ -2657,9 +2822,18 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                     </div>
                     <div className="provider-actions">
                       <button
+                        className="btn btn-sm btn-info"
+                        onClick={() => onSync(prov)}
+                        disabled={isSyncing === prov.id || isDiscovering === prov.id}
+                        title="Incremental sync - detect new, removed, and changed hosts"
+                      >
+                        {isSyncing === prov.id ? 'Syncing...' : 'Sync'}
+                      </button>
+                      <button
                         className="btn btn-sm btn-primary"
                         onClick={() => onDiscover(prov)}
-                        disabled={isDiscovering === prov.id}
+                        disabled={isDiscovering === prov.id || isSyncing === prov.id}
+                        title="Full discovery - fetch all hosts"
                       >
                         {isDiscovering === prov.id ? 'Scanning...' : 'Import Hosts'}
                       </button>
