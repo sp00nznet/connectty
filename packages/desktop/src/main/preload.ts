@@ -19,6 +19,8 @@ import type {
   HostFilter,
   CommandTargetOS,
   HostStats,
+  SystemTheory,
+  BoxAnalysisSettings,
 } from '@connectty/shared';
 
 // SFTP types (matching the types in sftp.ts)
@@ -417,6 +419,31 @@ const api = {
       };
       ipcRenderer.on('plugin:hostStats', handler);
       return () => ipcRenderer.removeListener('plugin:hostStats', handler);
+    },
+  },
+
+  // Box Analyzer plugin operations
+  boxAnalyzer: {
+    start: (connectionId: string, connectionName: string, sshSessionId: string, enablePolling?: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:start', connectionId, connectionName, sshSessionId, enablePolling || false),
+    stop: (connectionId: string): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:stop', connectionId),
+    getCached: (connectionId: string): Promise<SystemTheory | null> =>
+      ipcRenderer.invoke('boxAnalyzer:getCached', connectionId),
+    setDatadogCredentials: (credentials: { apiKey: string; appKey: string; site?: string }): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:setDatadogCredentials', credentials),
+    getDatadogCredentials: (): Promise<{ apiKey?: string; appKey?: string; site?: string } | null> =>
+      ipcRenderer.invoke('boxAnalyzer:getDatadogCredentials'),
+    deleteDatadogCredentials: (): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:deleteDatadogCredentials'),
+    initializeDatadog: (settings: BoxAnalysisSettings): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:initializeDatadog', settings),
+    onTheory: (callback: (theory: SystemTheory) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, theory: SystemTheory) => {
+        callback(theory);
+      };
+      ipcRenderer.on('boxAnalyzer:theory', handler);
+      return () => ipcRenderer.removeListener('boxAnalyzer:theory', handler);
     },
   },
 };

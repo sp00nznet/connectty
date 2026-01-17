@@ -16,6 +16,7 @@ import { CommandService } from './command';
 import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
 import { PluginService } from './plugins';
+import { BoxAnalyzerService } from './box-analyzer';
 import { getProviderService } from './providers';
 
 // App settings interface
@@ -49,6 +50,8 @@ import type {
   SavedCommand,
   CommandExecution,
   HostFilter,
+  SystemTheory,
+  BoxAnalysisSettings,
 } from '@connectty/shared';
 
 let mainWindow: BrowserWindow | null = null;
@@ -65,6 +68,7 @@ let commandService: CommandService;
 let sftpService: SFTPService;
 let localShellService: LocalShellService;
 let pluginService: PluginService;
+let boxAnalyzerService: BoxAnalyzerService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -1058,6 +1062,48 @@ function setupIpcHandlers(): void {
   ipcMain.handle('groups:getConnectionsForGroup', async (_event, groupId: string) => {
     return db.getConnectionsForGroup(groupId);
   });
+
+  // Box Analyzer plugin handlers
+  ipcMain.handle('boxAnalyzer:start', async (_event, connectionId: string, connectionName: string, sshSessionId: string, enablePolling: boolean) => {
+    const sshClient = sshService.getClient(sshSessionId);
+    if (!sshClient) {
+      throw new Error('SSH session not found');
+    }
+
+    await boxAnalyzerService.startAnalysis(connectionId, connectionName, sshClient, (theory) => {
+      mainWindow?.webContents.send('boxAnalyzer:theory', theory);
+    }, enablePolling);
+
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:stop', async (_event, connectionId: string) => {
+    boxAnalyzerService.stopPolling(connectionId);
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:getCached', async (_event, connectionId: string) => {
+    return boxAnalyzerService.getCachedAnalysis(connectionId);
+  });
+
+  ipcMain.handle('boxAnalyzer:setDatadogCredentials', async (_event, credentials: { apiKey: string; appKey: string; site?: string }) => {
+    db.setDatadogCredentials(credentials);
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:getDatadogCredentials', async () => {
+    return db.getDatadogCredentials();
+  });
+
+  ipcMain.handle('boxAnalyzer:deleteDatadogCredentials', async () => {
+    db.deleteDatadogCredentials();
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:initializeDatadog', async (_event, settings: BoxAnalysisSettings) => {
+    boxAnalyzerService.initializeDatadog(settings);
+    return true;
+  });
 }
 
 /**
@@ -1162,6 +1208,7 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('localShell:event', sessionId, event);
     });
     pluginService = new PluginService();
+    boxAnalyzerService = new BoxAnalyzerService();
 
     setupIpcHandlers();
   } catch (err) {

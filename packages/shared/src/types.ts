@@ -413,7 +413,7 @@ export interface ActionTemplate {
 // Plugin System Types
 // ============================================================================
 
-export type PluginType = 'host-stats' | 'script-manager' | 'custom';
+export type PluginType = 'host-stats' | 'script-manager' | 'box-analyzer' | 'custom';
 
 export interface PluginDefinition {
   id: string;
@@ -454,6 +454,68 @@ export interface HostStats {
   }[];
 }
 
+// ============================================================================
+// What Does This Box Do - System Analysis Types
+// ============================================================================
+
+export type TheoryConfidence = 'low' | 'medium' | 'high' | 'certain';
+export type SystemRole = 'web-server' | 'database' | 'application-server' | 'cache' | 'message-queue'
+  | 'load-balancer' | 'reverse-proxy' | 'file-server' | 'backup-server' | 'monitoring'
+  | 'ci-cd' | 'container-host' | 'kubernetes-node' | 'storage' | 'dns' | 'mail-server' | 'unknown';
+
+export interface DetectedApplication {
+  name: string;
+  version?: string;
+  process?: string;
+  port?: number;
+  confidence: TheoryConfidence;
+  evidence: string[]; // List of evidence that led to this detection
+}
+
+export interface ConnectedSystem {
+  hostname?: string;
+  ip: string;
+  port: number;
+  protocol: string;
+  connectionType: 'inbound' | 'outbound' | 'bidirectional';
+  purpose?: string; // e.g., "database connection", "API endpoint"
+  confidence: TheoryConfidence;
+}
+
+export interface SystemTheory {
+  connectionId: string;
+  timestamp: Date;
+  // Primary theory about what this system does
+  primaryRole: SystemRole;
+  confidence: TheoryConfidence;
+  // Supporting evidence for the theory
+  evidence: {
+    category: string; // e.g., "installed packages", "running processes", "open ports"
+    findings: string[];
+  }[];
+  // Detected applications
+  applications: DetectedApplication[];
+  // Connected systems
+  connectedSystems: ConnectedSystem[];
+  // Additional insights
+  insights: string[];
+  // Datadog integration data (if available)
+  datadogMetrics?: {
+    tags: string[];
+    metrics: Record<string, number>;
+    lastUpdated: Date;
+  };
+}
+
+export interface BoxAnalysisSettings {
+  pollingEnabled: boolean;
+  pollingInterval: number; // minutes
+  datadogEnabled: boolean;
+  datadogApiKey?: string;
+  datadogAppKey?: string;
+  datadogSite?: string; // e.g., 'datadoghq.com', 'datadoghq.eu'
+}
+
 export interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
@@ -463,4 +525,6 @@ export interface AppSettings {
   // Plugin settings
   pluginsEnabled: boolean;
   enabledPlugins: string[]; // Plugin IDs
+  // Box analysis settings
+  boxAnalysis?: BoxAnalysisSettings;
 }

@@ -1297,6 +1297,34 @@ export class DatabaseService {
     ).run('app_settings', value, new Date().toISOString());
   }
 
+  // Datadog credentials management (encrypted storage)
+  getDatadogCredentials(): { apiKey?: string; appKey?: string; site?: string } | null {
+    try {
+      const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get('datadog_credentials') as { value: string } | undefined;
+      if (!row) return null;
+
+      const encryptedData = JSON.parse(row.value);
+      const decrypted = decrypt(encryptedData, this.masterKey);
+      return JSON.parse(decrypted);
+    } catch {
+      return null;
+    }
+  }
+
+  setDatadogCredentials(credentials: { apiKey?: string; appKey?: string; site?: string }): void {
+    const json = JSON.stringify(credentials);
+    const encrypted = encrypt(json, this.masterKey);
+    const value = JSON.stringify(encrypted);
+
+    this.db.prepare(
+      'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)'
+    ).run('datadog_credentials', value, new Date().toISOString());
+  }
+
+  deleteDatadogCredentials(): void {
+    this.db.prepare('DELETE FROM settings WHERE key = ?').run('datadog_credentials');
+  }
+
   close(): void {
     this.db.close();
   }
