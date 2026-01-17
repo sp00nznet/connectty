@@ -940,6 +940,7 @@ function setupIpcHandlers(): void {
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
+      defaultShell: settingsStore.get('defaultShell'),
     };
   });
 
@@ -956,11 +957,15 @@ function setupIpcHandlers(): void {
     if (settings.terminalTheme !== undefined) {
       settingsStore.set('terminalTheme', settings.terminalTheme);
     }
+    if (settings.defaultShell !== undefined) {
+      settingsStore.set('defaultShell', settings.defaultShell);
+    }
     return {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
+      defaultShell: settingsStore.get('defaultShell'),
     };
   });
 
