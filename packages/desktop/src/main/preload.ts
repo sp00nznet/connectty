@@ -25,6 +25,7 @@ import type {
   MatrixConfig,
   DatadogHealthConfig,
   ConnectionHealthStatus,
+  Profile,
 } from '@connectty/shared';
 
 // SFTP types (matching the types in sftp.ts)
@@ -181,6 +182,26 @@ const api = {
     testConfig: (providerData: Partial<Provider>): Promise<boolean> => ipcRenderer.invoke('providers:testConfig', providerData),
     discover: (id: string): Promise<DiscoveryResult> => ipcRenderer.invoke('providers:discover', id),
     sync: (id: string): Promise<ProviderSyncResult> => ipcRenderer.invoke('providers:sync', id),
+  },
+
+  // Profile operations
+  profiles: {
+    list: (): Promise<Profile[]> => ipcRenderer.invoke('profiles:list'),
+    get: (id: string): Promise<Profile | null> => ipcRenderer.invoke('profiles:get', id),
+    create: (data: { name: string; description?: string }): Promise<Profile> =>
+      ipcRenderer.invoke('profiles:create', data),
+    update: (id: string, updates: { name?: string; description?: string }): Promise<Profile | null> =>
+      ipcRenderer.invoke('profiles:update', id, updates),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('profiles:delete', id),
+    getActive: (): Promise<Profile | null> => ipcRenderer.invoke('profiles:getActive'),
+    switch: (profileId: string): Promise<boolean> => ipcRenderer.invoke('profiles:switch', profileId),
+    onSwitched: (callback: (profileId: string) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, profileId: string) => {
+        callback(profileId);
+      };
+      ipcRenderer.on('profiles:switched', handler);
+      return () => ipcRenderer.removeListener('profiles:switched', handler);
+    },
   },
 
   // Discovered hosts operations

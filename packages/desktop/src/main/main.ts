@@ -381,6 +381,41 @@ function setupIpcHandlers(): void {
     }
   });
 
+  // Profile handlers
+  ipcMain.handle('profiles:list', async () => {
+    return db.getProfiles();
+  });
+
+  ipcMain.handle('profiles:get', async (_event, id: string) => {
+    return db.getProfile(id);
+  });
+
+  ipcMain.handle('profiles:create', async (_event, data: { name: string; description?: string }) => {
+    return db.createProfile(data);
+  });
+
+  ipcMain.handle('profiles:update', async (_event, id: string, updates: { name?: string; description?: string }) => {
+    return db.updateProfile(id, updates);
+  });
+
+  ipcMain.handle('profiles:delete', async (_event, id: string) => {
+    return db.deleteProfile(id);
+  });
+
+  ipcMain.handle('profiles:getActive', async () => {
+    const activeProfileId = db.getActiveProfileId();
+    return db.getProfile(activeProfileId);
+  });
+
+  ipcMain.handle('profiles:switch', async (_event, profileId: string) => {
+    const success = db.setActiveProfileId(profileId);
+    if (success) {
+      // Notify renderer that profile was switched (so it can reload all data)
+      mainWindow?.webContents.send('profiles:switched', profileId);
+    }
+    return success;
+  });
+
   // Discovered hosts handlers
   ipcMain.handle('discovered:list', async (_event, providerId?: string) => {
     return db.getDiscoveredHosts(providerId);

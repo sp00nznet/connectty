@@ -615,3 +615,16 @@ export interface AppSettings {
   // Datadog health monitoring settings
   datadogHealth?: DatadogHealthConfig;
 }
+
+// ============================================================================
+// Profile System Types
+// ============================================================================
+
+export interface Profile {
+  id: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}

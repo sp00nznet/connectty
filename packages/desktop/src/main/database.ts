@@ -172,10 +172,22 @@ export class DatabaseService {
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        is_default INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
 
     // Run migrations for existing databases BEFORE creating indexes
     this.runMigrations();
+
+    // Initialize profiles system (must run after migrations)
+    this.initializeProfiles();
 
     // Create indexes after migrations have added any missing columns
     this.db.exec(`
@@ -186,6 +198,11 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_discovered_provider ON discovered_hosts(provider_id);
       CREATE INDEX IF NOT EXISTS idx_connections_name ON connections(name);
       CREATE INDEX IF NOT EXISTS idx_discovered_imported ON discovered_hosts(imported, provider_id);
+      CREATE INDEX IF NOT EXISTS idx_connections_profile ON connections(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_credentials_profile ON credentials(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_groups_profile ON connection_groups(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_providers_profile ON providers(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_commands_profile ON saved_commands(profile_id);
     `);
 
     // Populate default sysadmin scripts
@@ -211,6 +228,13 @@ export class DatabaseService {
       { table: 'connection_groups', column: 'credential_id', sql: 'ALTER TABLE connection_groups ADD COLUMN credential_id TEXT' },
       { table: 'connection_groups', column: 'assigned_scripts', sql: "ALTER TABLE connection_groups ADD COLUMN assigned_scripts TEXT DEFAULT '[]'" },
       { table: 'saved_commands', column: 'assigned_groups', sql: "ALTER TABLE saved_commands ADD COLUMN assigned_groups TEXT DEFAULT '[]'" },
+      // Profile system migrations
+      { table: 'connections', column: 'profile_id', sql: 'ALTER TABLE connections ADD COLUMN profile_id TEXT' },
+      { table: 'credentials', column: 'profile_id', sql: 'ALTER TABLE credentials ADD COLUMN profile_id TEXT' },
+      { table: 'connection_groups', column: 'profile_id', sql: 'ALTER TABLE connection_groups ADD COLUMN profile_id TEXT' },
+      { table: 'providers', column: 'profile_id', sql: 'ALTER TABLE providers ADD COLUMN profile_id TEXT' },
+      { table: 'saved_commands', column: 'profile_id', sql: 'ALTER TABLE saved_commands ADD COLUMN profile_id TEXT' },
+      { table: 'command_history', column: 'profile_id', sql: 'ALTER TABLE command_history ADD COLUMN profile_id TEXT' },
     ];
 
     // Cache table schemas to avoid multiple PRAGMA calls (optimization)
@@ -250,13 +274,16 @@ export class DatabaseService {
       return;
     }
 
+    // Get active profile to assign scripts to
+    const activeProfileId = this.getActiveProfileId();
+
     // Insert all sysadmin scripts
     const insertStmt = this.db.prepare(`
       INSERT INTO saved_commands (
         id, name, description, type, target_os, command,
-        script_content, script_language, category, tags, variables, assigned_groups,
+        script_content, script_language, category, tags, variables, assigned_groups, profile_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const now = new Date().toISOString();
@@ -276,6 +303,7 @@ export class DatabaseService {
         JSON.stringify(script.tags || []),
         JSON.stringify(script.variables || []),
         JSON.stringify(script.assignedGroups || []),
+        activeProfileId,
         now,
         now
       );
@@ -286,10 +314,235 @@ export class DatabaseService {
     markStmt.run();
   }
 
+  private initializeProfiles(): void {
+    // Check if profiles have been initialized
+    const checkStmt = this.db.prepare("SELECT value FROM app_config WHERE key = 'profiles_initialized'");
+    const existing = checkStmt.get() as { value: string } | undefined;
+
+    if (existing) {
+      // Profiles already initialized
+      return;
+    }
+
+    console.log('Initializing profile system...');
+
+    // Create default profile
+    const defaultProfileId = generateId();
+    const now = new Date().toISOString();
+
+    const createProfileStmt = this.db.prepare(`
+      INSERT INTO profiles (id, name, description, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    createProfileStmt.run(
+      defaultProfileId,
+      'Default',
+      'Default profile',
+      1, // is_default = true
+      now,
+      now
+    );
+
+    console.log(`Created default profile: ${defaultProfileId}`);
+
+    // Migrate all existing data to default profile
+    const tables = [
+      'connections',
+      'credentials',
+      'connection_groups',
+      'providers',
+      'saved_commands',
+      'command_history'
+    ];
+
+    for (const table of tables) {
+      try {
+        const updateStmt = this.db.prepare(`UPDATE ${table} SET profile_id = ? WHERE profile_id IS NULL`);
+        const result = updateStmt.run(defaultProfileId);
+        console.log(`Migrated ${result.changes} rows in ${table} to default profile`);
+      } catch (error) {
+        console.warn(`Failed to migrate ${table}:`, error);
+      }
+    }
+
+    // Set active profile
+    const setActiveStmt = this.db.prepare("INSERT INTO app_config (key, value) VALUES ('active_profile_id', ?)");
+    setActiveStmt.run(defaultProfileId);
+
+    // Mark profiles as initialized
+    const markStmt = this.db.prepare("INSERT INTO app_config (key, value) VALUES ('profiles_initialized', 'true')");
+    markStmt.run();
+
+    console.log('Profile system initialized');
+  }
+
+  // Profile methods
+  getProfiles(): import('@connectty/shared').Profile[] {
+    const stmt = this.db.prepare('SELECT * FROM profiles ORDER BY is_default DESC, name');
+    const rows = stmt.all() as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      is_default: number;
+      created_at: string;
+      updated_at: string;
+    }>;
+
+    return rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || undefined,
+      isDefault: row.is_default === 1,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    }));
+  }
+
+  getProfile(id: string): import('@connectty/shared').Profile | null {
+    const stmt = this.db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const row = stmt.get(id) as {
+      id: string;
+      name: string;
+      description: string | null;
+      is_default: number;
+      created_at: string;
+      updated_at: string;
+    } | undefined;
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description || undefined,
+      isDefault: row.is_default === 1,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  createProfile(data: { name: string; description?: string }): import('@connectty/shared').Profile {
+    const id = generateId();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO profiles (id, name, description, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, 0, ?, ?)
+    `);
+
+    stmt.run(id, data.name, data.description || null, now, now);
+
+    return this.getProfile(id)!;
+  }
+
+  updateProfile(id: string, updates: { name?: string; description?: string }): import('@connectty/shared').Profile | null {
+    const existing = this.getProfile(id);
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+
+    if (updates.description !== undefined) {
+      fields.push('description = ?');
+      values.push(updates.description);
+    }
+
+    if (fields.length === 0) return existing;
+
+    fields.push('updated_at = ?');
+    values.push(now);
+    values.push(id);
+
+    const stmt = this.db.prepare(`UPDATE profiles SET ${fields.join(', ')} WHERE id = ?`);
+    stmt.run(...values);
+
+    return this.getProfile(id);
+  }
+
+  deleteProfile(id: string): boolean {
+    const profile = this.getProfile(id);
+    if (!profile) return false;
+
+    // Cannot delete default profile
+    if (profile.isDefault) {
+      throw new Error('Cannot delete the default profile');
+    }
+
+    // Check if this is the active profile
+    const activeProfileId = this.getActiveProfileId();
+    if (activeProfileId === id) {
+      throw new Error('Cannot delete the active profile. Switch to another profile first.');
+    }
+
+    // Delete all data associated with this profile
+    const tables = [
+      'connections',
+      'credentials',
+      'connection_groups',
+      'providers',
+      'saved_commands',
+      'command_history'
+    ];
+
+    for (const table of tables) {
+      try {
+        const deleteStmt = this.db.prepare(`DELETE FROM ${table} WHERE profile_id = ?`);
+        deleteStmt.run(id);
+      } catch (error) {
+        console.warn(`Failed to delete ${table} for profile ${id}:`, error);
+      }
+    }
+
+    // Delete the profile
+    const stmt = this.db.prepare('DELETE FROM profiles WHERE id = ?');
+    const result = stmt.run(id);
+
+    return result.changes > 0;
+  }
+
+  getActiveProfileId(): string {
+    const stmt = this.db.prepare("SELECT value FROM app_config WHERE key = 'active_profile_id'");
+    const row = stmt.get() as { value: string } | undefined;
+
+    if (!row) {
+      // Fallback: get default profile
+      const defaultProfile = this.db.prepare('SELECT id FROM profiles WHERE is_default = 1').get() as { id: string } | undefined;
+      return defaultProfile?.id || '';
+    }
+
+    return row.value;
+  }
+
+  setActiveProfileId(profileId: string): boolean {
+    const profile = this.getProfile(profileId);
+    if (!profile) {
+      throw new Error('Profile not found');
+    }
+
+    const stmt = this.db.prepare("UPDATE app_config SET value = ? WHERE key = 'active_profile_id'");
+    const result = stmt.run(profileId);
+
+    if (result.changes === 0) {
+      // Insert if not exists
+      const insertStmt = this.db.prepare("INSERT INTO app_config (key, value) VALUES ('active_profile_id', ?)");
+      insertStmt.run(profileId);
+    }
+
+    return true;
+  }
+
   // Connection methods
   getConnections(): ServerConnection[] {
-    const stmt = this.db.prepare('SELECT * FROM connections ORDER BY name');
-    const rows = stmt.all() as ConnectionRow[];
+    const activeProfileId = this.getActiveProfileId();
+    const stmt = this.db.prepare('SELECT * FROM connections WHERE profile_id = ? ORDER BY name');
+    const rows = stmt.all(activeProfileId) as ConnectionRow[];
     return rows.map(this.rowToConnection);
   }
 
@@ -302,12 +555,13 @@ export class DatabaseService {
   createConnection(data: Omit<ServerConnection, 'id' | 'createdAt' | 'updatedAt'>): ServerConnection {
     const id = generateId();
     const now = new Date().toISOString();
+    const activeProfileId = this.getActiveProfileId();
     const connectionType = data.connectionType || 'ssh';
     const defaultPort = connectionType === 'rdp' ? 3389 : connectionType === 'serial' ? 0 : 22;
 
     const stmt = this.db.prepare(`
-      INSERT INTO connections (id, name, hostname, port, connection_type, os_type, username, credential_id, tags, group_id, description, serial_settings, provider_id, provider_host_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO connections (id, name, hostname, port, connection_type, os_type, username, credential_id, tags, group_id, description, serial_settings, provider_id, provider_host_id, profile_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -325,6 +579,7 @@ export class DatabaseService {
       data.serialSettings ? JSON.stringify(data.serialSettings) : null,
       data.providerId || null,
       data.providerHostId || null,
+      activeProfileId,
       now,
       now
     );
@@ -416,8 +671,9 @@ export class DatabaseService {
   }
 
   getConnectionsByProvider(providerId: string): ServerConnection[] {
-    const stmt = this.db.prepare('SELECT * FROM connections WHERE provider_id = ? ORDER BY name');
-    const rows = stmt.all(providerId) as ConnectionRow[];
+    const activeProfileId = this.getActiveProfileId();
+    const stmt = this.db.prepare('SELECT * FROM connections WHERE provider_id = ? AND profile_id = ? ORDER BY name');
+    const rows = stmt.all(providerId, activeProfileId) as ConnectionRow[];
     return rows.map((row) => this.rowToConnection(row));
   }
 
@@ -434,14 +690,15 @@ export class DatabaseService {
 
   // Credential methods
   getCredentials(): Credential[] {
-    const stmt = this.db.prepare('SELECT * FROM credentials ORDER BY name');
-    const rows = stmt.all() as CredentialRow[];
+    const activeProfileId = this.getActiveProfileId();
+    const stmt = this.db.prepare('SELECT * FROM credentials WHERE profile_id = ? ORDER BY name');
+    const rows = stmt.all(activeProfileId) as CredentialRow[];
 
     // Batch load all credential->connection mappings in ONE query (fixes N+1 problem)
     const usedByMap = new Map<string, string[]>();
     const usedByRows = this.db.prepare(
-      'SELECT credential_id, id FROM connections WHERE credential_id IS NOT NULL'
-    ).all() as Array<{ credential_id: string; id: string }>;
+      'SELECT credential_id, id FROM connections WHERE credential_id IS NOT NULL AND profile_id = ?'
+    ).all(activeProfileId) as Array<{ credential_id: string; id: string }>;
 
     for (const row of usedByRows) {
       if (!usedByMap.has(row.credential_id)) {
@@ -462,6 +719,7 @@ export class DatabaseService {
   createCredential(data: Omit<Credential, 'id' | 'createdAt' | 'updatedAt' | 'usedBy'>): Credential {
     const id = generateId();
     const now = new Date().toISOString();
+    const activeProfileId = this.getActiveProfileId();
 
     // Encrypt sensitive data
     const sensitiveData: Record<string, string> = {};
@@ -474,8 +732,8 @@ export class DatabaseService {
       : null;
 
     const stmt = this.db.prepare(`
-      INSERT INTO credentials (id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_group, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO credentials (id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_group, profile_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -487,6 +745,7 @@ export class DatabaseService {
       encryptedData ? JSON.stringify(encryptedData) : null,
       JSON.stringify(data.autoAssignPatterns || []),
       data.autoAssignGroup || null,
+      activeProfileId,
       now,
       now
     );
@@ -562,8 +821,9 @@ export class DatabaseService {
 
   // Group methods
   getGroups(): ConnectionGroup[] {
-    const stmt = this.db.prepare('SELECT * FROM connection_groups ORDER BY name');
-    const rows = stmt.all() as GroupRow[];
+    const activeProfileId = this.getActiveProfileId();
+    const stmt = this.db.prepare('SELECT * FROM connection_groups WHERE profile_id = ? ORDER BY name');
+    const rows = stmt.all(activeProfileId) as GroupRow[];
     return rows.map(this.rowToGroup);
   }
 
@@ -576,10 +836,11 @@ export class DatabaseService {
   createGroup(data: Omit<ConnectionGroup, 'id' | 'createdAt' | 'updatedAt'>): ConnectionGroup {
     const id = generateId();
     const now = new Date().toISOString();
+    const activeProfileId = this.getActiveProfileId();
 
     const stmt = this.db.prepare(`
-      INSERT INTO connection_groups (id, name, description, parent_id, color, membership_type, rules, credential_id, assigned_scripts, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO connection_groups (id, name, description, parent_id, color, membership_type, rules, credential_id, assigned_scripts, profile_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -592,6 +853,7 @@ export class DatabaseService {
       data.rules ? JSON.stringify(data.rules) : null,
       data.credentialId || null,
       data.assignedScripts ? JSON.stringify(data.assignedScripts) : '[]',
+      activeProfileId,
       now,
       now
     );
@@ -744,8 +1006,9 @@ export class DatabaseService {
 
   // Provider methods
   getProviders(): Provider[] {
-    const stmt = this.db.prepare('SELECT * FROM providers ORDER BY name');
-    const rows = stmt.all() as ProviderRow[];
+    const activeProfileId = this.getActiveProfileId();
+    const stmt = this.db.prepare('SELECT * FROM providers WHERE profile_id = ? ORDER BY name');
+    const rows = stmt.all(activeProfileId) as ProviderRow[];
     return rows.map((row) => this.rowToProvider(row));
   }
 
@@ -758,13 +1021,14 @@ export class DatabaseService {
   createProvider(data: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>): Provider {
     const id = generateId();
     const now = new Date().toISOString();
+    const activeProfileId = this.getActiveProfileId();
 
     // Encrypt sensitive fields in config
     const configToStore = this.encryptProviderConfig(data.config);
 
     const stmt = this.db.prepare(`
-      INSERT INTO providers (id, name, type, enabled, config, auto_discover, discover_interval, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO providers (id, name, type, enabled, config, auto_discover, discover_interval, profile_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -775,6 +1039,7 @@ export class DatabaseService {
       JSON.stringify(configToStore),
       data.autoDiscover ? 1 : 0,
       data.discoverInterval || null,
+      activeProfileId,
       now,
       now
     );
@@ -833,11 +1098,12 @@ export class DatabaseService {
 
   // Discovered host methods
   getDiscoveredHosts(providerId?: string): DiscoveredHost[] {
+    const activeProfileId = this.getActiveProfileId();
     const sql = providerId
-      ? 'SELECT * FROM discovered_hosts WHERE provider_id = ? ORDER BY name'
-      : 'SELECT * FROM discovered_hosts ORDER BY name';
+      ? 'SELECT dh.* FROM discovered_hosts dh JOIN providers p ON dh.provider_id = p.id WHERE dh.provider_id = ? AND p.profile_id = ? ORDER BY dh.name'
+      : 'SELECT dh.* FROM discovered_hosts dh JOIN providers p ON dh.provider_id = p.id WHERE p.profile_id = ? ORDER BY dh.name';
     const stmt = this.db.prepare(sql);
-    const rows = (providerId ? stmt.all(providerId) : stmt.all()) as DiscoveredHostRow[];
+    const rows = (providerId ? stmt.all(providerId, activeProfileId) : stmt.all(activeProfileId)) as DiscoveredHostRow[];
     return rows.map((row) => this.rowToDiscoveredHost(row));
   }
 
@@ -1013,11 +1279,12 @@ export class DatabaseService {
 
   // Saved command methods
   getSavedCommands(category?: string): SavedCommand[] {
+    const activeProfileId = this.getActiveProfileId();
     const sql = category
-      ? 'SELECT * FROM saved_commands WHERE category = ? ORDER BY name'
-      : 'SELECT * FROM saved_commands ORDER BY name';
+      ? 'SELECT * FROM saved_commands WHERE profile_id = ? AND category = ? ORDER BY name'
+      : 'SELECT * FROM saved_commands WHERE profile_id = ? ORDER BY name';
     const stmt = this.db.prepare(sql);
-    const rows = (category ? stmt.all(category) : stmt.all()) as SavedCommandRow[];
+    const rows = (category ? stmt.all(activeProfileId, category) : stmt.all(activeProfileId)) as SavedCommandRow[];
     return rows.map((row) => this.rowToSavedCommand(row));
   }
 
@@ -1030,13 +1297,14 @@ export class DatabaseService {
   createSavedCommand(data: Omit<SavedCommand, 'id' | 'createdAt' | 'updatedAt'>): SavedCommand {
     const id = generateId();
     const now = new Date().toISOString();
+    const activeProfileId = this.getActiveProfileId();
 
     const stmt = this.db.prepare(`
       INSERT INTO saved_commands (
         id, name, description, type, target_os, command,
-        script_content, script_language, category, tags, variables, assigned_groups,
+        script_content, script_language, category, tags, variables, assigned_groups, profile_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -1052,6 +1320,7 @@ export class DatabaseService {
       JSON.stringify(data.tags || []),
       JSON.stringify(data.variables || []),
       JSON.stringify(data.assignedGroups || []),
+      activeProfileId,
       now,
       now
     );
