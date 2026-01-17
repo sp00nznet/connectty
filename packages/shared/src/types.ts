@@ -42,6 +42,9 @@ export interface ServerConnection {
   // Provider info (if discovered)
   providerId?: string;
   providerHostId?: string;
+  // Health status (from Datadog health plugin)
+  healthStatus?: HealthStatus;
+  healthLastChecked?: Date;
   // Sharing
   isShared?: boolean;
   ownerId?: string;
@@ -204,12 +207,67 @@ export interface DiscoveryResult {
   discoveredAt: Date;
 }
 
+export interface ProviderSyncResult {
+  providerId: string;
+  providerName: string;
+  success: boolean;
+  error?: string;
+  syncedAt: Date;
+  // New hosts discovered (not seen before or previously removed)
+  newHosts: DiscoveredHost[];
+  // Hosts that are no longer present (were in last discovery, not in current)
+  removedHosts: DiscoveredHost[];
+  // Hosts that were already known and still present
+  existingHosts: DiscoveredHost[];
+  // Hosts that changed state (running -> stopped, etc.)
+  changedHosts: Array<{
+    host: DiscoveredHost;
+    previousState: HostState;
+    currentState: HostState;
+  }>;
+  // Summary counts
+  summary: {
+    total: number;
+    new: number;
+    removed: number;
+    existing: number;
+    changed: number;
+    imported: number;  // How many were already imported as connections
+  };
+}
+
+export type GroupMembershipType = 'static' | 'dynamic';
+
+export interface GroupRule {
+  // Pattern matching (e.g., "dev-web-*", "prod-db-*", "*-linux")
+  hostnamePattern?: string;
+  // OS type filtering
+  osType?: OSType | OSType[];
+  // Tag matching
+  tags?: string[];
+  // Provider filtering
+  providerId?: string;
+  // Connection type filtering
+  connectionType?: ConnectionType;
+}
+
 export interface ConnectionGroup {
   id: string;
   name: string;
   description?: string;
   parentId?: string;
   color?: string;
+  // Group type
+  membershipType: GroupMembershipType;
+  // Dynamic group rules (applied automatically)
+  rules?: GroupRule[];
+  // Assigned credentials (auto-applied to matching hosts)
+  credentialId?: string;
+  // Assigned scripts/actions
+  assignedScripts?: string[]; // SavedCommand IDs
+  // Sharing
+  isShared?: boolean;
+  ownerId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -312,6 +370,8 @@ export interface SavedCommand {
   tags?: string[];
   // Variables that can be substituted (e.g., {{username}}, {{password}})
   variables?: CommandVariable[];
+  // Group assignment (for quick access via plugin)
+  assignedGroups?: string[]; // Group IDs this command is assigned to
   // Sharing
   isShared?: boolean;
   ownerId?: string;
@@ -379,4 +439,192 @@ export interface ActionTemplate {
   variables: CommandVariable[];
   linuxCommand?: string;
   windowsCommand?: string;
+}
+
+// ============================================================================
+// Plugin System Types
+// ============================================================================
+
+export type PluginType = 'host-stats' | 'script-manager' | 'box-analyzer' | 'matrix' | 'datadog-health' | 'custom';
+
+export interface PluginDefinition {
+  id: string;
+  name: string;
+  type: PluginType;
+  description: string;
+  icon?: string;
+  enabled: boolean;
+  settings?: Record<string, unknown>;
+}
+
+export interface HostStats {
+  connectionId: string;
+  timestamp: Date;
+  cpu: {
+    usage: number; // percentage
+    cores: number;
+    loadAverage?: number[];
+  };
+  memory: {
+    total: number; // bytes
+    used: number; // bytes
+    free: number; // bytes
+    usage: number; // percentage
+  };
+  disk: {
+    total: number; // bytes
+    used: number; // bytes
+    free: number; // bytes
+    usage: number; // percentage
+  }[];
+  network: {
+    interface: string;
+    bytesReceived: number;
+    bytesSent: number;
+    packetsReceived: number;
+    packetsSent: number;
+  }[];
+}
+
+// ============================================================================
+// What Does This Box Do - System Analysis Types
+// ============================================================================
+
+export type TheoryConfidence = 'low' | 'medium' | 'high' | 'certain';
+export type SystemRole = 'web-server' | 'database' | 'application-server' | 'cache' | 'message-queue'
+  | 'load-balancer' | 'reverse-proxy' | 'file-server' | 'backup-server' | 'monitoring'
+  | 'ci-cd' | 'container-host' | 'kubernetes-node' | 'storage' | 'dns' | 'mail-server' | 'unknown';
+
+export interface DetectedApplication {
+  name: string;
+  version?: string;
+  process?: string;
+  port?: number;
+  confidence: TheoryConfidence;
+  evidence: string[]; // List of evidence that led to this detection
+}
+
+export interface ConnectedSystem {
+  hostname?: string;
+  ip: string;
+  port: number;
+  protocol: string;
+  connectionType: 'inbound' | 'outbound' | 'bidirectional';
+  purpose?: string; // e.g., "database connection", "API endpoint"
+  confidence: TheoryConfidence;
+}
+
+export interface SystemTheory {
+  connectionId: string;
+  timestamp: Date;
+  // Primary theory about what this system does
+  primaryRole: SystemRole;
+  confidence: TheoryConfidence;
+  // Supporting evidence for the theory
+  evidence: {
+    category: string; // e.g., "installed packages", "running processes", "open ports"
+    findings: string[];
+  }[];
+  // Detected applications
+  applications: DetectedApplication[];
+  // Connected systems
+  connectedSystems: ConnectedSystem[];
+  // Additional insights
+  insights: string[];
+  // Datadog integration data (if available)
+  datadogMetrics?: {
+    tags: string[];
+    metrics: Record<string, number>;
+    lastUpdated: Date;
+  };
+}
+
+export interface BoxAnalysisSettings {
+  pollingEnabled: boolean;
+  pollingInterval: number; // minutes
+  datadogEnabled: boolean;
+  datadogApiKey?: string;
+  datadogAppKey?: string;
+  datadogSite?: string; // e.g., 'datadoghq.com', 'datadoghq.eu'
+}
+
+export interface MatrixConfig {
+  speed: number;        // Animation speed (1-10, default: 5)
+  density: number;      // Character density (1-10, default: 5)
+  fontSize: number;     // Font size in pixels (default: 14)
+  color: string;        // Color of characters (default: '#0F0')
+  useJapanese: boolean; // Use Japanese katakana characters (default: true)
+}
+
+// ============================================================================
+// Datadog Health Monitoring Plugin Types
+// ============================================================================
+
+export type HealthStatus = 'green' | 'yellow' | 'red' | 'unknown';
+
+export interface DatadogHealthConfig {
+  enabled: boolean;
+  apiKey: string;
+  appKey: string;
+  site?: string;          // Datadog site (datadoghq.com, datadoghq.eu, etc.)
+  pollInterval: number;   // Minutes between polls (default: 15)
+
+  // Thresholds for health status calculation
+  thresholds: {
+    cpu: {
+      yellow: number;     // CPU usage % to trigger yellow (default: 70)
+      red: number;        // CPU usage % to trigger red (default: 90)
+    };
+    memory: {
+      yellow: number;     // Memory usage % to trigger yellow (default: 75)
+      red: number;        // Memory usage % to trigger red (default: 90)
+    };
+    disk: {
+      yellow: number;     // Disk usage % to trigger yellow (default: 80)
+      red: number;        // Disk usage % to trigger red (default: 95)
+    };
+  };
+}
+
+export interface ConnectionHealthStatus {
+  connectionId: string;
+  hostname: string;
+  status: HealthStatus;
+  lastChecked: Date;
+  metrics?: {
+    cpu?: number;         // Current CPU usage %
+    memory?: number;      // Current memory usage %
+    disk?: number;        // Highest disk usage %
+  };
+  issues?: string[];      // List of current issues (e.g., "High CPU usage: 95%")
+}
+
+export interface AppSettings {
+  minimizeToTray: boolean;
+  closeToTray: boolean;
+  startMinimized: boolean;
+  terminalTheme: 'sync' | 'classic';
+  defaultShell: string;
+  // Plugin settings
+  pluginsEnabled: boolean;
+  enabledPlugins: string[]; // Plugin IDs
+  // Box analysis settings
+  boxAnalysis?: BoxAnalysisSettings;
+  // Matrix plugin settings
+  matrixConfig?: MatrixConfig;
+  // Datadog health monitoring settings
+  datadogHealth?: DatadogHealthConfig;
+}
+
+// ============================================================================
+// Profile System Types
+// ============================================================================
+
+export interface Profile {
+  id: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }

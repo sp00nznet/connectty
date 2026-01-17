@@ -15,6 +15,10 @@ import { SyncService, CloudSyncService } from './sync';
 import { CommandService } from './command';
 import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
+import { PluginService } from './plugins';
+import { BoxAnalyzerService } from './box-analyzer';
+import { MatrixPluginService } from './matrix-plugin';
+import { DatadogHealthService } from './datadog-health';
 import { getProviderService } from './providers';
 
 // App settings interface
@@ -24,6 +28,8 @@ interface AppSettings {
   startMinimized: boolean;
   terminalTheme?: 'sync' | 'classic';
   defaultShell?: string;
+  pluginsEnabled?: boolean;
+  enabledPlugins?: string[];
 }
 
 // Initialize settings store
@@ -46,6 +52,8 @@ import type {
   SavedCommand,
   CommandExecution,
   HostFilter,
+  SystemTheory,
+  BoxAnalysisSettings,
 } from '@connectty/shared';
 
 let mainWindow: BrowserWindow | null = null;
@@ -61,6 +69,10 @@ let cloudSyncService: CloudSyncService;
 let commandService: CommandService;
 let sftpService: SFTPService;
 let localShellService: LocalShellService;
+let pluginService: PluginService;
+let boxAnalyzerService: BoxAnalyzerService;
+let matrixPluginService: MatrixPluginService;
+let datadogHealthService: DatadogHealthService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -320,6 +332,88 @@ function setupIpcHandlers(): void {
     db.updateProvider(id, { lastDiscoveryAt: new Date() });
 
     return result;
+  });
+
+  ipcMain.handle('providers:sync', async (_event, id: string) => {
+    const provider = db.getProvider(id);
+    if (!provider) {
+      throw new Error('Provider not found');
+    }
+
+    const service = getProviderService(provider.type);
+
+    try {
+      // Discover hosts from provider
+      const discoveryResult = await service.discoverHosts(provider);
+
+      // Sync with database and get diff
+      const syncResult = db.syncDiscoveredHosts(
+        provider.id,
+        provider.name,
+        discoveryResult.hosts
+      );
+
+      // Update last discovery time
+      db.updateProvider(id, { lastDiscoveryAt: new Date() });
+
+      return syncResult;
+    } catch (error) {
+      // Return error result
+      return {
+        providerId: provider.id,
+        providerName: provider.name,
+        success: false,
+        error: String(error),
+        syncedAt: new Date(),
+        newHosts: [],
+        removedHosts: [],
+        existingHosts: [],
+        changedHosts: [],
+        summary: {
+          total: 0,
+          new: 0,
+          removed: 0,
+          existing: 0,
+          changed: 0,
+          imported: 0,
+        },
+      };
+    }
+  });
+
+  // Profile handlers
+  ipcMain.handle('profiles:list', async () => {
+    return db.getProfiles();
+  });
+
+  ipcMain.handle('profiles:get', async (_event, id: string) => {
+    return db.getProfile(id);
+  });
+
+  ipcMain.handle('profiles:create', async (_event, data: { name: string; description?: string }) => {
+    return db.createProfile(data);
+  });
+
+  ipcMain.handle('profiles:update', async (_event, id: string, updates: { name?: string; description?: string }) => {
+    return db.updateProfile(id, updates);
+  });
+
+  ipcMain.handle('profiles:delete', async (_event, id: string) => {
+    return db.deleteProfile(id);
+  });
+
+  ipcMain.handle('profiles:getActive', async () => {
+    const activeProfileId = db.getActiveProfileId();
+    return db.getProfile(activeProfileId);
+  });
+
+  ipcMain.handle('profiles:switch', async (_event, profileId: string) => {
+    const success = db.setActiveProfileId(profileId);
+    if (success) {
+      // Notify renderer that profile was switched (so it can reload all data)
+      mainWindow?.webContents.send('profiles:switched', profileId);
+    }
+    return success;
   });
 
   // Discovered hosts handlers
@@ -942,6 +1036,8 @@ function setupIpcHandlers(): void {
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
       defaultShell: settingsStore.get('defaultShell'),
+      pluginsEnabled: settingsStore.get('pluginsEnabled') || false,
+      enabledPlugins: settingsStore.get('enabledPlugins') || [],
     };
   });
 
@@ -961,12 +1057,20 @@ function setupIpcHandlers(): void {
     if (settings.defaultShell !== undefined) {
       settingsStore.set('defaultShell', settings.defaultShell);
     }
+    if (settings.pluginsEnabled !== undefined) {
+      settingsStore.set('pluginsEnabled', settings.pluginsEnabled);
+    }
+    if (settings.enabledPlugins !== undefined) {
+      settingsStore.set('enabledPlugins', settings.enabledPlugins);
+    }
     return {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
       defaultShell: settingsStore.get('defaultShell'),
+      pluginsEnabled: settingsStore.get('pluginsEnabled') || false,
+      enabledPlugins: settingsStore.get('enabledPlugins') || [],
     };
   });
 
@@ -1012,6 +1116,133 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('localShell:kill', async (_event, sessionId: string) => {
     localShellService.kill(sessionId);
+  });
+
+  // Plugin handlers
+  ipcMain.handle('plugins:startHostStats', async (_event, connectionId: string, sshSessionId: string) => {
+    const sshClient = sshService.getClient(sshSessionId);
+    if (!sshClient) {
+      throw new Error('SSH session not found');
+    }
+
+    pluginService.startStatsCollection(connectionId, sshClient, (stats) => {
+      mainWindow?.webContents.send('plugin:hostStats', stats);
+    });
+
+    return true;
+  });
+
+  ipcMain.handle('plugins:stopHostStats', async (_event, connectionId: string) => {
+    pluginService.stopStatsCollection(connectionId);
+    return true;
+  });
+
+  ipcMain.handle('plugins:getGroupScripts', async (_event, groupId: string) => {
+    return db.getSavedCommandsForGroup(groupId);
+  });
+
+  ipcMain.handle('plugins:getConnectionScripts', async (_event, connectionId: string) => {
+    return db.getSavedCommandsForConnection(connectionId);
+  });
+
+  ipcMain.handle('groups:getConnectionsForGroup', async (_event, groupId: string) => {
+    return db.getConnectionsForGroup(groupId);
+  });
+
+  // Box Analyzer plugin handlers
+  ipcMain.handle('boxAnalyzer:start', async (_event, connectionId: string, connectionName: string, sshSessionId: string, enablePolling: boolean) => {
+    const sshClient = sshService.getClient(sshSessionId);
+    if (!sshClient) {
+      throw new Error('SSH session not found');
+    }
+
+    await boxAnalyzerService.startAnalysis(connectionId, connectionName, sshClient, (theory) => {
+      mainWindow?.webContents.send('boxAnalyzer:theory', theory);
+    }, enablePolling);
+
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:stop', async (_event, connectionId: string) => {
+    boxAnalyzerService.stopPolling(connectionId);
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:getCached', async (_event, connectionId: string) => {
+    return boxAnalyzerService.getCachedAnalysis(connectionId);
+  });
+
+  ipcMain.handle('boxAnalyzer:setDatadogCredentials', async (_event, credentials: { apiKey: string; appKey: string; site?: string }) => {
+    db.setDatadogCredentials(credentials);
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:getDatadogCredentials', async () => {
+    return db.getDatadogCredentials();
+  });
+
+  ipcMain.handle('boxAnalyzer:deleteDatadogCredentials', async () => {
+    db.deleteDatadogCredentials();
+    return true;
+  });
+
+  ipcMain.handle('boxAnalyzer:initializeDatadog', async (_event, settings: BoxAnalysisSettings) => {
+    boxAnalyzerService.initializeDatadog(settings);
+    return true;
+  });
+
+  // Matrix plugin handlers
+  ipcMain.handle('matrix:getDefaultConfig', async () => {
+    return matrixPluginService.getDefaultConfig();
+  });
+
+  ipcMain.handle('matrix:validateConfig', async (_event, config: import('@connectty/shared').MatrixConfig) => {
+    return matrixPluginService.validateConfig(config);
+  });
+
+  ipcMain.handle('matrix:getCharacterSet', async (_event, useJapanese: boolean) => {
+    return matrixPluginService.getCharacterSet(useJapanese);
+  });
+
+  // Datadog health monitoring plugin handlers
+  ipcMain.handle('datadogHealth:start', async (_event, config: import('@connectty/shared').DatadogHealthConfig) => {
+    return datadogHealthService.start(config);
+  });
+
+  ipcMain.handle('datadogHealth:stop', async () => {
+    datadogHealthService.stop();
+    return true;
+  });
+
+  ipcMain.handle('datadogHealth:getDefaultConfig', async () => {
+    return datadogHealthService.getDefaultConfig();
+  });
+
+  ipcMain.handle('datadogHealth:validateConfig', async (_event, config: Partial<import('@connectty/shared').DatadogHealthConfig>) => {
+    return datadogHealthService.validateConfig(config);
+  });
+
+  ipcMain.handle('datadogHealth:getHealthStatus', async (_event, connectionId: string) => {
+    return datadogHealthService.getHealthStatus(connectionId);
+  });
+
+  ipcMain.handle('datadogHealth:getAllHealthStatuses', async () => {
+    return datadogHealthService.getAllHealthStatuses();
+  });
+
+  ipcMain.handle('datadogHealth:forcePoll', async (_event, config: import('@connectty/shared').DatadogHealthConfig) => {
+    await datadogHealthService.forcePoll(config);
+    return true;
+  });
+
+  ipcMain.handle('datadogHealth:clearCache', async () => {
+    datadogHealthService.clearCache();
+    return true;
+  });
+
+  // Register health update event handler
+  datadogHealthService.onHealthUpdate((status) => {
+    mainWindow?.webContents.send('datadogHealth:statusUpdate', status);
   });
 }
 
@@ -1116,6 +1347,10 @@ app.whenReady().then(async () => {
     localShellService = new LocalShellService((sessionId, event) => {
       mainWindow?.webContents.send('localShell:event', sessionId, event);
     });
+    pluginService = new PluginService();
+    boxAnalyzerService = new BoxAnalyzerService();
+    matrixPluginService = new MatrixPluginService();
+    datadogHealthService = new DatadogHealthService(db);
 
     setupIpcHandlers();
   } catch (err) {

@@ -10,6 +10,7 @@ import type {
   Provider,
   DiscoveredHost,
   DiscoveryResult,
+  ProviderSyncResult,
   ImportOptions,
   ExportOptions,
   SSHSessionEvent,
@@ -18,6 +19,13 @@ import type {
   CommandResult,
   HostFilter,
   CommandTargetOS,
+  HostStats,
+  SystemTheory,
+  BoxAnalysisSettings,
+  MatrixConfig,
+  DatadogHealthConfig,
+  ConnectionHealthStatus,
+  Profile,
 } from '@connectty/shared';
 
 // SFTP types (matching the types in sftp.ts)
@@ -105,6 +113,8 @@ export interface AppSettings {
   syncAccounts?: SyncAccount[];
   terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
   defaultShell?: string;  // ID of the default shell to open when clicking +
+  pluginsEnabled?: boolean;
+  enabledPlugins?: string[];
 }
 
 // Local shell types
@@ -155,6 +165,8 @@ const api = {
     update: (id: string, updates: Partial<ConnectionGroup>): Promise<ConnectionGroup | null> =>
       ipcRenderer.invoke('groups:update', id, updates),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('groups:delete', id),
+    getConnectionsForGroup: (groupId: string): Promise<ServerConnection[]> =>
+      ipcRenderer.invoke('groups:getConnectionsForGroup', groupId),
   },
 
   // Provider operations
@@ -169,6 +181,27 @@ const api = {
     test: (id: string): Promise<boolean> => ipcRenderer.invoke('providers:test', id),
     testConfig: (providerData: Partial<Provider>): Promise<boolean> => ipcRenderer.invoke('providers:testConfig', providerData),
     discover: (id: string): Promise<DiscoveryResult> => ipcRenderer.invoke('providers:discover', id),
+    sync: (id: string): Promise<ProviderSyncResult> => ipcRenderer.invoke('providers:sync', id),
+  },
+
+  // Profile operations
+  profiles: {
+    list: (): Promise<Profile[]> => ipcRenderer.invoke('profiles:list'),
+    get: (id: string): Promise<Profile | null> => ipcRenderer.invoke('profiles:get', id),
+    create: (data: { name: string; description?: string }): Promise<Profile> =>
+      ipcRenderer.invoke('profiles:create', data),
+    update: (id: string, updates: { name?: string; description?: string }): Promise<Profile | null> =>
+      ipcRenderer.invoke('profiles:update', id, updates),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('profiles:delete', id),
+    getActive: (): Promise<Profile | null> => ipcRenderer.invoke('profiles:getActive'),
+    switch: (profileId: string): Promise<boolean> => ipcRenderer.invoke('profiles:switch', profileId),
+    onSwitched: (callback: (profileId: string) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, profileId: string) => {
+        callback(profileId);
+      };
+      ipcRenderer.on('profiles:switched', handler);
+      return () => ipcRenderer.removeListener('profiles:switched', handler);
+    },
   },
 
   // Discovered hosts operations
@@ -393,6 +426,87 @@ const api = {
       };
       ipcRenderer.on('localShell:event', handler);
       return () => ipcRenderer.removeListener('localShell:event', handler);
+    },
+  },
+
+  // Plugin operations
+  plugins: {
+    startHostStats: (connectionId: string, sshSessionId: string): Promise<boolean> =>
+      ipcRenderer.invoke('plugins:startHostStats', connectionId, sshSessionId),
+    stopHostStats: (connectionId: string): Promise<boolean> =>
+      ipcRenderer.invoke('plugins:stopHostStats', connectionId),
+    getGroupScripts: (groupId: string): Promise<SavedCommand[]> =>
+      ipcRenderer.invoke('plugins:getGroupScripts', groupId),
+    getConnectionScripts: (connectionId: string): Promise<SavedCommand[]> =>
+      ipcRenderer.invoke('plugins:getConnectionScripts', connectionId),
+    onHostStats: (callback: (stats: HostStats) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, stats: HostStats) => {
+        callback(stats);
+      };
+      ipcRenderer.on('plugin:hostStats', handler);
+      return () => ipcRenderer.removeListener('plugin:hostStats', handler);
+    },
+  },
+
+  // Box Analyzer plugin operations
+  boxAnalyzer: {
+    start: (connectionId: string, connectionName: string, sshSessionId: string, enablePolling?: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:start', connectionId, connectionName, sshSessionId, enablePolling || false),
+    stop: (connectionId: string): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:stop', connectionId),
+    getCached: (connectionId: string): Promise<SystemTheory | null> =>
+      ipcRenderer.invoke('boxAnalyzer:getCached', connectionId),
+    setDatadogCredentials: (credentials: { apiKey: string; appKey: string; site?: string }): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:setDatadogCredentials', credentials),
+    getDatadogCredentials: (): Promise<{ apiKey?: string; appKey?: string; site?: string } | null> =>
+      ipcRenderer.invoke('boxAnalyzer:getDatadogCredentials'),
+    deleteDatadogCredentials: (): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:deleteDatadogCredentials'),
+    initializeDatadog: (settings: BoxAnalysisSettings): Promise<boolean> =>
+      ipcRenderer.invoke('boxAnalyzer:initializeDatadog', settings),
+    onTheory: (callback: (theory: SystemTheory) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, theory: SystemTheory) => {
+        callback(theory);
+      };
+      ipcRenderer.on('boxAnalyzer:theory', handler);
+      return () => ipcRenderer.removeListener('boxAnalyzer:theory', handler);
+    },
+  },
+
+  // Matrix plugin operations
+  matrix: {
+    getDefaultConfig: (): Promise<MatrixConfig> =>
+      ipcRenderer.invoke('matrix:getDefaultConfig'),
+    validateConfig: (config: Partial<MatrixConfig>): Promise<MatrixConfig> =>
+      ipcRenderer.invoke('matrix:validateConfig', config),
+    getCharacterSet: (useJapanese: boolean): Promise<string> =>
+      ipcRenderer.invoke('matrix:getCharacterSet', useJapanese),
+  },
+
+  // Datadog health monitoring plugin operations
+  datadogHealth: {
+    start: (config: DatadogHealthConfig): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:start', config),
+    stop: (): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:stop'),
+    getDefaultConfig: (): Promise<DatadogHealthConfig> =>
+      ipcRenderer.invoke('datadogHealth:getDefaultConfig'),
+    validateConfig: (config: Partial<DatadogHealthConfig>): Promise<DatadogHealthConfig> =>
+      ipcRenderer.invoke('datadogHealth:validateConfig', config),
+    getHealthStatus: (connectionId: string): Promise<ConnectionHealthStatus | undefined> =>
+      ipcRenderer.invoke('datadogHealth:getHealthStatus', connectionId),
+    getAllHealthStatuses: (): Promise<ConnectionHealthStatus[]> =>
+      ipcRenderer.invoke('datadogHealth:getAllHealthStatuses'),
+    forcePoll: (config: DatadogHealthConfig): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:forcePoll', config),
+    clearCache: (): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:clearCache'),
+    onStatusUpdate: (callback: (status: ConnectionHealthStatus) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, status: ConnectionHealthStatus) => {
+        callback(status);
+      };
+      ipcRenderer.on('datadogHealth:statusUpdate', handler);
+      return () => ipcRenderer.removeListener('datadogHealth:statusUpdate', handler);
     },
   },
 };

@@ -207,4 +207,8 @@ export class SSHService {
   getActiveSessions(): string[] {
     return Array.from(this.sessions.keys());
   }
+
+  getClient(sessionId: string): Client | undefined {
+    return this.sessions.get(sessionId)?.client;
+  }
 }
