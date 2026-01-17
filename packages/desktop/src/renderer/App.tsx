@@ -116,6 +116,7 @@ export default function App() {
     closeToTray: false,
     startMinimized: false,
     terminalTheme: 'classic',
+    defaultShell: undefined,
   });
 
   // New tab menu (stores position for fixed positioning)
@@ -1327,22 +1328,26 @@ export default function App() {
           <div className="new-tab-container">
             <button
               className="new-tab-btn"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                if (newTabMenuPos) {
-                  setNewTabMenuPos(null);
-                } else {
-                  setNewTabMenuPos({ x: rect.right, y: rect.bottom });
+              onClick={() => {
+                // Open default shell directly
+                if (availableShells.length > 0) {
+                  // Find the configured default shell, or fall back to first non-elevated shell
+                  const defaultShell = appSettings.defaultShell
+                    ? availableShells.find(s => s.id === appSettings.defaultShell)
+                    : availableShells.find(s => !s.elevated);
+                  if (defaultShell) {
+                    handleSpawnLocalShell(defaultShell);
+                  }
                 }
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
-                if (availableShells.length > 0) {
-                  setNewTabMenuPos(null);
-                  setShellContextMenu({ x: e.clientX, y: e.clientY });
-                }
+                // Right-click shows shell selection menu
+                const rect = e.currentTarget.getBoundingClientRect();
+                setShellContextMenu(null);
+                setNewTabMenuPos({ x: rect.right, y: rect.bottom });
               }}
-              title="Left-click: New Tab menu | Right-click: Quick shell access"
+              title="Left-click: Open default shell | Right-click: Shell menu"
             >
               +
             </button>
@@ -1671,6 +1676,7 @@ export default function App() {
           onThemeChange={setTheme}
           onClose={() => setShowSettingsModal(false)}
           onSave={handleSaveSettings}
+          availableShells={availableShells}
         />
       )}
 
@@ -5368,13 +5374,15 @@ interface SettingsModalProps {
   onThemeChange: (theme: string) => void;
   onClose: () => void;
   onSave: (settings: Partial<AppSettings>) => Promise<void>;
+  availableShells: LocalShellInfo[];
 }
 
-function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave }: SettingsModalProps) {
+function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave, availableShells }: SettingsModalProps) {
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
   const [terminalTheme, setTerminalTheme] = useState<'sync' | 'classic'>(settings.terminalTheme || 'classic');
+  const [defaultShell, setDefaultShell] = useState<string | undefined>(settings.defaultShell);
   const [saving, setSaving] = useState(false);
 
   // Collapsible section states - load from localStorage
@@ -5394,6 +5402,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     const saved = localStorage.getItem('settings-sync-expanded');
     return saved !== null ? saved === 'true' : true;
   });
+  const [defaultShellExpanded, setDefaultShellExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-defaultshell-expanded');
+    return saved !== null ? saved === 'true' : true;
+  });
 
   // Save collapse states to localStorage when they change
   useEffect(() => {
@@ -5408,6 +5420,9 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   useEffect(() => {
     localStorage.setItem('settings-sync-expanded', String(syncExpanded));
   }, [syncExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-defaultshell-expanded', String(defaultShellExpanded));
+  }, [defaultShellExpanded]);
 
   // Sync accounts state
   const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
@@ -5438,6 +5453,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     providers: true,
     commands: true,
     theme: true,
+    defaultShell: true,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -5449,6 +5465,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         closeToTray,
         startMinimized,
         terminalTheme,
+        defaultShell,
         syncAccounts,
       });
       onClose();
@@ -5687,6 +5704,47 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                 </div>
               )}
             </div>
+
+            {/* Default Shell Section - Collapsible */}
+            {availableShells.length > 0 && (
+              <div className="settings-section collapsible">
+                <button
+                  type="button"
+                  className="settings-section-header"
+                  onClick={() => setDefaultShellExpanded(!defaultShellExpanded)}
+                >
+                  <span className={`collapse-icon ${defaultShellExpanded ? 'expanded' : ''}`}>▶</span>
+                  <h4>Default Shell</h4>
+                  <span className="settings-badge">{availableShells.filter(s => !s.elevated).length} available</span>
+                </button>
+                {defaultShellExpanded && (
+                  <div className="settings-section-content">
+                    <p className="settings-description">
+                      Select the shell to open when clicking the + button.
+                    </p>
+                    <div className="form-group">
+                      <div className="shell-list">
+                        {availableShells.filter(s => !s.elevated).map(shell => (
+                          <label key={shell.id} className="radio-label shell-radio">
+                            <input
+                              type="radio"
+                              name="defaultShell"
+                              value={shell.id}
+                              checked={defaultShell === shell.id || (!defaultShell && shell === availableShells.find(s => !s.elevated))}
+                              onChange={() => setDefaultShell(shell.id)}
+                            />
+                            <span className="radio-text">
+                              <strong>{shell.name}</strong>
+                              <span className="radio-description">{shell.path}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* System Tray Section - Collapsible */}
             <div className="settings-section collapsible">

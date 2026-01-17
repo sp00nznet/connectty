@@ -250,6 +250,7 @@ interface ExtendedSyncData extends SyncData {
   providers?: Provider[];
   commands?: SavedCommand[];
   theme?: string;
+  defaultShell?: string;
   deviceName?: string;
   deviceId?: string;
 }
@@ -261,6 +262,7 @@ interface StoredSettings {
   deviceId?: string;
   syncAccounts?: SyncAccount[];
   theme?: string;
+  defaultShell?: string;
   [key: string]: unknown;
 }
 
@@ -648,7 +650,7 @@ export class CloudSyncService {
    */
   async upload(
     accountId: string,
-    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean; defaultShell?: boolean }
   ): Promise<{ success: boolean; configId?: string; error?: string }> {
     const account = this.accounts.get(accountId);
     if (!account) {
@@ -709,7 +711,7 @@ export class CloudSyncService {
   async importConfig(
     accountId: string,
     configId: string,
-    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean; defaultShell?: boolean }
   ): Promise<{
     success: boolean;
     imported?: { connections: number; credentials: number; groups: number; providers: number; commands: number };
@@ -744,9 +746,9 @@ export class CloudSyncService {
   }
 
   private buildSyncData(
-    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean; defaultShell?: boolean }
   ): ExtendedSyncData {
-    const opts = options || { connections: true, credentials: true, groups: true, providers: true, commands: true, theme: true };
+    const opts = options || { connections: true, credentials: true, groups: true, providers: true, commands: true, theme: true, defaultShell: true };
     const exportData = this.db.exportAll();
     const settings = (this.db.getSettings?.() || {}) as StoredSettings;
 
@@ -762,14 +764,15 @@ export class CloudSyncService {
       providers: opts.providers ? this.db.getProviders() : [],
       commands: opts.commands ? this.db.getSavedCommands() : [],
       theme: opts.theme ? settings.theme : undefined,
+      defaultShell: opts.defaultShell ? settings.defaultShell : undefined,
     };
   }
 
   private async importSyncData(
     data: ExtendedSyncData,
-    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean }
+    options?: { connections: boolean; credentials: boolean; groups: boolean; providers: boolean; commands: boolean; theme: boolean; defaultShell?: boolean }
   ): Promise<{ connections: number; credentials: number; groups: number; providers: number; commands: number }> {
-    const opts = options || { connections: true, credentials: true, groups: true, providers: true, commands: true, theme: true };
+    const opts = options || { connections: true, credentials: true, groups: true, providers: true, commands: true, theme: true, defaultShell: true };
     const imported = { connections: 0, credentials: 0, groups: 0, providers: 0, commands: 0 };
 
     // Import groups first (needed for connection references)
@@ -861,6 +864,12 @@ export class CloudSyncService {
     if (opts.theme && data.theme) {
       const settings = this.db.getSettings?.() || {};
       this.db.setSettings?.({ ...settings, theme: data.theme });
+    }
+
+    // Import default shell
+    if (opts.defaultShell && data.defaultShell) {
+      const settings = this.db.getSettings?.() || {};
+      this.db.setSettings?.({ ...settings, defaultShell: data.defaultShell });
     }
 
     return imported;

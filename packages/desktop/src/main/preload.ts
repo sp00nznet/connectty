@@ -104,6 +104,7 @@ export interface AppSettings {
   startMinimized: boolean;
   syncAccounts?: SyncAccount[];
   terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
+  defaultShell?: string;  // ID of the default shell to open when clicking +
 }
 
 // Local shell types
