@@ -14,6 +14,7 @@ import BulkCommandPanel from './BulkCommandPanel';
 import ImportExportModal from './ImportExportModal';
 import SFTPPanel from './SFTPPanel';
 import RDPPanel from './RDPPanel';
+import ProfileSelector from './ProfileSelector';
 
 type MainView = 'terminal' | 'providers' | 'commands' | 'sftp' | 'rdp';
 
@@ -402,6 +403,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             RDP
           </button>
         </nav>
+
+        <ProfileSelector onProfileSwitch={loadData} />
 
         <div className="user-info">
           <span className="user-name">{user.displayName}</span>

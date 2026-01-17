@@ -9,6 +9,8 @@ import type {
   User,
   AuthResponse,
   APIResponse,
+  Profile,
+  ProviderSyncResult,
 } from '@connectty/shared';
 
 const API_BASE = '/api';
@@ -472,6 +474,57 @@ class ApiService {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // Profiles
+  async getProfiles(): Promise<Profile[]> {
+    const response = await this.request<APIResponse<Profile[]>>('/profiles');
+    return response.data || [];
+  }
+
+  async getProfile(id: string): Promise<Profile | null> {
+    const response = await this.request<APIResponse<Profile>>(`/profiles/${id}`);
+    return response.data || null;
+  }
+
+  async getActiveProfile(): Promise<Profile | null> {
+    const response = await this.request<APIResponse<Profile>>('/profiles/active');
+    return response.data || null;
+  }
+
+  async createProfile(data: { name: string; description?: string }): Promise<Profile> {
+    const response = await this.request<APIResponse<Profile>>('/profiles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
+  async updateProfile(id: string, data: { name?: string; description?: string }): Promise<Profile> {
+    const response = await this.request<APIResponse<Profile>>(`/profiles/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response.data!;
+  }
+
+  async deleteProfile(id: string): Promise<void> {
+    await this.request(`/profiles/${id}`, { method: 'DELETE' });
+  }
+
+  async switchProfile(profileId: string): Promise<boolean> {
+    const response = await this.request<APIResponse<{ success: boolean }>>(`/profiles/${profileId}/switch`, {
+      method: 'POST',
+    });
+    return response.data?.success || false;
+  }
+
+  // Provider Sync (incremental discovery)
+  async syncProvider(providerId: string): Promise<ProviderSyncResult> {
+    const response = await this.request<APIResponse<ProviderSyncResult>>(`/providers/${providerId}/sync`, {
+      method: 'POST',
+    });
+    return response.data!;
   }
 }
 
