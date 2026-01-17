@@ -19,6 +19,7 @@ import type {
   CommandTargetOS,
   CommandVariable,
 } from '@connectty/shared';
+import { sysadminScripts } from './sysadmin-scripts';
 
 export class DatabaseService {
   private db: Database.Database;
@@ -186,6 +187,9 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_connections_name ON connections(name);
       CREATE INDEX IF NOT EXISTS idx_discovered_imported ON discovered_hosts(imported, provider_id);
     `);
+
+    // Populate default sysadmin scripts
+    this.populateSysadminScripts();
   }
 
   private runMigrations(): void {
@@ -232,6 +236,52 @@ export class DatabaseService {
         }
       }
     }
+  }
+
+  private populateSysadminScripts(): void {
+    // Check if sysadmin scripts have already been populated
+    const checkStmt = this.db.prepare("SELECT value FROM app_config WHERE key = 'sysadmin_scripts_v1'");
+    const existing = checkStmt.get() as { value: string } | undefined;
+
+    if (existing) {
+      // Scripts already populated
+      return;
+    }
+
+    // Insert all sysadmin scripts
+    const insertStmt = this.db.prepare(`
+      INSERT INTO saved_commands (
+        id, name, description, type, target_os, command,
+        script_content, script_language, category, tags, variables, assigned_groups,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const now = new Date().toISOString();
+
+    for (const script of sysadminScripts) {
+      const id = generateId();
+      insertStmt.run(
+        id,
+        script.name,
+        script.description || null,
+        script.type,
+        script.targetOS,
+        script.command || null,
+        script.scriptContent || null,
+        script.scriptLanguage || null,
+        script.category || null,
+        JSON.stringify(script.tags || []),
+        JSON.stringify(script.variables || []),
+        JSON.stringify(script.assignedGroups || []),
+        now,
+        now
+      );
+    }
+
+    // Mark scripts as populated
+    const markStmt = this.db.prepare("INSERT INTO app_config (key, value) VALUES ('sysadmin_scripts_v1', 'true')");
+    markStmt.run();
   }
 
   // Connection methods
