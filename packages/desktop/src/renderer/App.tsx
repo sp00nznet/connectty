@@ -369,6 +369,42 @@ export default function App() {
     }, 50);
   }, [theme]);
 
+  // Darken title bar when modals are open to match the backdrop effect
+  const isAnyModalOpen = showConnectionModal || showCredentialModal || showProviderModal ||
+    showHostSelectionModal || showRepeatedActionsModal || showGroupModal || showSettingsModal;
+
+  useEffect(() => {
+    const style = getComputedStyle(document.documentElement);
+    const bgSecondary = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
+    const textPrimary = style.getPropertyValue('--text-primary').trim() || '#edf2f4';
+
+    if (isAnyModalOpen) {
+      // Darken the title bar to simulate backdrop effect
+      // Convert hex to RGB, darken by ~40% to match backdrop opacity
+      const darkenColor = (hex: string): string => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        // Darken by multiplying by 0.6 (40% darker)
+        const dr = Math.round(r * 0.6);
+        const dg = Math.round(g * 0.6);
+        const db = Math.round(b * 0.6);
+        return `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
+      };
+
+      window.connectty.window?.setTitleBarOverlay?.({
+        color: darkenColor(bgSecondary),
+        symbolColor: textPrimary,
+      });
+    } else {
+      // Restore normal title bar color
+      window.connectty.window?.setTitleBarOverlay?.({
+        color: bgSecondary,
+        symbolColor: textPrimary,
+      });
+    }
+  }, [isAnyModalOpen, theme]);
+
   // Load data on mount
   useEffect(() => {
     loadData();
