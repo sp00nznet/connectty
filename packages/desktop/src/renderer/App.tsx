@@ -357,13 +357,13 @@ export default function App() {
     localStorage.setItem('connectty-theme', theme);
 
     // Update Windows title bar overlay to match theme
-    // Use --bg-primary to match the main content background
+    // Use --bg-secondary to match the tab bar background
     setTimeout(() => {
       const style = getComputedStyle(document.documentElement);
-      const bgPrimary = style.getPropertyValue('--bg-primary').trim() || '#1a1a2e';
+      const bgSecondary = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
       const textPrimary = style.getPropertyValue('--text-primary').trim() || '#edf2f4';
       window.connectty.window?.setTitleBarOverlay?.({
-        color: bgPrimary,
+        color: bgSecondary,
         symbolColor: textPrimary,
       });
     }, 50);
@@ -1249,73 +1249,147 @@ export default function App() {
 
       {/* Main Content */}
       <main className="main-content">
-        {sessions.length > 0 ? (
-          <>
-            {/* Session Tabs */}
-            <div className="session-tabs">
-              {sessions.map(session => (
-                <button
-                  key={session.id}
-                  className={`session-tab ${session.type} ${activeSessionId === session.id ? 'active' : ''}`}
-                  onClick={() => setActiveSessionId(session.id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setTabContextMenu({ x: e.clientX, y: e.clientY, sessionId: session.id });
-                  }}
-                >
-                  <span className={`session-type-badge ${session.type}`}>
-                    {session.type === 'ssh' ? 'SSH' :
-                     session.type === 'sftp' ? 'SFTP' :
-                     session.type === 'rdp' ? 'RDP' :
-                     session.type === 'serial' ? 'Serial' :
-                     session.type === 'localShell' ? 'Shell' : ''}
-                  </span>
-                  {customTabNames.get(session.id) || (session.type === 'localShell' ? session.shellName : session.connectionName)}
-                  <span className="close-btn" onClick={(e) => { e.stopPropagation(); handleDisconnect(session.id); }}>
-                    ×
-                  </span>
-                </button>
-              ))}
+        {/* Session Tabs - always visible for consistent title bar alignment */}
+        <div className="session-tabs">
+          {sessions.map(session => (
+            <button
+              key={session.id}
+              className={`session-tab ${session.type} ${activeSessionId === session.id ? 'active' : ''}`}
+              onClick={() => setActiveSessionId(session.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setTabContextMenu({ x: e.clientX, y: e.clientY, sessionId: session.id });
+              }}
+            >
+              <span className={`session-type-badge ${session.type}`}>
+                {session.type === 'ssh' ? 'SSH' :
+                 session.type === 'sftp' ? 'SFTP' :
+                 session.type === 'rdp' ? 'RDP' :
+                 session.type === 'serial' ? 'Serial' :
+                 session.type === 'localShell' ? 'Shell' : ''}
+              </span>
+              {customTabNames.get(session.id) || (session.type === 'localShell' ? session.shellName : session.connectionName)}
+              <span className="close-btn" onClick={(e) => { e.stopPropagation(); handleDisconnect(session.id); }}>
+                ×
+              </span>
+            </button>
+          ))}
 
-              {/* New Tab Button */}
-              <div className="new-tab-container">
-                <button
-                  className="new-tab-btn"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    if (newTabMenuPos) {
-                      setNewTabMenuPos(null);
-                    } else {
-                      setNewTabMenuPos({ x: rect.right, y: rect.bottom });
-                    }
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    if (availableShells.length > 0) {
-                      setNewTabMenuPos(null);
-                      setShellContextMenu({ x: e.clientX, y: e.clientY });
-                    }
-                  }}
-                  title="Left-click: New Tab menu | Right-click: Quick shell access"
-                >
-                  +
-                </button>
-              </div>
-            </div>
+          {/* New Tab Button */}
+          <div className="new-tab-container">
+            <button
+              className="new-tab-btn"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                if (newTabMenuPos) {
+                  setNewTabMenuPos(null);
+                } else {
+                  setNewTabMenuPos({ x: rect.right, y: rect.bottom });
+                }
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (availableShells.length > 0) {
+                  setNewTabMenuPos(null);
+                  setShellContextMenu({ x: e.clientX, y: e.clientY });
+                }
+              }}
+              title="Left-click: New Tab menu | Right-click: Quick shell access"
+            >
+              +
+            </button>
+          </div>
+        </div>
 
-            {/* Shell Context Menu (right-click on + button) */}
-            {shellContextMenu && availableShells.length > 0 && (
-              <div
-                ref={shellContextMenuRef}
-                className="shell-context-menu"
-                style={{ left: shellContextMenu.x, top: shellContextMenu.y }}
+        {/* Shell Context Menu (right-click on + button) */}
+        {shellContextMenu && availableShells.length > 0 && (
+          <div
+            ref={shellContextMenuRef}
+            className="shell-context-menu"
+            style={{ left: shellContextMenu.x, top: shellContextMenu.y }}
+          >
+            {availableShells.map(shell => (
+              <button
+                key={shell.id}
+                className="shell-context-menu-item"
+                onClick={() => {
+                  setShellContextMenu(null);
+                  handleSpawnLocalShell(shell);
+                }}
               >
+                <span className="menu-icon">
+                  {shell.elevated ? '🛡️' :
+                   shell.icon === 'cmd' ? '⌨' :
+                   shell.icon === 'powershell' ? '💠' :
+                   shell.icon === 'linux' ? '🐧' : '💻'}
+                </span>
+                {shell.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Tab Context Menu (right-click on existing tab) */}
+        {tabContextMenu && (
+          <div
+            ref={tabContextMenuRef}
+            className="tab-context-menu"
+            style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+          >
+            <button
+              className="tab-context-menu-item"
+              onClick={() => handleDuplicateTab(tabContextMenu.sessionId)}
+            >
+              <span className="menu-icon">📋</span>
+              Duplicate Tab
+            </button>
+            <button
+              className="tab-context-menu-item"
+              onClick={() => handleRenameTab(tabContextMenu.sessionId)}
+            >
+              <span className="menu-icon">✏️</span>
+              Rename Tab
+            </button>
+            <div className="tab-context-menu-divider" />
+            <button
+              className="tab-context-menu-item danger"
+              onClick={() => {
+                handleDisconnect(tabContextMenu.sessionId);
+                setTabContextMenu(null);
+              }}
+            >
+              <span className="menu-icon">✕</span>
+              Close Tab
+            </button>
+          </div>
+        )}
+
+        {/* New Tab Menu (left-click on + button) */}
+        {newTabMenuPos && (
+          <div
+            ref={newTabMenuRef}
+            className="new-tab-menu"
+            style={{ right: `calc(100% - ${newTabMenuPos.x}px)`, top: newTabMenuPos.y }}
+          >
+            <button
+              className="new-tab-menu-item"
+              onClick={() => {
+                setNewTabMenuPos(null);
+                setShowConnectionModal(true);
+              }}
+            >
+              <span className="menu-icon">🔗</span>
+              New Connection
+            </button>
+            {availableShells.length > 0 && (
+              <>
+                <div className="new-tab-menu-divider" />
                 {availableShells.map(shell => (
                   <button
                     key={shell.id}
-                    className="shell-context-menu-item"
+                    className="new-tab-menu-item"
                     onClick={() => {
-                      setShellContextMenu(null);
+                      setNewTabMenuPos(null);
                       handleSpawnLocalShell(shell);
                     }}
                   >
@@ -1328,160 +1402,84 @@ export default function App() {
                     {shell.name}
                   </button>
                 ))}
-              </div>
+              </>
             )}
+          </div>
+        )}
 
-            {/* Tab Context Menu (right-click on existing tab) */}
-            {tabContextMenu && (
-              <div
-                ref={tabContextMenuRef}
-                className="tab-context-menu"
-                style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
-              >
-                <button
-                  className="tab-context-menu-item"
-                  onClick={() => handleDuplicateTab(tabContextMenu.sessionId)}
-                >
-                  <span className="menu-icon">📋</span>
-                  Duplicate Tab
-                </button>
-                <button
-                  className="tab-context-menu-item"
-                  onClick={() => handleRenameTab(tabContextMenu.sessionId)}
-                >
-                  <span className="menu-icon">✏️</span>
-                  Rename Tab
-                </button>
-                <div className="tab-context-menu-divider" />
-                <button
-                  className="tab-context-menu-item danger"
-                  onClick={() => {
-                    handleDisconnect(tabContextMenu.sessionId);
-                    setTabContextMenu(null);
-                  }}
-                >
-                  <span className="menu-icon">✕</span>
-                  Close Tab
-                </button>
-              </div>
-            )}
+        {/* Content based on session type or welcome screen */}
+        {sessions.length > 0 ? (
+          <div className="content-body">
+            {(() => {
+              const activeSession = sessions.find(s => s.id === activeSessionId);
+              if (!activeSession) return null;
 
-            {/* New Tab Menu (left-click on + button) */}
-            {newTabMenuPos && (
-              <div
-                ref={newTabMenuRef}
-                className="new-tab-menu"
-                style={{ right: `calc(100% - ${newTabMenuPos.x}px)`, top: newTabMenuPos.y }}
-              >
-                <button
-                  className="new-tab-menu-item"
-                  onClick={() => {
-                    setNewTabMenuPos(null);
-                    setShowConnectionModal(true);
-                  }}
-                >
-                  <span className="menu-icon">🔗</span>
-                  New Connection
-                </button>
-                {availableShells.length > 0 && (
-                  <>
-                    <div className="new-tab-menu-divider" />
-                    {availableShells.map(shell => (
-                      <button
-                        key={shell.id}
-                        className="new-tab-menu-item"
-                        onClick={() => {
-                          setNewTabMenuPos(null);
-                          handleSpawnLocalShell(shell);
-                        }}
-                      >
-                        <span className="menu-icon">
-                          {shell.elevated ? '🛡️' :
-                           shell.icon === 'cmd' ? '⌨' :
-                           shell.icon === 'powershell' ? '💠' :
-                           shell.icon === 'linux' ? '🐧' : '💻'}
-                        </span>
-                        {shell.name}
-                      </button>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Content based on session type */}
-            <div className="content-body">
-              {(() => {
-                const activeSession = sessions.find(s => s.id === activeSessionId);
-                if (!activeSession) return null;
-
-                if (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') {
-                  return (
-                    <div className="terminal-container" ref={terminalContainerRef} />
-                  );
-                } else if (activeSession.type === 'sftp') {
-                  const otherSftpSessions = sessions.filter(
-                    (s): s is SFTPSession => s.type === 'sftp' && s.id !== activeSession.id
-                  );
-                  return (
-                    <SFTPBrowser
-                      session={activeSession}
-                      otherSftpSessions={otherSftpSessions}
-                      onNotification={showNotification}
-                      fxpSourceSession={fxpSourceSession}
-                      onFxpSourceChange={setFxpSourceSession}
+              if (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') {
+                return (
+                  <div className="terminal-container" ref={terminalContainerRef} />
+                );
+              } else if (activeSession.type === 'sftp') {
+                const otherSftpSessions = sessions.filter(
+                  (s): s is SFTPSession => s.type === 'sftp' && s.id !== activeSession.id
+                );
+                return (
+                  <SFTPBrowser
+                    session={activeSession}
+                    otherSftpSessions={otherSftpSessions}
+                    onNotification={showNotification}
+                    fxpSourceSession={fxpSourceSession}
+                    onFxpSourceChange={setFxpSourceSession}
+                  />
+                );
+              } else if (activeSession.type === 'rdp') {
+                return (
+                  <div className="rdp-container" style={{ width: '100%', height: '100%', overflow: 'auto', background: '#000' }}>
+                    <canvas
+                      ref={activeSession.canvasRef}
+                      width={activeSession.screenWidth}
+                      height={activeSession.screenHeight}
+                      style={{ display: 'block', margin: '0 auto' }}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        e.preventDefault();
+                        window.connectty.rdp.sendKey(activeSession.id, e.keyCode, true, e.location === 2 || e.location === 3);
+                      }}
+                      onKeyUp={(e) => {
+                        e.preventDefault();
+                        window.connectty.rdp.sendKey(activeSession.id, e.keyCode, false, e.location === 2 || e.location === 3);
+                      }}
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = Math.round(e.clientX - rect.left);
+                        const y = Math.round(e.clientY - rect.top);
+                        window.connectty.rdp.sendMouse(activeSession.id, x, y, 0, false);
+                      }}
+                      onMouseDown={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = Math.round(e.clientX - rect.left);
+                        const y = Math.round(e.clientY - rect.top);
+                        window.connectty.rdp.sendMouse(activeSession.id, x, y, e.button + 1, true);
+                      }}
+                      onMouseUp={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = Math.round(e.clientX - rect.left);
+                        const y = Math.round(e.clientY - rect.top);
+                        window.connectty.rdp.sendMouse(activeSession.id, x, y, e.button + 1, false);
+                      }}
+                      onWheel={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = Math.round(e.clientX - rect.left);
+                        const y = Math.round(e.clientY - rect.top);
+                        window.connectty.rdp.sendWheel(activeSession.id, x, y, Math.sign(e.deltaY) * -120, e.shiftKey);
+                      }}
+                      onContextMenu={(e) => e.preventDefault()}
                     />
-                  );
-                } else if (activeSession.type === 'rdp') {
-                  return (
-                    <div className="rdp-container" style={{ width: '100%', height: '100%', overflow: 'auto', background: '#000' }}>
-                      <canvas
-                        ref={activeSession.canvasRef}
-                        width={activeSession.screenWidth}
-                        height={activeSession.screenHeight}
-                        style={{ display: 'block', margin: '0 auto' }}
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          e.preventDefault();
-                          window.connectty.rdp.sendKey(activeSession.id, e.keyCode, true, e.location === 2 || e.location === 3);
-                        }}
-                        onKeyUp={(e) => {
-                          e.preventDefault();
-                          window.connectty.rdp.sendKey(activeSession.id, e.keyCode, false, e.location === 2 || e.location === 3);
-                        }}
-                        onMouseMove={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = Math.round(e.clientX - rect.left);
-                          const y = Math.round(e.clientY - rect.top);
-                          window.connectty.rdp.sendMouse(activeSession.id, x, y, 0, false);
-                        }}
-                        onMouseDown={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = Math.round(e.clientX - rect.left);
-                          const y = Math.round(e.clientY - rect.top);
-                          window.connectty.rdp.sendMouse(activeSession.id, x, y, e.button + 1, true);
-                        }}
-                        onMouseUp={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = Math.round(e.clientX - rect.left);
-                          const y = Math.round(e.clientY - rect.top);
-                          window.connectty.rdp.sendMouse(activeSession.id, x, y, e.button + 1, false);
-                        }}
-                        onWheel={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = Math.round(e.clientX - rect.left);
-                          const y = Math.round(e.clientY - rect.top);
-                          window.connectty.rdp.sendWheel(activeSession.id, x, y, Math.sign(e.deltaY) * -120, e.shiftKey);
-                        }}
-                        onContextMenu={(e) => e.preventDefault()}
-                      />
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-          </>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
         ) : (
           <div className="welcome-screen">
             <h2>Welcome to Connectty</h2>
