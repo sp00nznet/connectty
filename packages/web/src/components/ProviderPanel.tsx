@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, Provider, DiscoveredHost } from '../services/api';
-import type { Credential, ConnectionGroup } from '@connectty/shared';
+import type { Credential, ConnectionGroup, ProviderSyncResult } from '@connectty/shared';
 import ProviderModal from './ProviderModal';
 
 interface ProviderPanelProps {
@@ -24,6 +24,8 @@ export default function ProviderPanel({
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<ProviderSyncResult | null>(null);
   const [importing, setImporting] = useState(false);
 
   // Import options
@@ -115,6 +117,7 @@ export default function ProviderPanel({
 
     try {
       setDiscovering(true);
+      setSyncResult(null);
       const hosts = await api.discoverHosts(selectedProvider.id);
       setDiscoveredHosts(hosts);
       onNotification('success', `Discovered ${hosts.length} hosts`);
@@ -122,6 +125,32 @@ export default function ProviderPanel({
       onNotification('error', (err as Error).message);
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const handleSync = async () => {
+    if (!selectedProvider) return;
+
+    try {
+      setSyncing(true);
+      const result = await api.syncProvider(selectedProvider.id);
+      setSyncResult(result);
+      await loadDiscoveredHosts(selectedProvider.id);
+
+      const messages: string[] = [];
+      if (result.summary.new > 0) messages.push(`${result.summary.new} new`);
+      if (result.summary.removed > 0) messages.push(`${result.summary.removed} removed`);
+      if (result.summary.changed > 0) messages.push(`${result.summary.changed} changed`);
+
+      if (messages.length > 0) {
+        onNotification('success', `Sync complete: ${messages.join(', ')}`);
+      } else {
+        onNotification('success', 'Sync complete: No changes detected');
+      }
+    } catch (err) {
+      onNotification('error', (err as Error).message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -285,14 +314,58 @@ export default function ProviderPanel({
               <h3>
                 {getProviderIcon(selectedProvider.type)} {selectedProvider.name}
               </h3>
-              <button
-                className="btn btn-primary"
-                onClick={handleDiscover}
-                disabled={discovering}
-              >
-                {discovering ? 'Discovering...' : 'Discover Hosts'}
-              </button>
+              <div className="button-group">
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleSync}
+                  disabled={syncing || discovering}
+                  title="Incremental sync - detects new, removed, and changed hosts"
+                >
+                  {syncing ? 'Syncing...' : 'Sync'}
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleDiscover}
+                  disabled={discovering || syncing}
+                  title="Full discovery - fetches all hosts from provider"
+                >
+                  {discovering ? 'Discovering...' : 'Discover Hosts'}
+                </button>
+              </div>
             </div>
+
+            {syncResult && (syncResult.summary.new > 0 || syncResult.summary.removed > 0 || syncResult.summary.changed > 0) && (
+              <div className="sync-result-banner">
+                <div className="sync-result-title">Last Sync Results</div>
+                <div className="sync-result-stats">
+                  {syncResult.summary.new > 0 && (
+                    <span className="sync-stat new">
+                      +{syncResult.summary.new} new
+                    </span>
+                  )}
+                  {syncResult.summary.removed > 0 && (
+                    <span className="sync-stat removed">
+                      -{syncResult.summary.removed} removed
+                    </span>
+                  )}
+                  {syncResult.summary.changed > 0 && (
+                    <span className="sync-stat changed">
+                      ~{syncResult.summary.changed} changed
+                    </span>
+                  )}
+                  <span className="sync-stat total">
+                    {syncResult.summary.total} total
+                  </span>
+                </div>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setSyncResult(null)}
+                  title="Dismiss"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
 
             {discoveredHosts.length > 0 && (
               <>

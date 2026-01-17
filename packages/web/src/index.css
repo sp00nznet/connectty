@@ -784,6 +784,62 @@ body {
   font-weight: 600;
 }
 
+.provider-content-header .button-group {
+  display: flex;
+  gap: 8px;
+}
+
+/* Sync Results Banner */
+.sync-result-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.sync-result-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.sync-result-stats {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.sync-stat {
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.sync-stat.new {
+  background-color: rgba(0, 200, 83, 0.2);
+  color: #00c853;
+}
+
+.sync-stat.removed {
+  background-color: rgba(255, 82, 82, 0.2);
+  color: #ff5252;
+}
+
+.sync-stat.changed {
+  background-color: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.sync-stat.total {
+  background-color: rgba(136, 136, 136, 0.2);
+  color: #888;
+}
+
 /* Import Options */
 .import-options {
   display: flex;
