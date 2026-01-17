@@ -1572,27 +1572,6 @@ export default function App() {
               +
             </button>
           </div>
-
-          {/* Plugin Panel Toggle - only show when a plugin is active */}
-          {getAppActivePlugin() !== 'none' && (
-            <button
-              className={`plugin-panel-toggle ${showPluginPanel ? 'active' : ''}`}
-              onClick={() => setShowPluginPanel(!showPluginPanel)}
-              title={`${showPluginPanel ? 'Hide' : 'Show'} ${
-                getAppActivePlugin() === 'hostStats' ? 'Host Stats' :
-                getAppActivePlugin() === 'boxAnalyzer' ? 'Box Analyzer' :
-                getAppActivePlugin() === 'datadogHealth' ? 'Datadog Health' :
-                'Matrix Rain'
-              } panel`}
-            >
-              <span className="plugin-toggle-icon">
-                {getAppActivePlugin() === 'hostStats' ? '📊' :
-                 getAppActivePlugin() === 'boxAnalyzer' ? '🔍' :
-                 getAppActivePlugin() === 'datadogHealth' ? '🐕' : '🟢'}
-              </span>
-              <span className="plugin-toggle-arrow">{showPluginPanel ? '▶' : '◀'}</span>
-            </button>
-          )}
         </div>
 
         {/* Shell Context Menu (right-click on + button) */}
@@ -1802,22 +1781,43 @@ export default function App() {
           </div>
         )}
 
-        {/* Plugin Slide-out Panel */}
-        <div className={`plugin-panel ${showPluginPanel ? 'open' : ''}`}>
-          <div className="plugin-panel-header">
-            <h3>
-              {getAppActivePlugin() === 'hostStats' ? '📊 Host Stats' :
-               getAppActivePlugin() === 'boxAnalyzer' ? '🔍 Box Analyzer' :
-               getAppActivePlugin() === 'datadogHealth' ? '🐕 Datadog Health' :
-               getAppActivePlugin() === 'matrixRain' ? '🟢 Matrix Rain' : 'Plugin'}
-            </h3>
-            <button
-              className="plugin-panel-close"
-              onClick={() => setShowPluginPanel(false)}
+        {/* Plugin Slide-out Panel with Tab Handle */}
+        {getAppActivePlugin() !== 'none' && (
+          <div className={`plugin-panel-container ${showPluginPanel ? 'open' : ''}`}>
+            {/* Tab Handle - appears on right edge of terminal */}
+            <div
+              className="plugin-panel-tab"
+              onClick={() => setShowPluginPanel(!showPluginPanel)}
+              title={`${showPluginPanel ? 'Hide' : 'Show'} ${
+                getAppActivePlugin() === 'hostStats' ? 'Host Stats' :
+                getAppActivePlugin() === 'boxAnalyzer' ? 'Box Analyzer' :
+                getAppActivePlugin() === 'datadogHealth' ? 'Datadog Health' : 'Matrix Rain'
+              }`}
             >
-              &times;
-            </button>
-          </div>
+              <span className="plugin-tab-icon">
+                {getAppActivePlugin() === 'hostStats' ? '📊' :
+                 getAppActivePlugin() === 'boxAnalyzer' ? '🔍' :
+                 getAppActivePlugin() === 'datadogHealth' ? '🐕' : '🟢'}
+              </span>
+              <span className="plugin-tab-arrow">{showPluginPanel ? '▶' : '◀'}</span>
+            </div>
+
+            {/* Panel Content */}
+            <div className="plugin-panel">
+              <div className="plugin-panel-header">
+                <h3>
+                  {getAppActivePlugin() === 'hostStats' ? '📊 Host Stats' :
+                   getAppActivePlugin() === 'boxAnalyzer' ? '🔍 Box Analyzer' :
+                   getAppActivePlugin() === 'datadogHealth' ? '🐕 Datadog Health' :
+                   getAppActivePlugin() === 'matrixRain' ? '🟢 Matrix Rain' : 'Plugin'}
+                </h3>
+                <button
+                  className="plugin-panel-close"
+                  onClick={() => setShowPluginPanel(false)}
+                >
+                  &times;
+                </button>
+              </div>
           <div className="plugin-panel-content">
             {getAppActivePlugin() === 'hostStats' && (
               <div className="plugin-output">
@@ -1893,15 +1893,10 @@ export default function App() {
                 </div>
               </div>
             )}
-            {getAppActivePlugin() === 'none' && (
-              <div className="plugin-output">
-                <p className="plugin-output-empty">
-                  No plugin is active. Enable a plugin in Settings.
-                </p>
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Connection Modal */}
