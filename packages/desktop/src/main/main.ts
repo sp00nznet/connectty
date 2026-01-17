@@ -15,6 +15,7 @@ import { SyncService, CloudSyncService } from './sync';
 import { CommandService } from './command';
 import { SFTPService } from './sftp';
 import { LocalShellService } from './local-shell';
+import { PluginService } from './plugins';
 import { getProviderService } from './providers';
 
 // App settings interface
@@ -24,6 +25,8 @@ interface AppSettings {
   startMinimized: boolean;
   terminalTheme?: 'sync' | 'classic';
   defaultShell?: string;
+  pluginsEnabled?: boolean;
+  enabledPlugins?: string[];
 }
 
 // Initialize settings store
@@ -61,6 +64,7 @@ let cloudSyncService: CloudSyncService;
 let commandService: CommandService;
 let sftpService: SFTPService;
 let localShellService: LocalShellService;
+let pluginService: PluginService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -942,6 +946,8 @@ function setupIpcHandlers(): void {
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
       defaultShell: settingsStore.get('defaultShell'),
+      pluginsEnabled: settingsStore.get('pluginsEnabled') || false,
+      enabledPlugins: settingsStore.get('enabledPlugins') || [],
     };
   });
 
@@ -961,12 +967,20 @@ function setupIpcHandlers(): void {
     if (settings.defaultShell !== undefined) {
       settingsStore.set('defaultShell', settings.defaultShell);
     }
+    if (settings.pluginsEnabled !== undefined) {
+      settingsStore.set('pluginsEnabled', settings.pluginsEnabled);
+    }
+    if (settings.enabledPlugins !== undefined) {
+      settingsStore.set('enabledPlugins', settings.enabledPlugins);
+    }
     return {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
       defaultShell: settingsStore.get('defaultShell'),
+      pluginsEnabled: settingsStore.get('pluginsEnabled') || false,
+      enabledPlugins: settingsStore.get('enabledPlugins') || [],
     };
   });
 
@@ -1012,6 +1026,37 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('localShell:kill', async (_event, sessionId: string) => {
     localShellService.kill(sessionId);
+  });
+
+  // Plugin handlers
+  ipcMain.handle('plugins:startHostStats', async (_event, connectionId: string, sshSessionId: string) => {
+    const sshClient = sshService.getClient(sshSessionId);
+    if (!sshClient) {
+      throw new Error('SSH session not found');
+    }
+
+    pluginService.startStatsCollection(connectionId, sshClient, (stats) => {
+      mainWindow?.webContents.send('plugin:hostStats', stats);
+    });
+
+    return true;
+  });
+
+  ipcMain.handle('plugins:stopHostStats', async (_event, connectionId: string) => {
+    pluginService.stopStatsCollection(connectionId);
+    return true;
+  });
+
+  ipcMain.handle('plugins:getGroupScripts', async (_event, groupId: string) => {
+    return db.getSavedCommandsForGroup(groupId);
+  });
+
+  ipcMain.handle('plugins:getConnectionScripts', async (_event, connectionId: string) => {
+    return db.getSavedCommandsForConnection(connectionId);
+  });
+
+  ipcMain.handle('groups:getConnectionsForGroup', async (_event, groupId: string) => {
+    return db.getConnectionsForGroup(groupId);
   });
 }
 
@@ -1116,6 +1161,7 @@ app.whenReady().then(async () => {
     localShellService = new LocalShellService((sessionId, event) => {
       mainWindow?.webContents.send('localShell:event', sessionId, event);
     });
+    pluginService = new PluginService();
 
     setupIpcHandlers();
   } catch (err) {

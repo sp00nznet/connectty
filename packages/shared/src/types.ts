@@ -204,12 +204,38 @@ export interface DiscoveryResult {
   discoveredAt: Date;
 }
 
+export type GroupMembershipType = 'static' | 'dynamic';
+
+export interface GroupRule {
+  // Pattern matching (e.g., "dev-web-*", "prod-db-*", "*-linux")
+  hostnamePattern?: string;
+  // OS type filtering
+  osType?: OSType | OSType[];
+  // Tag matching
+  tags?: string[];
+  // Provider filtering
+  providerId?: string;
+  // Connection type filtering
+  connectionType?: ConnectionType;
+}
+
 export interface ConnectionGroup {
   id: string;
   name: string;
   description?: string;
   parentId?: string;
   color?: string;
+  // Group type
+  membershipType: GroupMembershipType;
+  // Dynamic group rules (applied automatically)
+  rules?: GroupRule[];
+  // Assigned credentials (auto-applied to matching hosts)
+  credentialId?: string;
+  // Assigned scripts/actions
+  assignedScripts?: string[]; // SavedCommand IDs
+  // Sharing
+  isShared?: boolean;
+  ownerId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -312,6 +338,8 @@ export interface SavedCommand {
   tags?: string[];
   // Variables that can be substituted (e.g., {{username}}, {{password}})
   variables?: CommandVariable[];
+  // Group assignment (for quick access via plugin)
+  assignedGroups?: string[]; // Group IDs this command is assigned to
   // Sharing
   isShared?: boolean;
   ownerId?: string;
@@ -379,4 +407,60 @@ export interface ActionTemplate {
   variables: CommandVariable[];
   linuxCommand?: string;
   windowsCommand?: string;
+}
+
+// ============================================================================
+// Plugin System Types
+// ============================================================================
+
+export type PluginType = 'host-stats' | 'script-manager' | 'custom';
+
+export interface PluginDefinition {
+  id: string;
+  name: string;
+  type: PluginType;
+  description: string;
+  icon?: string;
+  enabled: boolean;
+  settings?: Record<string, unknown>;
+}
+
+export interface HostStats {
+  connectionId: string;
+  timestamp: Date;
+  cpu: {
+    usage: number; // percentage
+    cores: number;
+    loadAverage?: number[];
+  };
+  memory: {
+    total: number; // bytes
+    used: number; // bytes
+    free: number; // bytes
+    usage: number; // percentage
+  };
+  disk: {
+    total: number; // bytes
+    used: number; // bytes
+    free: number; // bytes
+    usage: number; // percentage
+  }[];
+  network: {
+    interface: string;
+    bytesReceived: number;
+    bytesSent: number;
+    packetsReceived: number;
+    packetsSent: number;
+  }[];
+}
+
+export interface AppSettings {
+  minimizeToTray: boolean;
+  closeToTray: boolean;
+  startMinimized: boolean;
+  terminalTheme: 'sync' | 'classic';
+  defaultShell: string;
+  // Plugin settings
+  pluginsEnabled: boolean;
+  enabledPlugins: string[]; // Plugin IDs
 }

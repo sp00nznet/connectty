@@ -95,6 +95,10 @@ export class DatabaseService {
         description TEXT,
         parent_id TEXT,
         color TEXT,
+        membership_type TEXT DEFAULT 'static',
+        rules TEXT DEFAULT NULL,
+        credential_id TEXT,
+        assigned_scripts TEXT DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -144,6 +148,7 @@ export class DatabaseService {
         category TEXT,
         tags TEXT DEFAULT '[]',
         variables TEXT DEFAULT '[]',
+        assigned_groups TEXT DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -195,6 +200,11 @@ export class DatabaseService {
       { table: 'credentials', column: 'auto_assign_patterns', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_patterns TEXT DEFAULT '[]'" },
       { table: 'credentials', column: 'auto_assign_os_types', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_os_types TEXT DEFAULT '[]'" },
       { table: 'credentials', column: 'auto_assign_group', sql: 'ALTER TABLE credentials ADD COLUMN auto_assign_group TEXT' },
+      { table: 'connection_groups', column: 'membership_type', sql: "ALTER TABLE connection_groups ADD COLUMN membership_type TEXT DEFAULT 'static'" },
+      { table: 'connection_groups', column: 'rules', sql: 'ALTER TABLE connection_groups ADD COLUMN rules TEXT DEFAULT NULL' },
+      { table: 'connection_groups', column: 'credential_id', sql: 'ALTER TABLE connection_groups ADD COLUMN credential_id TEXT' },
+      { table: 'connection_groups', column: 'assigned_scripts', sql: "ALTER TABLE connection_groups ADD COLUMN assigned_scripts TEXT DEFAULT '[]'" },
+      { table: 'saved_commands', column: 'assigned_groups', sql: "ALTER TABLE saved_commands ADD COLUMN assigned_groups TEXT DEFAULT '[]'" },
     ];
 
     // Cache table schemas to avoid multiple PRAGMA calls (optimization)
@@ -516,11 +526,23 @@ export class DatabaseService {
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(`
-      INSERT INTO connection_groups (id, name, description, parent_id, color, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO connection_groups (id, name, description, parent_id, color, membership_type, rules, credential_id, assigned_scripts, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, data.name, data.description || null, data.parentId || null, data.color || null, now, now);
+    stmt.run(
+      id,
+      data.name,
+      data.description || null,
+      data.parentId || null,
+      data.color || null,
+      data.membershipType || 'static',
+      data.rules ? JSON.stringify(data.rules) : null,
+      data.credentialId || null,
+      data.assignedScripts ? JSON.stringify(data.assignedScripts) : '[]',
+      now,
+      now
+    );
 
     return this.getGroup(id)!;
   }
@@ -549,6 +571,22 @@ export class DatabaseService {
       fields.push('color = ?');
       values.push(updates.color);
     }
+    if (updates.membershipType !== undefined) {
+      fields.push('membership_type = ?');
+      values.push(updates.membershipType);
+    }
+    if (updates.rules !== undefined) {
+      fields.push('rules = ?');
+      values.push(updates.rules ? JSON.stringify(updates.rules) : null);
+    }
+    if (updates.credentialId !== undefined) {
+      fields.push('credential_id = ?');
+      values.push(updates.credentialId);
+    }
+    if (updates.assignedScripts !== undefined) {
+      fields.push('assigned_scripts = ?');
+      values.push(JSON.stringify(updates.assignedScripts));
+    }
 
     values.push(id);
     const stmt = this.db.prepare(`UPDATE connection_groups SET ${fields.join(', ')} WHERE id = ?`);
@@ -561,6 +599,95 @@ export class DatabaseService {
     const stmt = this.db.prepare('DELETE FROM connection_groups WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
+  }
+
+  // Get connections that match a group's dynamic rules
+  getConnectionsForGroup(groupId: string): ServerConnection[] {
+    const group = this.getGroup(groupId);
+    if (!group || group.membershipType !== 'dynamic' || !group.rules) {
+      // For static groups, return connections explicitly assigned to this group
+      const stmt = this.db.prepare('SELECT * FROM connections WHERE group_id = ? ORDER BY name');
+      const rows = stmt.all(groupId) as ConnectionRow[];
+      return rows.map(this.rowToConnection);
+    }
+
+    // For dynamic groups, filter all connections based on rules
+    const allConnections = this.getConnections();
+    return allConnections.filter(conn => this.connectionMatchesGroupRules(conn, group.rules!));
+  }
+
+  // Check if a connection matches group rules
+  private connectionMatchesGroupRules(connection: ServerConnection, rules: import('@connectty/shared').GroupRule[]): boolean {
+    // A connection must match ALL rules (AND logic)
+    return rules.every(rule => {
+      // Hostname pattern matching
+      if (rule.hostnamePattern) {
+        const pattern = this.wildcardToRegex(rule.hostnamePattern);
+        if (!pattern.test(connection.hostname) && !pattern.test(connection.name)) {
+          return false;
+        }
+      }
+
+      // OS type filtering
+      if (rule.osType) {
+        const osTypes = Array.isArray(rule.osType) ? rule.osType : [rule.osType];
+        if (connection.osType && !osTypes.includes(connection.osType)) {
+          return false;
+        }
+      }
+
+      // Tag matching
+      if (rule.tags && rule.tags.length > 0) {
+        const hasMatchingTag = rule.tags.some(tag => connection.tags.includes(tag));
+        if (!hasMatchingTag) {
+          return false;
+        }
+      }
+
+      // Provider filtering
+      if (rule.providerId && connection.providerId !== rule.providerId) {
+        return false;
+      }
+
+      // Connection type filtering
+      if (rule.connectionType && connection.connectionType !== rule.connectionType) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  // Convert wildcard pattern to regex (*, ?)
+  private wildcardToRegex(pattern: string): RegExp {
+    // Escape special regex characters except * and ?
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    // Convert * to .* and ? to .
+    const regex = escaped.replace(/\*/g, '.*').replace(/\?/g, '.');
+    return new RegExp(`^${regex}$`, 'i'); // Case insensitive
+  }
+
+  // Update connection's group based on dynamic group rules
+  updateDynamicGroupMembership(connectionId: string): void {
+    const connection = this.getConnection(connectionId);
+    if (!connection) return;
+
+    const dynamicGroups = this.getGroups().filter(g => g.membershipType === 'dynamic' && g.rules);
+
+    for (const group of dynamicGroups) {
+      const matches = this.connectionMatchesGroupRules(connection, group.rules!);
+
+      if (matches && connection.group !== group.id) {
+        // Assign to this dynamic group
+        this.updateConnection(connectionId, { group: group.id });
+
+        // Auto-assign credential if group has one
+        if (group.credentialId && !connection.credentialId) {
+          this.updateConnection(connectionId, { credentialId: group.credentialId });
+        }
+        break; // Only assign to first matching dynamic group
+      }
+    }
   }
 
   // Provider methods
@@ -775,9 +902,9 @@ export class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO saved_commands (
         id, name, description, type, target_os, command,
-        script_content, script_language, category, tags, variables,
+        script_content, script_language, category, tags, variables, assigned_groups,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -792,6 +919,7 @@ export class DatabaseService {
       data.category || null,
       JSON.stringify(data.tags || []),
       JSON.stringify(data.variables || []),
+      JSON.stringify(data.assignedGroups || []),
       now,
       now
     );
@@ -847,6 +975,10 @@ export class DatabaseService {
       fields.push('variables = ?');
       values.push(JSON.stringify(updates.variables));
     }
+    if (updates.assignedGroups !== undefined) {
+      fields.push('assigned_groups = ?');
+      values.push(JSON.stringify(updates.assignedGroups));
+    }
 
     values.push(id);
     const stmt = this.db.prepare(`UPDATE saved_commands SET ${fields.join(', ')} WHERE id = ?`);
@@ -859,6 +991,23 @@ export class DatabaseService {
     const stmt = this.db.prepare('DELETE FROM saved_commands WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
+  }
+
+  // Get scripts assigned to a specific group
+  getSavedCommandsForGroup(groupId: string): SavedCommand[] {
+    const allCommands = this.getSavedCommands();
+    return allCommands.filter(cmd =>
+      cmd.assignedGroups && cmd.assignedGroups.includes(groupId)
+    );
+  }
+
+  // Get scripts assigned to a connection (based on its group)
+  getSavedCommandsForConnection(connectionId: string): SavedCommand[] {
+    const connection = this.getConnection(connectionId);
+    if (!connection || !connection.group) {
+      return [];
+    }
+    return this.getSavedCommandsForGroup(connection.group);
   }
 
   // Command execution history methods
@@ -1039,6 +1188,10 @@ export class DatabaseService {
       description: row.description || undefined,
       parentId: row.parent_id || undefined,
       color: row.color || undefined,
+      membershipType: (row.membership_type || 'static') as 'static' | 'dynamic',
+      rules: row.rules ? JSON.parse(row.rules) : undefined,
+      credentialId: row.credential_id || undefined,
+      assignedScripts: row.assigned_scripts ? JSON.parse(row.assigned_scripts) : undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
@@ -1094,6 +1247,7 @@ export class DatabaseService {
       category: row.category || undefined,
       tags: JSON.parse(row.tags || '[]'),
       variables: JSON.parse(row.variables || '[]') as CommandVariable[],
+      assignedGroups: JSON.parse(row.assigned_groups || '[]'),
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
@@ -1187,6 +1341,10 @@ interface GroupRow {
   description: string | null;
   parent_id: string | null;
   color: string | null;
+  membership_type: string;
+  rules: string | null;
+  credential_id: string | null;
+  assigned_scripts: string;
   created_at: string;
   updated_at: string;
 }
@@ -1235,6 +1393,7 @@ interface SavedCommandRow {
   category: string | null;
   tags: string;
   variables: string;
+  assigned_groups: string;
   created_at: string;
   updated_at: string;
 }

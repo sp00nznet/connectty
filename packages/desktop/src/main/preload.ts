@@ -18,6 +18,7 @@ import type {
   CommandResult,
   HostFilter,
   CommandTargetOS,
+  HostStats,
 } from '@connectty/shared';
 
 // SFTP types (matching the types in sftp.ts)
@@ -105,6 +106,8 @@ export interface AppSettings {
   syncAccounts?: SyncAccount[];
   terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
   defaultShell?: string;  // ID of the default shell to open when clicking +
+  pluginsEnabled?: boolean;
+  enabledPlugins?: string[];
 }
 
 // Local shell types
@@ -155,6 +158,8 @@ const api = {
     update: (id: string, updates: Partial<ConnectionGroup>): Promise<ConnectionGroup | null> =>
       ipcRenderer.invoke('groups:update', id, updates),
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('groups:delete', id),
+    getConnectionsForGroup: (groupId: string): Promise<ServerConnection[]> =>
+      ipcRenderer.invoke('groups:getConnectionsForGroup', groupId),
   },
 
   // Provider operations
@@ -393,6 +398,25 @@ const api = {
       };
       ipcRenderer.on('localShell:event', handler);
       return () => ipcRenderer.removeListener('localShell:event', handler);
+    },
+  },
+
+  // Plugin operations
+  plugins: {
+    startHostStats: (connectionId: string, sshSessionId: string): Promise<boolean> =>
+      ipcRenderer.invoke('plugins:startHostStats', connectionId, sshSessionId),
+    stopHostStats: (connectionId: string): Promise<boolean> =>
+      ipcRenderer.invoke('plugins:stopHostStats', connectionId),
+    getGroupScripts: (groupId: string): Promise<SavedCommand[]> =>
+      ipcRenderer.invoke('plugins:getGroupScripts', groupId),
+    getConnectionScripts: (connectionId: string): Promise<SavedCommand[]> =>
+      ipcRenderer.invoke('plugins:getConnectionScripts', connectionId),
+    onHostStats: (callback: (stats: HostStats) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, stats: HostStats) => {
+        callback(stats);
+      };
+      ipcRenderer.on('plugin:hostStats', handler);
+      return () => ipcRenderer.removeListener('plugin:hostStats', handler);
     },
   },
 };
