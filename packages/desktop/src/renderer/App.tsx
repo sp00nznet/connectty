@@ -376,7 +376,7 @@ export default function App() {
       };
 
       window.connectty.window?.setTitleBarOverlay?.({
-        color: adjustColor(bgSecondary, 0.9), // Darken by 10% to match CSS rendering
+        color: adjustColor(bgSecondary, 0.85), // Darken by 15% to match CSS rendering
         symbolColor: textPrimary,
       });
     }, 50);
@@ -403,15 +403,15 @@ export default function App() {
     };
 
     if (isAnyModalOpen) {
-      // Darken more for modal backdrop effect (0.9 base * 0.6 modal = 0.54)
+      // Darken more for modal backdrop effect (0.85 base * 0.6 modal = 0.51)
       window.connectty.window?.setTitleBarOverlay?.({
-        color: adjustColor(bgSecondary, 0.54),
+        color: adjustColor(bgSecondary, 0.51),
         symbolColor: textPrimary,
       });
     } else {
-      // Normal state: darken by 10% to compensate for Windows rendering
+      // Normal state: darken by 15% to compensate for Windows rendering
       window.connectty.window?.setTitleBarOverlay?.({
-        color: adjustColor(bgSecondary, 0.9),
+        color: adjustColor(bgSecondary, 0.85),
         symbolColor: textPrimary,
       });
     }
