@@ -18,13 +18,10 @@ const projectRoot = path.resolve(__dirname, '..', '..', '..');
 const sevenZipBinDir = path.join(projectRoot, 'node_modules', '7zip-bin', 'win', 'x64');
 const sevenZipBinExe = path.join(sevenZipBinDir, '7za.exe');
 
-// Check if 7za.exe already exists
-if (fs.existsSync(sevenZipBinExe)) {
-  console.log('7zip-bin: 7za.exe already exists, skipping fix');
-  process.exit(0);
-}
-
-console.log('7zip-bin: 7za.exe missing, attempting to fix...');
+// Always copy fresh - electron-builder's "install production dependencies"
+// step can break previously-fixed 7zip-bin
+console.log(`7zip-bin: Target path: ${sevenZipBinExe}`);
+console.log('7zip-bin: Force copying from system 7-Zip...');
 
 // Common 7-Zip installation paths
 const sevenZipPaths = [
