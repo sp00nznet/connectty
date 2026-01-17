@@ -372,6 +372,12 @@ const api = {
     platform: (): Promise<string> => ipcRenderer.invoke('app:platform'),
   },
 
+  // Window operations
+  window: {
+    setTitleBarOverlay: (options: { color: string; symbolColor: string }): Promise<boolean> =>
+      ipcRenderer.invoke('window:setTitleBarOverlay', options),
+  },
+
   // Local shell operations
   localShell: {
     getAvailable: (): Promise<LocalShellInfo[]> => ipcRenderer.invoke('localShell:getAvailable'),
