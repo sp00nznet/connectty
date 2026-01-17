@@ -23,6 +23,7 @@ interface AppSettings {
   closeToTray: boolean;
   startMinimized: boolean;
   terminalTheme?: 'sync' | 'classic';
+  defaultShell?: string;
 }
 
 // Initialize settings store
