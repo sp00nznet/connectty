@@ -44,6 +44,7 @@ export function createGroup(
   const now = new Date();
   return {
     id: generateId(),
+    membershipType: 'static',
     createdAt: now,
     updatedAt: now,
     ...partial,
