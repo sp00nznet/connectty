@@ -112,6 +112,8 @@ export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
   const [showRepeatedActionsModal, setShowRepeatedActionsModal] = useState(false);
@@ -1161,20 +1163,31 @@ export default function App() {
       const result = await window.connectty.providers.sync(provider.id);
       setLastSyncResult(result);
 
-      const messages: string[] = [];
-      if (result.summary.new > 0) messages.push(`${result.summary.new} new`);
-      if (result.summary.removed > 0) messages.push(`${result.summary.removed} removed`);
-      if (result.summary.changed > 0) messages.push(`${result.summary.changed} changed`);
-
-      if (messages.length > 0) {
-        showNotification('success', `Sync complete: ${messages.join(', ')}`);
-      } else {
-        showNotification('success', 'Sync complete: No changes detected');
-      }
-
       // Refresh the discovered hosts list
       const hosts = await window.connectty.discovered.list(provider.id);
       setDiscoveredHosts(hosts);
+
+      // Count hosts available to import (not yet imported)
+      const availableToImport = hosts.filter(h => !h.imported).length;
+
+      const messages: string[] = [];
+      if (result.summary.new > 0) messages.push(`${result.summary.new} new on provider`);
+      if (result.summary.removed > 0) messages.push(`${result.summary.removed} removed`);
+      if (result.summary.changed > 0) messages.push(`${result.summary.changed} changed`);
+
+      let notification = '';
+      if (messages.length > 0) {
+        notification = `Sync complete: ${messages.join(', ')}`;
+      } else {
+        notification = 'Sync complete: No changes on provider';
+      }
+
+      // Always show how many hosts are available to import
+      if (availableToImport > 0) {
+        notification += ` (${availableToImport} available to import)`;
+      }
+
+      showNotification('success', notification);
     } catch (err) {
       showNotification('error', `Sync failed: ${(err as Error).message}`);
     }
@@ -1320,19 +1333,53 @@ export default function App() {
                 </div>
               ))}
               <div className="profile-menu-divider" />
-              <button
-                className="profile-menu-item profile-add-btn"
-                onClick={() => {
-                  const name = window.prompt('Enter profile name:');
-                  if (name?.trim()) handleCreateProfile(name.trim());
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                New Profile
-              </button>
+              {isCreatingProfile ? (
+                <div className="profile-create-form">
+                  <input
+                    type="text"
+                    className="profile-create-input"
+                    value={newProfileName}
+                    onChange={(e) => setNewProfileName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newProfileName.trim()) {
+                        handleCreateProfile(newProfileName.trim());
+                        setNewProfileName('');
+                        setIsCreatingProfile(false);
+                      }
+                      if (e.key === 'Escape') {
+                        setNewProfileName('');
+                        setIsCreatingProfile(false);
+                      }
+                    }}
+                    placeholder="Profile name"
+                    autoFocus
+                  />
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={() => {
+                      if (newProfileName.trim()) {
+                        handleCreateProfile(newProfileName.trim());
+                        setNewProfileName('');
+                        setIsCreatingProfile(false);
+                      }
+                    }}
+                    disabled={!newProfileName.trim()}
+                  >
+                    Add
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="profile-menu-item profile-add-btn"
+                  onClick={() => setIsCreatingProfile(true)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  New Profile
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -5580,6 +5627,15 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     const saved = localStorage.getItem('settings-defaultshell-expanded');
     return saved !== null ? saved === 'true' : true;
   });
+  const [pluginsExpanded, setPluginsExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-plugins-expanded');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // Plugin enable/disable states
+  const [hostStatsEnabled, setHostStatsEnabled] = useState(settings.pluginsEnabled !== false);
+  const [boxAnalyzerEnabled, setBoxAnalyzerEnabled] = useState(settings.boxAnalysis?.pollingEnabled !== false);
+  const [datadogHealthEnabled, setDatadogHealthEnabled] = useState(settings.datadogHealth?.enabled === true);
 
   // Save collapse states to localStorage when they change
   useEffect(() => {
@@ -5597,6 +5653,9 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   useEffect(() => {
     localStorage.setItem('settings-defaultshell-expanded', String(defaultShellExpanded));
   }, [defaultShellExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-plugins-expanded', String(pluginsExpanded));
+  }, [pluginsExpanded]);
 
   // Sync accounts state
   const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
@@ -5641,6 +5700,23 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         terminalTheme,
         defaultShell,
         syncAccounts,
+        pluginsEnabled: hostStatsEnabled,
+        boxAnalysis: {
+          pollingEnabled: boxAnalyzerEnabled,
+          pollingInterval: 60,
+          datadogEnabled: false,
+        },
+        datadogHealth: {
+          enabled: datadogHealthEnabled,
+          apiKey: settings.datadogHealth?.apiKey || '',
+          appKey: settings.datadogHealth?.appKey || '',
+          pollInterval: 15,
+          thresholds: settings.datadogHealth?.thresholds || {
+            cpu: { yellow: 70, red: 90 },
+            memory: { yellow: 75, red: 90 },
+            disk: { yellow: 80, red: 95 },
+          },
+        },
       });
       onClose();
     } finally {
@@ -6204,6 +6280,107 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                         + Add Account...
                       </button>
                     )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Plugins Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setPluginsExpanded(!pluginsExpanded)}
+              >
+                <span className={`collapse-icon ${pluginsExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Plugins</h4>
+                <span className="settings-badge">
+                  {[hostStatsEnabled, boxAnalyzerEnabled, datadogHealthEnabled].filter(Boolean).length} enabled
+                </span>
+              </button>
+              {pluginsExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Enable or disable plugins to add extra functionality to your sessions.
+                  </p>
+
+                  <div className="plugin-list">
+                    {/* Host Stats Plugin */}
+                    <div className="plugin-item">
+                      <div className="plugin-info">
+                        <div className="plugin-header">
+                          <span className="plugin-icon">📊</span>
+                          <span className="plugin-name">Host Stats</span>
+                        </div>
+                        <p className="plugin-description">
+                          Shows real-time CPU, memory, and disk usage for connected SSH sessions.
+                        </p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={hostStatsEnabled}
+                          onChange={(e) => setHostStatsEnabled(e.target.checked)}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    {/* Box Analyzer Plugin */}
+                    <div className="plugin-item">
+                      <div className="plugin-info">
+                        <div className="plugin-header">
+                          <span className="plugin-icon">🔍</span>
+                          <span className="plugin-name">Box Analyzer</span>
+                        </div>
+                        <p className="plugin-description">
+                          "What Does This Box Do?" - Analyzes running processes, services, and connections to determine system purpose.
+                        </p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={boxAnalyzerEnabled}
+                          onChange={(e) => setBoxAnalyzerEnabled(e.target.checked)}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    {/* Datadog Health Plugin */}
+                    <div className="plugin-item">
+                      <div className="plugin-info">
+                        <div className="plugin-header">
+                          <span className="plugin-icon">🐕</span>
+                          <span className="plugin-name">Datadog Health</span>
+                        </div>
+                        <p className="plugin-description">
+                          Shows health status indicators (green/yellow/red) for hosts monitored by Datadog.
+                        </p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={datadogHealthEnabled}
+                          onChange={(e) => setDatadogHealthEnabled(e.target.checked)}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    {/* Matrix Plugin */}
+                    <div className="plugin-item">
+                      <div className="plugin-info">
+                        <div className="plugin-header">
+                          <span className="plugin-icon">🟢</span>
+                          <span className="plugin-name">Matrix Rain</span>
+                        </div>
+                        <p className="plugin-description">
+                          Displays the classic Matrix falling code effect when no session is active.
+                        </p>
+                      </div>
+                      <span className="plugin-status">Coming soon</span>
+                    </div>
                   </div>
                 </div>
               )}
