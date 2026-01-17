@@ -358,12 +358,25 @@ export default function App() {
 
     // Update Windows title bar overlay to match theme
     // Use --bg-secondary to match the tab bar background
+    // Note: Title bar color is adjusted in the modal effect below
     setTimeout(() => {
       const style = getComputedStyle(document.documentElement);
       const bgSecondary = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
       const textPrimary = style.getPropertyValue('--text-primary').trim() || '#edf2f4';
+
+      // Windows renders titleBarOverlay slightly lighter than CSS, so darken by ~10% to compensate
+      const adjustColor = (hex: string, factor: number): string => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        const dr = Math.round(r * factor);
+        const dg = Math.round(g * factor);
+        const db = Math.round(b * factor);
+        return `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
+      };
+
       window.connectty.window?.setTitleBarOverlay?.({
-        color: bgSecondary,
+        color: adjustColor(bgSecondary, 0.9), // Darken by 10% to match CSS rendering
         symbolColor: textPrimary,
       });
     }, 50);
@@ -378,28 +391,27 @@ export default function App() {
     const bgSecondary = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
     const textPrimary = style.getPropertyValue('--text-primary').trim() || '#edf2f4';
 
-    if (isAnyModalOpen) {
-      // Darken the title bar to simulate backdrop effect
-      // Convert hex to RGB, darken by ~40% to match backdrop opacity
-      const darkenColor = (hex: string): string => {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        // Darken by multiplying by 0.6 (40% darker)
-        const dr = Math.round(r * 0.6);
-        const dg = Math.round(g * 0.6);
-        const db = Math.round(b * 0.6);
-        return `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
-      };
+    // Helper to adjust color brightness
+    const adjustColor = (hex: string, factor: number): string => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      const dr = Math.round(r * factor);
+      const dg = Math.round(g * factor);
+      const db = Math.round(b * factor);
+      return `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
+    };
 
+    if (isAnyModalOpen) {
+      // Darken more for modal backdrop effect (0.9 base * 0.6 modal = 0.54)
       window.connectty.window?.setTitleBarOverlay?.({
-        color: darkenColor(bgSecondary),
+        color: adjustColor(bgSecondary, 0.54),
         symbolColor: textPrimary,
       });
     } else {
-      // Restore normal title bar color
+      // Normal state: darken by 10% to compensate for Windows rendering
       window.connectty.window?.setTitleBarOverlay?.({
-        color: bgSecondary,
+        color: adjustColor(bgSecondary, 0.9),
         symbolColor: textPrimary,
       });
     }
