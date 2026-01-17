@@ -123,15 +123,17 @@ async function createWindow(): Promise<void> {
     },
   };
 
-  // On Windows, hide the menu bar (title bar remains for window controls)
-  // Note: We tried titleBarOverlay but it doesn't allow custom colors reliably
+  // On Windows, use title bar overlay for theme-matching title bar
+  if (process.platform === 'win32') {
+    windowOptions.titleBarStyle = 'hidden';
+    windowOptions.titleBarOverlay = {
+      color: '#1a1a2e',
+      symbolColor: '#edf2f4',
+      height: 32,
+    };
+  }
 
   mainWindow = new BrowserWindow(windowOptions);
-
-  // Hide menu bar on Windows
-  if (process.platform === 'win32') {
-    mainWindow.setMenuBarVisibility(false);
-  }
 
   // Handle minimize to tray
   mainWindow.on('minimize', (event: Electron.Event) => {
@@ -959,6 +961,24 @@ function setupIpcHandlers(): void {
       startMinimized: settingsStore.get('startMinimized'),
       terminalTheme: settingsStore.get('terminalTheme') || 'classic',
     };
+  });
+
+  // Title bar overlay handler (Windows only)
+  ipcMain.handle('window:setTitleBarOverlay', async (_event, options: { color: string; symbolColor: string }) => {
+    if (process.platform === 'win32' && mainWindow) {
+      try {
+        mainWindow.setTitleBarOverlay({
+          color: options.color,
+          symbolColor: options.symbolColor,
+          height: 32,
+        });
+        return true;
+      } catch (err) {
+        console.error('Failed to set title bar overlay:', err);
+        return false;
+      }
+    }
+    return false;
   });
 
   // Local shell handlers
