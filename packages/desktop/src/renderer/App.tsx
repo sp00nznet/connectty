@@ -357,13 +357,13 @@ export default function App() {
     localStorage.setItem('connectty-theme', theme);
 
     // Update Windows title bar overlay to match theme
-    // Use setTimeout to ensure CSS variables are applied first
+    // Use --bg-secondary to match the tab bar background
     setTimeout(() => {
       const style = getComputedStyle(document.documentElement);
-      const bgPrimary = style.getPropertyValue('--bg-primary').trim() || '#1a1a2e';
+      const bgSecondary = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
       const textPrimary = style.getPropertyValue('--text-primary').trim() || '#edf2f4';
       window.connectty.window?.setTitleBarOverlay?.({
-        color: bgPrimary,
+        color: bgSecondary,
         symbolColor: textPrimary,
       });
     }, 50);
