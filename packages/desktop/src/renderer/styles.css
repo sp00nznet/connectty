@@ -2722,6 +2722,7 @@ body {
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
+  min-height: 41px; /* Match session-tab height (10px padding * 2 + line height) */
 }
 
 .session-tab {
