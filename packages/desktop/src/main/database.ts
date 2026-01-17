@@ -200,6 +200,8 @@ export class DatabaseService {
       { table: 'connections', column: 'provider_id', sql: 'ALTER TABLE connections ADD COLUMN provider_id TEXT' },
       { table: 'connections', column: 'provider_host_id', sql: 'ALTER TABLE connections ADD COLUMN provider_host_id TEXT' },
       { table: 'connections', column: 'serial_settings', sql: 'ALTER TABLE connections ADD COLUMN serial_settings TEXT' },
+      { table: 'connections', column: 'health_status', sql: 'ALTER TABLE connections ADD COLUMN health_status TEXT' },
+      { table: 'connections', column: 'health_last_checked', sql: 'ALTER TABLE connections ADD COLUMN health_last_checked TEXT' },
       { table: 'credentials', column: 'domain', sql: 'ALTER TABLE credentials ADD COLUMN domain TEXT' },
       { table: 'credentials', column: 'auto_assign_patterns', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_patterns TEXT DEFAULT '[]'" },
       { table: 'credentials', column: 'auto_assign_os_types', sql: "ALTER TABLE credentials ADD COLUMN auto_assign_os_types TEXT DEFAULT '[]'" },
@@ -1269,6 +1271,8 @@ export class DatabaseService {
       serialSettings: row.serial_settings ? JSON.parse(row.serial_settings) : undefined,
       providerId: row.provider_id || undefined,
       providerHostId: row.provider_host_id || undefined,
+      healthStatus: row.health_status as import('@connectty/shared').HealthStatus | undefined,
+      healthLastChecked: row.health_last_checked ? new Date(row.health_last_checked) : undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
       lastConnectedAt: row.last_connected_at ? new Date(row.last_connected_at) : undefined,
@@ -1475,6 +1479,8 @@ interface ConnectionRow {
   serial_settings: string | null;
   provider_id: string | null;
   provider_host_id: string | null;
+  health_status: string | null;
+  health_last_checked: string | null;
   created_at: string;
   updated_at: string;
   last_connected_at: string | null;

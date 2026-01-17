@@ -42,6 +42,9 @@ export interface ServerConnection {
   // Provider info (if discovered)
   providerId?: string;
   providerHostId?: string;
+  // Health status (from Datadog health plugin)
+  healthStatus?: HealthStatus;
+  healthLastChecked?: Date;
   // Sharing
   isShared?: boolean;
   ownerId?: string;
@@ -442,7 +445,7 @@ export interface ActionTemplate {
 // Plugin System Types
 // ============================================================================
 
-export type PluginType = 'host-stats' | 'script-manager' | 'box-analyzer' | 'matrix' | 'custom';
+export type PluginType = 'host-stats' | 'script-manager' | 'box-analyzer' | 'matrix' | 'datadog-health' | 'custom';
 
 export interface PluginDefinition {
   id: string;
@@ -553,6 +556,49 @@ export interface MatrixConfig {
   useJapanese: boolean; // Use Japanese katakana characters (default: true)
 }
 
+// ============================================================================
+// Datadog Health Monitoring Plugin Types
+// ============================================================================
+
+export type HealthStatus = 'green' | 'yellow' | 'red' | 'unknown';
+
+export interface DatadogHealthConfig {
+  enabled: boolean;
+  apiKey: string;
+  appKey: string;
+  site?: string;          // Datadog site (datadoghq.com, datadoghq.eu, etc.)
+  pollInterval: number;   // Minutes between polls (default: 15)
+
+  // Thresholds for health status calculation
+  thresholds: {
+    cpu: {
+      yellow: number;     // CPU usage % to trigger yellow (default: 70)
+      red: number;        // CPU usage % to trigger red (default: 90)
+    };
+    memory: {
+      yellow: number;     // Memory usage % to trigger yellow (default: 75)
+      red: number;        // Memory usage % to trigger red (default: 90)
+    };
+    disk: {
+      yellow: number;     // Disk usage % to trigger yellow (default: 80)
+      red: number;        // Disk usage % to trigger red (default: 95)
+    };
+  };
+}
+
+export interface ConnectionHealthStatus {
+  connectionId: string;
+  hostname: string;
+  status: HealthStatus;
+  lastChecked: Date;
+  metrics?: {
+    cpu?: number;         // Current CPU usage %
+    memory?: number;      // Current memory usage %
+    disk?: number;        // Highest disk usage %
+  };
+  issues?: string[];      // List of current issues (e.g., "High CPU usage: 95%")
+}
+
 export interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
@@ -566,4 +612,6 @@ export interface AppSettings {
   boxAnalysis?: BoxAnalysisSettings;
   // Matrix plugin settings
   matrixConfig?: MatrixConfig;
+  // Datadog health monitoring settings
+  datadogHealth?: DatadogHealthConfig;
 }

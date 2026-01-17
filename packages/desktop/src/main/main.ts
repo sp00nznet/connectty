@@ -18,6 +18,7 @@ import { LocalShellService } from './local-shell';
 import { PluginService } from './plugins';
 import { BoxAnalyzerService } from './box-analyzer';
 import { MatrixPluginService } from './matrix-plugin';
+import { DatadogHealthService } from './datadog-health';
 import { getProviderService } from './providers';
 
 // App settings interface
@@ -71,6 +72,7 @@ let localShellService: LocalShellService;
 let pluginService: PluginService;
 let boxAnalyzerService: BoxAnalyzerService;
 let matrixPluginService: MatrixPluginService;
+let datadogHealthService: DatadogHealthService;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -1166,6 +1168,47 @@ function setupIpcHandlers(): void {
   ipcMain.handle('matrix:getCharacterSet', async (_event, useJapanese: boolean) => {
     return matrixPluginService.getCharacterSet(useJapanese);
   });
+
+  // Datadog health monitoring plugin handlers
+  ipcMain.handle('datadogHealth:start', async (_event, config: import('@connectty/shared').DatadogHealthConfig) => {
+    return datadogHealthService.start(config);
+  });
+
+  ipcMain.handle('datadogHealth:stop', async () => {
+    datadogHealthService.stop();
+    return true;
+  });
+
+  ipcMain.handle('datadogHealth:getDefaultConfig', async () => {
+    return datadogHealthService.getDefaultConfig();
+  });
+
+  ipcMain.handle('datadogHealth:validateConfig', async (_event, config: Partial<import('@connectty/shared').DatadogHealthConfig>) => {
+    return datadogHealthService.validateConfig(config);
+  });
+
+  ipcMain.handle('datadogHealth:getHealthStatus', async (_event, connectionId: string) => {
+    return datadogHealthService.getHealthStatus(connectionId);
+  });
+
+  ipcMain.handle('datadogHealth:getAllHealthStatuses', async () => {
+    return datadogHealthService.getAllHealthStatuses();
+  });
+
+  ipcMain.handle('datadogHealth:forcePoll', async (_event, config: import('@connectty/shared').DatadogHealthConfig) => {
+    await datadogHealthService.forcePoll(config);
+    return true;
+  });
+
+  ipcMain.handle('datadogHealth:clearCache', async () => {
+    datadogHealthService.clearCache();
+    return true;
+  });
+
+  // Register health update event handler
+  datadogHealthService.onHealthUpdate((status) => {
+    mainWindow?.webContents.send('datadogHealth:statusUpdate', status);
+  });
 }
 
 /**
@@ -1272,6 +1315,7 @@ app.whenReady().then(async () => {
     pluginService = new PluginService();
     boxAnalyzerService = new BoxAnalyzerService();
     matrixPluginService = new MatrixPluginService();
+    datadogHealthService = new DatadogHealthService(db);
 
     setupIpcHandlers();
   } catch (err) {

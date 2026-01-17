@@ -23,6 +23,8 @@ import type {
   SystemTheory,
   BoxAnalysisSettings,
   MatrixConfig,
+  DatadogHealthConfig,
+  ConnectionHealthStatus,
 } from '@connectty/shared';
 
 // SFTP types (matching the types in sftp.ts)
@@ -458,6 +460,33 @@ const api = {
       ipcRenderer.invoke('matrix:validateConfig', config),
     getCharacterSet: (useJapanese: boolean): Promise<string> =>
       ipcRenderer.invoke('matrix:getCharacterSet', useJapanese),
+  },
+
+  // Datadog health monitoring plugin operations
+  datadogHealth: {
+    start: (config: DatadogHealthConfig): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:start', config),
+    stop: (): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:stop'),
+    getDefaultConfig: (): Promise<DatadogHealthConfig> =>
+      ipcRenderer.invoke('datadogHealth:getDefaultConfig'),
+    validateConfig: (config: Partial<DatadogHealthConfig>): Promise<DatadogHealthConfig> =>
+      ipcRenderer.invoke('datadogHealth:validateConfig', config),
+    getHealthStatus: (connectionId: string): Promise<ConnectionHealthStatus | undefined> =>
+      ipcRenderer.invoke('datadogHealth:getHealthStatus', connectionId),
+    getAllHealthStatuses: (): Promise<ConnectionHealthStatus[]> =>
+      ipcRenderer.invoke('datadogHealth:getAllHealthStatuses'),
+    forcePoll: (config: DatadogHealthConfig): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:forcePoll', config),
+    clearCache: (): Promise<boolean> =>
+      ipcRenderer.invoke('datadogHealth:clearCache'),
+    onStatusUpdate: (callback: (status: ConnectionHealthStatus) => void): (() => void) => {
+      const handler = (_event: IpcRendererEvent, status: ConnectionHealthStatus) => {
+        callback(status);
+      };
+      ipcRenderer.on('datadogHealth:statusUpdate', handler);
+      return () => ipcRenderer.removeListener('datadogHealth:statusUpdate', handler);
+    },
   },
 };
 
