@@ -254,6 +254,8 @@ interface ExtendedSyncData extends SyncData {
   defaultShell?: string;
   deviceName?: string;
   deviceId?: string;
+  profileId?: string;
+  profileName?: string;
 }
 
 /**
@@ -648,6 +650,7 @@ export class CloudSyncService {
 
   /**
    * Upload configuration to cloud storage
+   * Each profile gets its own sync file to prevent data mixing
    */
   async upload(
     accountId: string,
@@ -662,10 +665,17 @@ export class CloudSyncService {
       // Refresh token if needed
       await this.refreshTokenIfNeeded(account);
 
-      // Build sync data with options
+      // Get active profile info
+      const activeProfileId = this.db.getActiveProfileId();
+      const activeProfile = this.db.getProfile(activeProfileId);
+      const profileName = activeProfile?.name || 'Default';
+
+      // Build sync data with options (includes profile info)
       const syncData = this.buildSyncData(options);
       const content = JSON.stringify(syncData, null, 2);
-      const filename = `connectty-config-${this.deviceId}.json`;
+
+      // Include profile ID in filename so each profile has separate sync data
+      const filename = `connectty-config-${this.deviceId}-${activeProfileId}.json`;
 
       // Upload based on provider
       switch (account.provider) {
@@ -753,12 +763,18 @@ export class CloudSyncService {
     const exportData = this.db.exportAll();
     const settings = (this.db.getSettings?.() || {}) as StoredSettings;
 
+    // Get active profile info - sync data is always profile-specific
+    const activeProfileId = this.db.getActiveProfileId();
+    const activeProfile = this.db.getProfile(activeProfileId);
+
     return {
       version: '1.0.0',
       exportedAt: new Date(),
       exportedBy: 'desktop-client',
       deviceName: this.deviceName,
       deviceId: this.deviceId,
+      profileId: activeProfileId,
+      profileName: activeProfile?.name || 'Default',
       connections: opts.connections ? exportData.connections : [],
       credentials: opts.credentials ? exportData.credentials : [],
       groups: opts.groups ? exportData.groups : [],
@@ -995,15 +1011,50 @@ export class CloudSyncService {
     const configs: SyncConfigInfo[] = [];
 
     for (const item of data.files || []) {
-      const match = item.name.match(/connectty-config-(.+)\.json/);
-      configs.push({
-        id: item.id,
-        deviceName: match ? match[1] : 'Unknown',
-        deviceId: match ? match[1] : item.id,
-        uploadedAt: item.modifiedTime,
-        connectionCount: 0,
-        credentialCount: 0,
-      });
+      // New format: connectty-config-{deviceId}-{profileId}.json
+      // Old format: connectty-config-{deviceId}.json
+      const newMatch = item.name.match(/connectty-config-([^-]+)-([^.]+)\.json/);
+      const oldMatch = item.name.match(/connectty-config-([^.]+)\.json/);
+
+      let deviceId = item.id;
+      let profileId: string | undefined;
+      let profileName: string | undefined;
+
+      if (newMatch) {
+        deviceId = newMatch[1];
+        profileId = newMatch[2];
+      } else if (oldMatch) {
+        deviceId = oldMatch[1];
+      }
+
+      // Try to fetch content to get profile name and counts
+      try {
+        const content = await this.downloadFromGoogleDrive(account, item.id);
+        const parsed = JSON.parse(content) as ExtendedSyncData;
+        profileId = parsed.profileId || profileId;
+        profileName = parsed.profileName;
+        configs.push({
+          id: item.id,
+          deviceName: parsed.deviceName || deviceId,
+          deviceId: parsed.deviceId || deviceId,
+          uploadedAt: item.modifiedTime,
+          connectionCount: parsed.connections?.length || 0,
+          credentialCount: parsed.credentials?.length || 0,
+          profileId,
+          profileName: profileName || (profileId ? `Profile ${profileId.slice(0, 8)}...` : undefined),
+        });
+      } catch {
+        // Fallback if content fetch fails
+        configs.push({
+          id: item.id,
+          deviceName: deviceId,
+          deviceId: deviceId,
+          uploadedAt: item.modifiedTime,
+          connectionCount: 0,
+          credentialCount: 0,
+          profileId,
+        });
+      }
     }
 
     return { success: true, configs };
@@ -1103,15 +1154,51 @@ export class CloudSyncService {
     for (const gist of gists) {
       const configFile = Object.entries(gist.files).find(([name]) => name.startsWith('connectty-config-'));
       if (configFile) {
-        const match = configFile[0].match(/connectty-config-(.+)\.json/);
-        configs.push({
-          id: gist.id,
-          deviceName: match ? match[1] : 'Unknown',
-          deviceId: match ? match[1] : gist.id,
-          uploadedAt: gist.updated_at,
-          connectionCount: 0,
-          credentialCount: 0,
-        });
+        const filename = configFile[0];
+        // New format: connectty-config-{deviceId}-{profileId}.json
+        // Old format: connectty-config-{deviceId}.json
+        const newMatch = filename.match(/connectty-config-([^-]+)-([^.]+)\.json/);
+        const oldMatch = filename.match(/connectty-config-([^.]+)\.json/);
+
+        let deviceId = gist.id;
+        let profileId: string | undefined;
+        let profileName: string | undefined;
+
+        if (newMatch) {
+          deviceId = newMatch[1];
+          profileId = newMatch[2];
+        } else if (oldMatch) {
+          deviceId = oldMatch[1];
+        }
+
+        // Try to fetch content to get profile name and counts
+        try {
+          const content = await this.downloadFromGist(account, gist.id);
+          const parsed = JSON.parse(content) as ExtendedSyncData;
+          profileId = parsed.profileId || profileId;
+          profileName = parsed.profileName;
+          configs.push({
+            id: gist.id,
+            deviceName: parsed.deviceName || deviceId,
+            deviceId: parsed.deviceId || deviceId,
+            uploadedAt: gist.updated_at,
+            connectionCount: parsed.connections?.length || 0,
+            credentialCount: parsed.credentials?.length || 0,
+            profileId,
+            profileName: profileName || (profileId ? `Profile ${profileId.slice(0, 8)}...` : undefined),
+          });
+        } catch {
+          // Fallback if content fetch fails
+          configs.push({
+            id: gist.id,
+            deviceName: deviceId,
+            deviceId: deviceId,
+            uploadedAt: gist.updated_at,
+            connectionCount: 0,
+            credentialCount: 0,
+            profileId,
+          });
+        }
       }
     }
 

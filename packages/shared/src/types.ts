@@ -612,6 +612,7 @@ export interface AppSettings {
   boxAnalysis?: BoxAnalysisSettings;
   // Matrix plugin settings
   matrixConfig?: MatrixConfig;
+  matrixRainEnabled?: boolean;
   // Datadog health monitoring settings
   datadogHealth?: DatadogHealthConfig;
 }
