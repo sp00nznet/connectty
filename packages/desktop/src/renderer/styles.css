@@ -2469,6 +2469,7 @@ body {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  background-color: var(--bg-secondary);
 }
 
 .content-header {
