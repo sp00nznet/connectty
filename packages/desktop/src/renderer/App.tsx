@@ -131,6 +131,18 @@ export default function App() {
     defaultShell: undefined,
   });
 
+  // Plugin panel state
+  type AppPluginType = 'none' | 'hostStats' | 'boxAnalyzer' | 'datadogHealth' | 'matrixRain';
+  const getAppActivePlugin = (): AppPluginType => {
+    if (appSettings.datadogHealth?.enabled) return 'datadogHealth';
+    if (appSettings.boxAnalysis?.pollingEnabled) return 'boxAnalyzer';
+    if (appSettings.pluginsEnabled) return 'hostStats';
+    if (appSettings.matrixRainEnabled) return 'matrixRain';
+    return 'none';
+  };
+  const [showPluginPanel, setShowPluginPanel] = useState(false);
+  const [pluginPanelData, setPluginPanelData] = useState<Record<string, unknown> | null>(null);
+
   // New tab menu (stores position for fixed positioning)
   const [newTabMenuPos, setNewTabMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [platform, setPlatform] = useState<string>('');
@@ -1560,6 +1572,27 @@ export default function App() {
               +
             </button>
           </div>
+
+          {/* Plugin Panel Toggle - only show when a plugin is active */}
+          {getAppActivePlugin() !== 'none' && (
+            <button
+              className={`plugin-panel-toggle ${showPluginPanel ? 'active' : ''}`}
+              onClick={() => setShowPluginPanel(!showPluginPanel)}
+              title={`${showPluginPanel ? 'Hide' : 'Show'} ${
+                getAppActivePlugin() === 'hostStats' ? 'Host Stats' :
+                getAppActivePlugin() === 'boxAnalyzer' ? 'Box Analyzer' :
+                getAppActivePlugin() === 'datadogHealth' ? 'Datadog Health' :
+                'Matrix Rain'
+              } panel`}
+            >
+              <span className="plugin-toggle-icon">
+                {getAppActivePlugin() === 'hostStats' ? '📊' :
+                 getAppActivePlugin() === 'boxAnalyzer' ? '🔍' :
+                 getAppActivePlugin() === 'datadogHealth' ? '🐕' : '🟢'}
+              </span>
+              <span className="plugin-toggle-arrow">{showPluginPanel ? '▶' : '◀'}</span>
+            </button>
+          )}
         </div>
 
         {/* Shell Context Menu (right-click on + button) */}
@@ -1768,6 +1801,107 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Plugin Slide-out Panel */}
+        <div className={`plugin-panel ${showPluginPanel ? 'open' : ''}`}>
+          <div className="plugin-panel-header">
+            <h3>
+              {getAppActivePlugin() === 'hostStats' ? '📊 Host Stats' :
+               getAppActivePlugin() === 'boxAnalyzer' ? '🔍 Box Analyzer' :
+               getAppActivePlugin() === 'datadogHealth' ? '🐕 Datadog Health' :
+               getAppActivePlugin() === 'matrixRain' ? '🟢 Matrix Rain' : 'Plugin'}
+            </h3>
+            <button
+              className="plugin-panel-close"
+              onClick={() => setShowPluginPanel(false)}
+            >
+              &times;
+            </button>
+          </div>
+          <div className="plugin-panel-content">
+            {getAppActivePlugin() === 'hostStats' && (
+              <div className="plugin-output">
+                <p className="plugin-output-empty">
+                  Connect to a host to view real-time stats.
+                </p>
+                <div className="host-stats-placeholder">
+                  <div className="stat-row">
+                    <span className="stat-label">CPU</span>
+                    <div className="stat-bar"><div className="stat-fill" style={{ width: '0%' }}></div></div>
+                    <span className="stat-value">--</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Memory</span>
+                    <div className="stat-bar"><div className="stat-fill" style={{ width: '0%' }}></div></div>
+                    <span className="stat-value">--</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label">Disk</span>
+                    <div className="stat-bar"><div className="stat-fill" style={{ width: '0%' }}></div></div>
+                    <span className="stat-value">--</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {getAppActivePlugin() === 'boxAnalyzer' && (
+              <div className="plugin-output">
+                <p className="plugin-output-empty">
+                  Connect to a host to analyze what it does.
+                </p>
+                <div className="box-analyzer-placeholder">
+                  <div className="analysis-section">
+                    <h4>System Purpose</h4>
+                    <p className="analysis-result">--</p>
+                  </div>
+                  <div className="analysis-section">
+                    <h4>Key Services</h4>
+                    <ul className="analysis-list">
+                      <li className="placeholder">Waiting for connection...</li>
+                    </ul>
+                  </div>
+                  <div className="analysis-section">
+                    <h4>Open Ports</h4>
+                    <ul className="analysis-list">
+                      <li className="placeholder">Waiting for connection...</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+            {getAppActivePlugin() === 'datadogHealth' && (
+              <div className="plugin-output">
+                <p className="plugin-output-empty">
+                  Health metrics from Datadog will appear here.
+                </p>
+                <div className="datadog-placeholder">
+                  <div className="health-indicator">
+                    <span className="health-dot neutral"></span>
+                    <span>No host selected</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {getAppActivePlugin() === 'matrixRain' && (
+              <div className="plugin-output matrix-rain-panel">
+                <p className="plugin-info-text">
+                  Matrix Rain effect is displayed in the main terminal area when no session is active.
+                </p>
+                <div className="matrix-preview">
+                  <div className="matrix-column">ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜ</div>
+                  <div className="matrix-column">ﾂｵﾘｱﾎﾃﾏｹﾒｴ</div>
+                  <div className="matrix-column">ｶｷﾑﾕﾗｾﾈｽﾀﾇ</div>
+                </div>
+              </div>
+            )}
+            {getAppActivePlugin() === 'none' && (
+              <div className="plugin-output">
+                <p className="plugin-output-empty">
+                  No plugin is active. Enable a plugin in Settings.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </main>
 
       {/* Connection Modal */}
@@ -5632,10 +5766,21 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     return saved !== null ? saved === 'true' : true;
   });
 
-  // Plugin enable/disable states
-  const [hostStatsEnabled, setHostStatsEnabled] = useState(settings.pluginsEnabled !== false);
-  const [boxAnalyzerEnabled, setBoxAnalyzerEnabled] = useState(settings.boxAnalysis?.pollingEnabled !== false);
-  const [datadogHealthEnabled, setDatadogHealthEnabled] = useState(settings.datadogHealth?.enabled === true);
+  // Plugin state - only one plugin can be active at a time
+  type PluginType = 'none' | 'hostStats' | 'boxAnalyzer' | 'datadogHealth' | 'matrixRain';
+  const getInitialPlugin = (): PluginType => {
+    if (settings.datadogHealth?.enabled) return 'datadogHealth';
+    if (settings.boxAnalysis?.pollingEnabled) return 'boxAnalyzer';
+    if (settings.pluginsEnabled) return 'hostStats';
+    if (settings.matrixRainEnabled) return 'matrixRain';
+    return 'none';
+  };
+  const [activePlugin, setActivePlugin] = useState<PluginType>(getInitialPlugin());
+
+  // Datadog configuration modal
+  const [showDatadogConfig, setShowDatadogConfig] = useState(false);
+  const [datadogApiKey, setDatadogApiKey] = useState(settings.datadogHealth?.apiKey || '');
+  const [datadogAppKey, setDatadogAppKey] = useState(settings.datadogHealth?.appKey || '');
 
   // Save collapse states to localStorage when they change
   useEffect(() => {
@@ -5700,16 +5845,17 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         terminalTheme,
         defaultShell,
         syncAccounts,
-        pluginsEnabled: hostStatsEnabled,
+        pluginsEnabled: activePlugin === 'hostStats',
+        matrixRainEnabled: activePlugin === 'matrixRain',
         boxAnalysis: {
-          pollingEnabled: boxAnalyzerEnabled,
+          pollingEnabled: activePlugin === 'boxAnalyzer',
           pollingInterval: 60,
           datadogEnabled: false,
         },
         datadogHealth: {
-          enabled: datadogHealthEnabled,
-          apiKey: settings.datadogHealth?.apiKey || '',
-          appKey: settings.datadogHealth?.appKey || '',
+          enabled: activePlugin === 'datadogHealth',
+          apiKey: datadogApiKey,
+          appKey: datadogAppKey,
           pollInterval: 15,
           thresholds: settings.datadogHealth?.thresholds || {
             cpu: { yellow: 70, red: 90 },
@@ -6209,8 +6355,16 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           {availableConfigs.map(config => (
                             <div key={config.id} className="sync-config-item">
                               <div className="sync-config-info">
-                                <span className="sync-config-device">{config.deviceName}</span>
-                                <span className="sync-config-date">Uploaded: {formatDate(config.uploadedAt)}</span>
+                                <span className="sync-config-device">
+                                  {config.deviceId || config.deviceName}
+                                  {config.profileName && (
+                                    <span className="sync-config-profile"> ({config.profileName})</span>
+                                  )}
+                                </span>
+                                <span className="sync-config-date">
+                                  Uploaded: {formatDate(config.uploadedAt)}
+                                  {config.connectionCount > 0 && ` • ${config.connectionCount} connections`}
+                                </span>
                               </div>
                               <button
                                 type="button"
@@ -6295,7 +6449,7 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                 <span className={`collapse-icon ${pluginsExpanded ? 'expanded' : ''}`}>▶</span>
                 <h4>Plugins</h4>
                 <span className="settings-badge">
-                  {[hostStatsEnabled, boxAnalyzerEnabled, datadogHealthEnabled].filter(Boolean).length} enabled
+                  {activePlugin === 'none' ? 'disabled' : activePlugin === 'hostStats' ? 'Host Stats' : activePlugin === 'boxAnalyzer' ? 'Box Analyzer' : activePlugin === 'datadogHealth' ? 'Datadog' : 'Matrix Rain'}
                 </span>
               </button>
               {pluginsExpanded && (
@@ -6305,8 +6459,30 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                   </p>
 
                   <div className="plugin-list">
+                    {/* None - Disable all plugins */}
+                    <div className={`plugin-item ${activePlugin === 'none' ? 'active' : ''}`}>
+                      <div className="plugin-info">
+                        <div className="plugin-header">
+                          <span className="plugin-icon">⭕</span>
+                          <span className="plugin-name">None</span>
+                        </div>
+                        <p className="plugin-description">
+                          Disable all plugins. No additional UI overlays will be shown.
+                        </p>
+                      </div>
+                      <label className="plugin-radio">
+                        <input
+                          type="radio"
+                          name="activePlugin"
+                          checked={activePlugin === 'none'}
+                          onChange={() => setActivePlugin('none')}
+                        />
+                        <span className="radio-indicator"></span>
+                      </label>
+                    </div>
+
                     {/* Host Stats Plugin */}
-                    <div className="plugin-item">
+                    <div className={`plugin-item ${activePlugin === 'hostStats' ? 'active' : ''}`}>
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">📊</span>
@@ -6316,18 +6492,19 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Shows real-time CPU, memory, and disk usage for connected SSH sessions.
                         </p>
                       </div>
-                      <label className="toggle-switch">
+                      <label className="plugin-radio">
                         <input
-                          type="checkbox"
-                          checked={hostStatsEnabled}
-                          onChange={(e) => setHostStatsEnabled(e.target.checked)}
+                          type="radio"
+                          name="activePlugin"
+                          checked={activePlugin === 'hostStats'}
+                          onChange={() => setActivePlugin('hostStats')}
                         />
-                        <span className="toggle-slider"></span>
+                        <span className="radio-indicator"></span>
                       </label>
                     </div>
 
                     {/* Box Analyzer Plugin */}
-                    <div className="plugin-item">
+                    <div className={`plugin-item ${activePlugin === 'boxAnalyzer' ? 'active' : ''}`}>
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🔍</span>
@@ -6337,18 +6514,19 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           "What Does This Box Do?" - Analyzes running processes, services, and connections to determine system purpose.
                         </p>
                       </div>
-                      <label className="toggle-switch">
+                      <label className="plugin-radio">
                         <input
-                          type="checkbox"
-                          checked={boxAnalyzerEnabled}
-                          onChange={(e) => setBoxAnalyzerEnabled(e.target.checked)}
+                          type="radio"
+                          name="activePlugin"
+                          checked={activePlugin === 'boxAnalyzer'}
+                          onChange={() => setActivePlugin('boxAnalyzer')}
                         />
-                        <span className="toggle-slider"></span>
+                        <span className="radio-indicator"></span>
                       </label>
                     </div>
 
                     {/* Datadog Health Plugin */}
-                    <div className="plugin-item">
+                    <div className={`plugin-item ${activePlugin === 'datadogHealth' ? 'active' : ''}`}>
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🐕</span>
@@ -6357,19 +6535,36 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                         <p className="plugin-description">
                           Shows health status indicators (green/yellow/red) for hosts monitored by Datadog.
                         </p>
+                        {activePlugin === 'datadogHealth' && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => setShowDatadogConfig(true)}
+                            style={{ marginTop: '8px' }}
+                          >
+                            Configure API Keys
+                          </button>
+                        )}
                       </div>
-                      <label className="toggle-switch">
+                      <label className="plugin-radio">
                         <input
-                          type="checkbox"
-                          checked={datadogHealthEnabled}
-                          onChange={(e) => setDatadogHealthEnabled(e.target.checked)}
+                          type="radio"
+                          name="activePlugin"
+                          checked={activePlugin === 'datadogHealth'}
+                          onChange={() => {
+                            // If no API keys configured, show config modal
+                            if (!datadogApiKey || !datadogAppKey) {
+                              setShowDatadogConfig(true);
+                            }
+                            setActivePlugin('datadogHealth');
+                          }}
                         />
-                        <span className="toggle-slider"></span>
+                        <span className="radio-indicator"></span>
                       </label>
                     </div>
 
-                    {/* Matrix Plugin */}
-                    <div className="plugin-item">
+                    {/* Matrix Rain Plugin */}
+                    <div className={`plugin-item ${activePlugin === 'matrixRain' ? 'active' : ''}`}>
                       <div className="plugin-info">
                         <div className="plugin-header">
                           <span className="plugin-icon">🟢</span>
@@ -6379,9 +6574,81 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           Displays the classic Matrix falling code effect when no session is active.
                         </p>
                       </div>
-                      <span className="plugin-status">Coming soon</span>
+                      <label className="plugin-radio">
+                        <input
+                          type="radio"
+                          name="activePlugin"
+                          checked={activePlugin === 'matrixRain'}
+                          onChange={() => setActivePlugin('matrixRain')}
+                        />
+                        <span className="radio-indicator"></span>
+                      </label>
                     </div>
                   </div>
+
+                  {/* Datadog Configuration Modal */}
+                  {showDatadogConfig && (
+                    <div className="inline-modal">
+                      <div className="inline-modal-header">
+                        <h5>Datadog API Configuration</h5>
+                        <button
+                          type="button"
+                          className="btn-close"
+                          onClick={() => setShowDatadogConfig(false)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                      <div className="inline-modal-content">
+                        <p className="settings-description" style={{ marginBottom: '12px' }}>
+                          Enter your Datadog API and Application keys to enable health monitoring.
+                          You can find these in your Datadog account under Organization Settings &gt; API Keys.
+                        </p>
+                        <div className="form-group">
+                          <label>API Key</label>
+                          <input
+                            type="password"
+                            value={datadogApiKey}
+                            onChange={(e) => setDatadogApiKey(e.target.value)}
+                            placeholder="Enter your Datadog API key"
+                            className="form-control"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Application Key</label>
+                          <input
+                            type="password"
+                            value={datadogAppKey}
+                            onChange={(e) => setDatadogAppKey(e.target.value)}
+                            placeholder="Enter your Datadog Application key"
+                            className="form-control"
+                          />
+                        </div>
+                        <div className="inline-modal-actions">
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              setShowDatadogConfig(false);
+                              if (!datadogApiKey || !datadogAppKey) {
+                                setActivePlugin('none');
+                              }
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => setShowDatadogConfig(false)}
+                            disabled={!datadogApiKey || !datadogAppKey}
+                          >
+                            Save Keys
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

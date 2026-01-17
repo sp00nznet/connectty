@@ -103,6 +103,8 @@ export interface SyncConfigInfo {
   uploadedAt: string;
   connectionCount: number;
   credentialCount: number;
+  profileId?: string;
+  profileName?: string;
 }
 
 // App settings types
