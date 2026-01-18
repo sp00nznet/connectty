@@ -350,15 +350,10 @@ if ($Clean) {
 
 # Reset package-lock.json to avoid cross-platform conflicts
 Write-Host "`n[2/6] Resetting package-lock.json..." -ForegroundColor Yellow
-$packageLockPath = Join-Path $ProjectRoot "package-lock.json"
-if (Test-Path $packageLockPath) {
-    git checkout package-lock.json 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "  Reset package-lock.json to repo version" -ForegroundColor Green
-    } else {
-        Write-Host "  package-lock.json not tracked or no changes" -ForegroundColor Gray
-    }
-}
+$ErrorActionPreference = "Continue"
+& git checkout package-lock.json 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
+Write-Host "  Done" -ForegroundColor Green
 
 # Install dependencies
 if (-not $SkipInstall) {
