@@ -328,7 +328,8 @@ export class CloudSyncService {
 
   // OAuth configuration - credentials loaded from environment variables
   // Set these in Codespaces secrets or local .env file:
-  // GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET
+  // GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GH_OAUTH_CLIENT_ID, GH_OAUTH_CLIENT_SECRET
+  // Note: GitHub Codespaces reserves the GITHUB_ prefix, so we use GH_ instead
   private readonly OAUTH_CONFIG = {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -339,8 +340,8 @@ export class CloudSyncService {
       redirectUri: 'http://localhost:19283/callback',
     },
     github: {
-      clientId: process.env.GITHUB_OAUTH_CLIENT_ID || '',
-      clientSecret: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
+      clientId: process.env.GH_OAUTH_CLIENT_ID || '',
+      clientSecret: process.env.GH_OAUTH_CLIENT_SECRET || '',
       authUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
       scope: 'gist read:user user:email',
