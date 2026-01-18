@@ -352,12 +352,14 @@ if ($Clean) {
 Write-Host "`n[2/6] Resetting package-lock.json..." -ForegroundColor Yellow
 $packageLockPath = Join-Path $ProjectRoot "package-lock.json"
 if (Test-Path $packageLockPath) {
-    git checkout package-lock.json 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    # Use Start-Process to avoid PowerShell treating git stderr as error
+    $gitResult = Start-Process -FilePath "git" -ArgumentList "checkout", "package-lock.json" -Wait -PassThru -NoNewWindow -RedirectStandardError "$env:TEMP\git-err.txt" 2>$null
+    if ($gitResult.ExitCode -eq 0) {
         Write-Host "  Reset package-lock.json to repo version" -ForegroundColor Green
     } else {
         Write-Host "  package-lock.json not tracked or no changes" -ForegroundColor Gray
     }
+    Remove-Item "$env:TEMP\git-err.txt" -Force -ErrorAction SilentlyContinue
 }
 
 # Install dependencies
