@@ -460,11 +460,12 @@ export default function App() {
           const defaultState = await window.connectty.sessionStates.get(activeProf.defaultSessionStateId);
           if (defaultState && defaultState.sessions.length > 0) {
             console.log('[Auto-restore] Loading default session state:', defaultState.name);
-            // Delay slightly to ensure connections are loaded
+            // Delay slightly to ensure connections and shells are loaded
             setTimeout(async () => {
               try {
-                // Get fresh connections list
+                // Get fresh connections and shells list
                 const conns = await window.connectty.connections.list();
+                const shells = await window.connectty.localShell.getAvailable();
                 for (const savedSession of defaultState.sessions) {
                   if (savedSession.type === 'ssh' && savedSession.connectionId) {
                     const connection = conns.find(c => c.id === savedSession.connectionId);
@@ -472,7 +473,10 @@ export default function App() {
                       await handleConnect(connection);
                     }
                   } else if (savedSession.type === 'localShell' && savedSession.shellId) {
-                    await handleNewLocalShell(savedSession.shellId);
+                    const shell = shells.find(s => s.id === savedSession.shellId);
+                    if (shell) {
+                      await handleSpawnLocalShell(shell);
+                    }
                   }
                 }
               } catch (err) {
@@ -1195,8 +1199,13 @@ export default function App() {
             console.warn(`Connection not found for session state: ${savedSession.connectionName || savedSession.connectionId}`);
           }
         } else if (savedSession.type === 'localShell' && savedSession.shellId) {
-          // Spawn the local shell
-          await handleNewLocalShell(savedSession.shellId);
+          // Find the shell info
+          const shell = availableShells.find(s => s.id === savedSession.shellId);
+          if (shell) {
+            await handleSpawnLocalShell(shell);
+          } else {
+            console.warn(`Shell not found for session state: ${savedSession.shellName || savedSession.shellId}`);
+          }
         }
       }
     } catch (error) {
