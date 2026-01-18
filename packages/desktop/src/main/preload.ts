@@ -19,12 +19,6 @@ import type {
   CommandResult,
   HostFilter,
   CommandTargetOS,
-  HostStats,
-  SystemTheory,
-  BoxAnalysisSettings,
-  MatrixConfig,
-  DatadogHealthConfig,
-  ConnectionHealthStatus,
   Profile,
   SessionState,
   SavedSession,
@@ -117,8 +111,6 @@ export interface AppSettings {
   syncAccounts?: SyncAccount[];
   terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
   defaultShell?: string;  // ID of the default shell to open when clicking +
-  pluginsEnabled?: boolean;
-  enabledPlugins?: string[];
 }
 
 // Local shell types
@@ -446,86 +438,6 @@ const api = {
     },
   },
 
-  // Plugin operations
-  plugins: {
-    startHostStats: (connectionId: string, sshSessionId: string): Promise<boolean> =>
-      ipcRenderer.invoke('plugins:startHostStats', connectionId, sshSessionId),
-    stopHostStats: (connectionId: string): Promise<boolean> =>
-      ipcRenderer.invoke('plugins:stopHostStats', connectionId),
-    getGroupScripts: (groupId: string): Promise<SavedCommand[]> =>
-      ipcRenderer.invoke('plugins:getGroupScripts', groupId),
-    getConnectionScripts: (connectionId: string): Promise<SavedCommand[]> =>
-      ipcRenderer.invoke('plugins:getConnectionScripts', connectionId),
-    onHostStats: (callback: (stats: HostStats) => void): (() => void) => {
-      const handler = (_event: IpcRendererEvent, stats: HostStats) => {
-        callback(stats);
-      };
-      ipcRenderer.on('plugin:hostStats', handler);
-      return () => ipcRenderer.removeListener('plugin:hostStats', handler);
-    },
-  },
-
-  // Box Analyzer plugin operations
-  boxAnalyzer: {
-    start: (connectionId: string, connectionName: string, sshSessionId: string, enablePolling?: boolean): Promise<boolean> =>
-      ipcRenderer.invoke('boxAnalyzer:start', connectionId, connectionName, sshSessionId, enablePolling || false),
-    stop: (connectionId: string): Promise<boolean> =>
-      ipcRenderer.invoke('boxAnalyzer:stop', connectionId),
-    getCached: (connectionId: string): Promise<SystemTheory | null> =>
-      ipcRenderer.invoke('boxAnalyzer:getCached', connectionId),
-    setDatadogCredentials: (credentials: { apiKey: string; appKey: string; site?: string }): Promise<boolean> =>
-      ipcRenderer.invoke('boxAnalyzer:setDatadogCredentials', credentials),
-    getDatadogCredentials: (): Promise<{ apiKey?: string; appKey?: string; site?: string } | null> =>
-      ipcRenderer.invoke('boxAnalyzer:getDatadogCredentials'),
-    deleteDatadogCredentials: (): Promise<boolean> =>
-      ipcRenderer.invoke('boxAnalyzer:deleteDatadogCredentials'),
-    initializeDatadog: (settings: BoxAnalysisSettings): Promise<boolean> =>
-      ipcRenderer.invoke('boxAnalyzer:initializeDatadog', settings),
-    onTheory: (callback: (theory: SystemTheory) => void): (() => void) => {
-      const handler = (_event: IpcRendererEvent, theory: SystemTheory) => {
-        callback(theory);
-      };
-      ipcRenderer.on('boxAnalyzer:theory', handler);
-      return () => ipcRenderer.removeListener('boxAnalyzer:theory', handler);
-    },
-  },
-
-  // Matrix plugin operations
-  matrix: {
-    getDefaultConfig: (): Promise<MatrixConfig> =>
-      ipcRenderer.invoke('matrix:getDefaultConfig'),
-    validateConfig: (config: Partial<MatrixConfig>): Promise<MatrixConfig> =>
-      ipcRenderer.invoke('matrix:validateConfig', config),
-    getCharacterSet: (useJapanese: boolean): Promise<string> =>
-      ipcRenderer.invoke('matrix:getCharacterSet', useJapanese),
-  },
-
-  // Datadog health monitoring plugin operations
-  datadogHealth: {
-    start: (config: DatadogHealthConfig): Promise<boolean> =>
-      ipcRenderer.invoke('datadogHealth:start', config),
-    stop: (): Promise<boolean> =>
-      ipcRenderer.invoke('datadogHealth:stop'),
-    getDefaultConfig: (): Promise<DatadogHealthConfig> =>
-      ipcRenderer.invoke('datadogHealth:getDefaultConfig'),
-    validateConfig: (config: Partial<DatadogHealthConfig>): Promise<DatadogHealthConfig> =>
-      ipcRenderer.invoke('datadogHealth:validateConfig', config),
-    getHealthStatus: (connectionId: string): Promise<ConnectionHealthStatus | undefined> =>
-      ipcRenderer.invoke('datadogHealth:getHealthStatus', connectionId),
-    getAllHealthStatuses: (): Promise<ConnectionHealthStatus[]> =>
-      ipcRenderer.invoke('datadogHealth:getAllHealthStatuses'),
-    forcePoll: (config: DatadogHealthConfig): Promise<boolean> =>
-      ipcRenderer.invoke('datadogHealth:forcePoll', config),
-    clearCache: (): Promise<boolean> =>
-      ipcRenderer.invoke('datadogHealth:clearCache'),
-    onStatusUpdate: (callback: (status: ConnectionHealthStatus) => void): (() => void) => {
-      const handler = (_event: IpcRendererEvent, status: ConnectionHealthStatus) => {
-        callback(status);
-      };
-      ipcRenderer.on('datadogHealth:statusUpdate', handler);
-      return () => ipcRenderer.removeListener('datadogHealth:statusUpdate', handler);
-    },
-  },
 };
 
 contextBridge.exposeInMainWorld('connectty', api);
