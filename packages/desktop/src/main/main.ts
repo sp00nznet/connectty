@@ -2,8 +2,12 @@
  * Electron main process entry point
  */
 
-import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
+// Load environment variables from .env file (for local development)
+import * as dotenv from 'dotenv';
 import * as path from 'path';
+dotenv.config({ path: path.join(__dirname, '..', '..', '..', '..', '.env') });
+
+import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as os from 'os';
 import Store from 'electron-store';
 import { DatabaseService } from './database';
