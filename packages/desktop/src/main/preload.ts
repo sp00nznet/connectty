@@ -26,6 +26,8 @@ import type {
   DatadogHealthConfig,
   ConnectionHealthStatus,
   Profile,
+  SessionState,
+  SavedSession,
 } from '@connectty/shared';
 
 // SFTP types (matching the types in sftp.ts)
@@ -197,6 +199,8 @@ const api = {
     delete: (id: string): Promise<boolean> => ipcRenderer.invoke('profiles:delete', id),
     getActive: (): Promise<Profile | null> => ipcRenderer.invoke('profiles:getActive'),
     switch: (profileId: string): Promise<boolean> => ipcRenderer.invoke('profiles:switch', profileId),
+    setDefaultSessionState: (profileId: string, sessionStateId: string | null): Promise<boolean> =>
+      ipcRenderer.invoke('profiles:setDefaultSessionState', profileId, sessionStateId),
     onSwitched: (callback: (profileId: string) => void): (() => void) => {
       const handler = (_event: IpcRendererEvent, profileId: string) => {
         callback(profileId);
@@ -204,6 +208,17 @@ const api = {
       ipcRenderer.on('profiles:switched', handler);
       return () => ipcRenderer.removeListener('profiles:switched', handler);
     },
+  },
+
+  // Session state operations
+  sessionStates: {
+    list: (profileId?: string): Promise<SessionState[]> => ipcRenderer.invoke('sessionStates:list', profileId),
+    get: (id: string): Promise<SessionState | null> => ipcRenderer.invoke('sessionStates:get', id),
+    create: (data: { name: string; description?: string; sessions: SavedSession[]; profileId?: string }): Promise<SessionState> =>
+      ipcRenderer.invoke('sessionStates:create', data),
+    update: (id: string, updates: { name?: string; description?: string; sessions?: SavedSession[] }): Promise<SessionState | null> =>
+      ipcRenderer.invoke('sessionStates:update', id, updates),
+    delete: (id: string): Promise<boolean> => ipcRenderer.invoke('sessionStates:delete', id),
   },
 
   // Discovered hosts operations

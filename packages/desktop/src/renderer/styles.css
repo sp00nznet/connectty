@@ -2672,6 +2672,167 @@ body {
   margin-top: 16px;
 }
 
+/* Session States Section */
+.session-state-current {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.session-state-current-header {
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.session-state-current-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.session-state-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.session-state-create {
+  margin-bottom: 16px;
+}
+
+.session-state-create .form-control {
+  margin-bottom: 10px;
+}
+
+.session-state-create-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.session-state-hint {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.session-state-save-btn {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.session-states-loading {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.session-states-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.session-states-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-state-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.session-state-item:hover {
+  border-color: var(--accent);
+}
+
+.session-state-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.session-state-edit .form-control {
+  flex: 1;
+}
+
+.session-state-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-state-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-state-default-badge {
+  padding: 2px 8px;
+  background: var(--accent);
+  color: white;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: normal;
+}
+
+.session-state-details {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.session-state-types {
+  color: var(--text-muted);
+}
+
+.session-state-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.btn-icon-only {
+  padding: 4px 8px;
+  min-width: auto;
+}
+
+.btn-danger {
+  color: var(--error);
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .plugin-info {
   flex: 1;
   min-width: 0;
@@ -2716,17 +2877,14 @@ body {
   right: 0;
   transform: translateY(-50%);
   z-index: 100;
-  display: flex;
-  align-items: center;
-  transition: right 0.3s ease;
 }
 
-.plugin-panel-container.open {
-  right: 0;
-}
-
-/* Tab Handle - vertical tab on right edge */
+/* Tab Handle - vertical tab anchored to right edge */
 .plugin-panel-tab {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2739,8 +2897,13 @@ body {
   border-right: none;
   border-radius: 8px 0 0 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: right 0.3s ease, background 0.2s ease;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+  z-index: 101;
+}
+
+.plugin-panel-container.open .plugin-panel-tab {
+  right: min(max(12.5vw, 200px), 350px);
 }
 
 .plugin-panel-tab:hover {
@@ -2765,9 +2928,11 @@ body {
 
 /* Plugin Slide-out Panel */
 .plugin-panel {
-  width: calc(12.5vw);
-  min-width: 200px;
-  max-width: 350px;
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%) translateX(100%);
+  width: min(max(12.5vw, 200px), 350px);
   height: 60vh;
   max-height: 500px;
   background: var(--bg-secondary);
@@ -2778,12 +2943,12 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transform: translateX(100%);
   transition: transform 0.3s ease;
+  z-index: 100;
 }
 
 .plugin-panel-container.open .plugin-panel {
-  transform: translateX(0);
+  transform: translateY(-50%) translateX(0);
 }
 
 .plugin-panel-header {
@@ -2845,10 +3010,20 @@ body {
 }
 
 /* Host Stats Plugin Styles */
+.host-stats-display,
 .host-stats-placeholder {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.plugin-host-name {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 8px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
 .stat-row {
@@ -2858,9 +3033,10 @@ body {
 }
 
 .stat-label {
-  width: 60px;
-  font-size: 0.85rem;
+  width: 50px;
+  font-size: 0.8rem;
   color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .stat-bar {
@@ -2873,9 +3049,23 @@ body {
 
 .stat-fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--success);
   border-radius: 4px;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.stat-fill.medium {
+  background: var(--warning);
+}
+
+.stat-fill.high {
+  background: var(--error);
+}
+
+.stat-value-wide {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  font-family: monospace;
 }
 
 .stat-value {

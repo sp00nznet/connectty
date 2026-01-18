@@ -626,6 +626,38 @@ export interface Profile {
   name: string;
   description?: string;
   isDefault: boolean;
+  defaultSessionStateId?: string; // Default session state to load for this profile
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ============================================================================
+// Session State Types
+// ============================================================================
+
+/**
+ * Represents a saved session within a session state
+ */
+export interface SavedSession {
+  type: 'ssh' | 'localShell';
+  // For SSH sessions
+  connectionId?: string;
+  connectionName?: string;
+  // For local shell sessions
+  shellId?: string;
+  shellName?: string;
+  workingDirectory?: string;
+}
+
+/**
+ * Represents a saved session state that can be restored
+ */
+export interface SessionState {
+  id: string;
+  profileId: string;
+  name: string;
+  description?: string;
+  sessions: SavedSession[];
   createdAt: Date;
   updatedAt: Date;
 }
