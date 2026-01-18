@@ -326,21 +326,21 @@ export class CloudSyncService {
   private deviceName: string;
   private currentOAuthServer: http.Server | null = null;
 
-  // OAuth configuration
-  // Note: Google "Web application" clients require clientSecret
-  // Google "Desktop app" clients work without clientSecret when using PKCE
+  // OAuth configuration - credentials loaded from environment variables
+  // Set these in Codespaces secrets or local .env file:
+  // GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET
   private readonly OAUTH_CONFIG = {
     google: {
-      clientId: '1081959577053-rfp12bd9ikrjhl3ptgk03a8v0ofr7ri6.apps.googleusercontent.com',
-      clientSecret: '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',
+      clientId: process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
       authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       scope: 'openid email profile https://www.googleapis.com/auth/drive.appdata',
       redirectUri: 'http://localhost:19283/callback',
     },
     github: {
-      clientId: 'Ov23liqvNVMDWijyAPNT',
-      clientSecret: 'e65d46e950750d2044cde256668065ff87933ded',
+      clientId: process.env.GITHUB_OAUTH_CLIENT_ID || '',
+      clientSecret: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
       authUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
       scope: 'gist read:user user:email',
