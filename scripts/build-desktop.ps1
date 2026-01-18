@@ -348,9 +348,21 @@ if ($Clean) {
     Write-Host "`n[1/4] Skipping clean (use -Clean flag)" -ForegroundColor Gray
 }
 
+# Reset package-lock.json to avoid cross-platform conflicts
+Write-Host "`n[2/6] Resetting package-lock.json..." -ForegroundColor Yellow
+$packageLockPath = Join-Path $ProjectRoot "package-lock.json"
+if (Test-Path $packageLockPath) {
+    git checkout package-lock.json 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Reset package-lock.json to repo version" -ForegroundColor Green
+    } else {
+        Write-Host "  package-lock.json not tracked or no changes" -ForegroundColor Gray
+    }
+}
+
 # Install dependencies
 if (-not $SkipInstall) {
-    Write-Host "`n[2/4] Installing dependencies..." -ForegroundColor Yellow
+    Write-Host "`n[3/6] Installing dependencies..." -ForegroundColor Yellow
     npm install
     if ($LASTEXITCODE -ne 0) {
         Write-Host "npm install failed!" -ForegroundColor Red
@@ -358,7 +370,7 @@ if (-not $SkipInstall) {
     }
     Write-Host "  Done!" -ForegroundColor Green
 } else {
-    Write-Host "`n[2/4] Skipping npm install" -ForegroundColor Gray
+    Write-Host "`n[3/6] Skipping npm install" -ForegroundColor Gray
 }
 
 # Fix 7zip-bin if npm failed to download 7za.exe (common Windows issue)
@@ -377,7 +389,7 @@ if ($sevenZipPath -and (-not (Test-Path $sevenZipBinExe))) {
 }
 
 # Sync version
-Write-Host "`n[3/5] Syncing version..." -ForegroundColor Yellow
+Write-Host "`n[4/6] Syncing version..." -ForegroundColor Yellow
 $versionFile = Join-Path $ProjectRoot "version.json"
 if (Test-Path $versionFile) {
     $versionData = Get-Content $versionFile | ConvertFrom-Json
@@ -390,7 +402,7 @@ if (Test-Path $versionFile) {
 }
 
 # Build shared
-Write-Host "`n[4/5] Building shared package..." -ForegroundColor Yellow
+Write-Host "`n[5/6] Building shared package..." -ForegroundColor Yellow
 Set-Location (Join-Path $ProjectRoot "packages\shared")
 npm run build
 if ($LASTEXITCODE -ne 0) {
@@ -402,7 +414,7 @@ Set-Location $ProjectRoot
 Write-Host "  Done!" -ForegroundColor Green
 
 # Build desktop
-Write-Host "`n[5/5] Building Windows distribution..." -ForegroundColor Yellow
+Write-Host "`n[6/6] Building Windows distribution..." -ForegroundColor Yellow
 Set-Location (Join-Path $ProjectRoot "packages\desktop")
 npm run dist:win
 if ($LASTEXITCODE -ne 0) {
@@ -413,7 +425,7 @@ if ($LASTEXITCODE -ne 0) {
 Set-Location $ProjectRoot
 
 # Copy final binaries to releases folder
-Write-Host "`n[6/6] Copying to releases folder..." -ForegroundColor Yellow
+Write-Host "`nCopying to releases folder..." -ForegroundColor Yellow
 $ReleasesDir = Join-Path $ProjectRoot "releases"
 if (-not (Test-Path $ReleasesDir)) {
     New-Item -ItemType Directory -Force -Path $ReleasesDir | Out-Null
