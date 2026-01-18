@@ -2716,17 +2716,14 @@ body {
   right: 0;
   transform: translateY(-50%);
   z-index: 100;
-  display: flex;
-  align-items: center;
-  transition: right 0.3s ease;
 }
 
-.plugin-panel-container.open {
-  right: 0;
-}
-
-/* Tab Handle - vertical tab on right edge */
+/* Tab Handle - vertical tab anchored to right edge */
 .plugin-panel-tab {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2739,8 +2736,13 @@ body {
   border-right: none;
   border-radius: 8px 0 0 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: right 0.3s ease, background 0.2s ease;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+  z-index: 101;
+}
+
+.plugin-panel-container.open .plugin-panel-tab {
+  right: min(max(12.5vw, 200px), 350px);
 }
 
 .plugin-panel-tab:hover {
@@ -2765,9 +2767,11 @@ body {
 
 /* Plugin Slide-out Panel */
 .plugin-panel {
-  width: calc(12.5vw);
-  min-width: 200px;
-  max-width: 350px;
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%) translateX(100%);
+  width: min(max(12.5vw, 200px), 350px);
   height: 60vh;
   max-height: 500px;
   background: var(--bg-secondary);
@@ -2778,12 +2782,12 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transform: translateX(100%);
   transition: transform 0.3s ease;
+  z-index: 100;
 }
 
 .plugin-panel-container.open .plugin-panel {
-  transform: translateX(0);
+  transform: translateY(-50%) translateX(0);
 }
 
 .plugin-panel-header {

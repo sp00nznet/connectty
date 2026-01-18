@@ -1038,6 +1038,9 @@ function setupIpcHandlers(): void {
       defaultShell: settingsStore.get('defaultShell'),
       pluginsEnabled: settingsStore.get('pluginsEnabled') || false,
       enabledPlugins: settingsStore.get('enabledPlugins') || [],
+      boxAnalysis: settingsStore.get('boxAnalysis'),
+      datadogHealth: settingsStore.get('datadogHealth'),
+      matrixRainEnabled: settingsStore.get('matrixRainEnabled') || false,
     };
   });
 
@@ -1063,6 +1066,15 @@ function setupIpcHandlers(): void {
     if (settings.enabledPlugins !== undefined) {
       settingsStore.set('enabledPlugins', settings.enabledPlugins);
     }
+    if (settings.boxAnalysis !== undefined) {
+      settingsStore.set('boxAnalysis', settings.boxAnalysis);
+    }
+    if (settings.datadogHealth !== undefined) {
+      settingsStore.set('datadogHealth', settings.datadogHealth);
+    }
+    if (settings.matrixRainEnabled !== undefined) {
+      settingsStore.set('matrixRainEnabled', settings.matrixRainEnabled);
+    }
     return {
       minimizeToTray: settingsStore.get('minimizeToTray'),
       closeToTray: settingsStore.get('closeToTray'),
@@ -1071,6 +1083,9 @@ function setupIpcHandlers(): void {
       defaultShell: settingsStore.get('defaultShell'),
       pluginsEnabled: settingsStore.get('pluginsEnabled') || false,
       enabledPlugins: settingsStore.get('enabledPlugins') || [],
+      boxAnalysis: settingsStore.get('boxAnalysis'),
+      datadogHealth: settingsStore.get('datadogHealth'),
+      matrixRainEnabled: settingsStore.get('matrixRainEnabled') || false,
     };
   });
 
