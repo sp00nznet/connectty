@@ -6730,9 +6730,22 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
   const [importing, setImporting] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
   const [selectedCredential, setSelectedCredential] = useState<string>('');
+  const [nameFilter, setNameFilter] = useState<string>('');
 
-  // Filter to show only non-imported hosts
-  const availableHosts = hosts.filter(h => !h.imported);
+  // Convert wildcard pattern to regex
+  const matchesFilter = (name: string, pattern: string): boolean => {
+    if (!pattern.trim()) return true;
+    const regexPattern = pattern
+      .split('*')
+      .map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*');
+    const regex = new RegExp(`^${regexPattern}$`, 'i');
+    return regex.test(name);
+  };
+
+  // Filter to show only non-imported hosts, then apply name filter
+  const allAvailableHosts = hosts.filter(h => !h.imported);
+  const availableHosts = allAvailableHosts.filter(h => matchesFilter(h.name, nameFilter));
   const importedHosts = hosts.filter(h => h.imported);
 
   const handleToggleHost = (hostId: string) => {
@@ -6743,17 +6756,33 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
       newSelected.add(hostId);
     }
     setSelectedHosts(newSelected);
-    setSelectAll(newSelected.size === availableHosts.length && availableHosts.length > 0);
+    // Check if all currently filtered hosts are selected
+    const filteredIds = new Set(availableHosts.map(h => h.id));
+    const allFilteredSelected = availableHosts.length > 0 &&
+      availableHosts.every(h => newSelected.has(h.id));
+    setSelectAll(allFilteredSelected);
   };
 
   const handleSelectAll = () => {
     if (selectAll) {
-      setSelectedHosts(new Set());
+      // Deselect only the filtered hosts
+      const newSelected = new Set(selectedHosts);
+      availableHosts.forEach(h => newSelected.delete(h.id));
+      setSelectedHosts(newSelected);
       setSelectAll(false);
     } else {
-      setSelectedHosts(new Set(availableHosts.map(h => h.id)));
+      // Select all filtered hosts (keeping any previously selected)
+      const newSelected = new Set(selectedHosts);
+      availableHosts.forEach(h => newSelected.add(h.id));
+      setSelectedHosts(newSelected);
       setSelectAll(true);
     }
+  };
+
+  const handleSelectFiltered = () => {
+    // Select only the filtered hosts, clear everything else
+    setSelectedHosts(new Set(availableHosts.map(h => h.id)));
+    setSelectAll(true);
   };
 
   const handleImport = async () => {
@@ -6789,20 +6818,61 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
             </p>
           ) : (
             <>
-              {availableHosts.length > 0 && (
+              {allAvailableHosts.length > 0 && (
                 <>
+                  {/* Filter input */}
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>Filter by Name</label>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g., *-dev, prod-*, web*"
+                        value={nameFilter}
+                        onChange={(e) => setNameFilter(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      {nameFilter && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => setNameFilter('')}
+                          title="Clear filter"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                    {nameFilter && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                        Showing {availableHosts.length} of {allAvailableHosts.length} hosts
+                      </div>
+                    )}
+                  </div>
+
                   <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                     <label className="checkbox-label" style={{ margin: 0 }}>
                       <input
                         type="checkbox"
-                        checked={selectAll}
+                        checked={selectAll && availableHosts.length > 0}
                         onChange={handleSelectAll}
+                        disabled={availableHosts.length === 0}
                       />
-                      <span>Select All ({availableHosts.length} available)</span>
+                      <span>Select All ({availableHosts.length} {nameFilter ? 'matching' : 'available'})</span>
                     </label>
                     <span style={{ color: '#a0aec0', fontSize: '0.875rem' }}>
                       {selectedHosts.size} selected
                     </span>
+                    {nameFilter && availableHosts.length > 0 && selectedHosts.size !== availableHosts.length && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={handleSelectFiltered}
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                      >
+                        Select Only Matching
+                      </button>
+                    )}
                   </div>
                   <div className="form-group" style={{ marginBottom: '1rem' }}>
                     <label>Assign Credential to Imported Hosts</label>
@@ -6915,9 +6985,15 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
                 </div>
               )}
 
-              {availableHosts.length === 0 && importedHosts.length > 0 && (
+              {allAvailableHosts.length === 0 && importedHosts.length > 0 && (
                 <p style={{ color: '#a0aec0', textAlign: 'center', marginTop: '1rem' }}>
                   All hosts from this provider have been imported. Use "Remove Hosts" to reset and reimport.
+                </p>
+              )}
+
+              {allAvailableHosts.length > 0 && availableHosts.length === 0 && nameFilter && (
+                <p style={{ color: '#a0aec0', textAlign: 'center', marginTop: '1rem' }}>
+                  No hosts match the filter "{nameFilter}". Try a different pattern.
                 </p>
               )}
             </>
