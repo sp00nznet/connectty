@@ -2849,10 +2849,20 @@ body {
 }
 
 /* Host Stats Plugin Styles */
+.host-stats-display,
 .host-stats-placeholder {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.plugin-host-name {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 8px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
 .stat-row {
@@ -2862,9 +2872,10 @@ body {
 }
 
 .stat-label {
-  width: 60px;
-  font-size: 0.85rem;
+  width: 50px;
+  font-size: 0.8rem;
   color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .stat-bar {
@@ -2877,9 +2888,23 @@ body {
 
 .stat-fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--success);
   border-radius: 4px;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.stat-fill.medium {
+  background: var(--warning);
+}
+
+.stat-fill.high {
+  background: var(--error);
+}
+
+.stat-value-wide {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  font-family: monospace;
 }
 
 .stat-value {

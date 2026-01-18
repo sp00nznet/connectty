@@ -23,6 +23,7 @@ import type {
   SerialFlowControl,
   Profile,
   ProviderSyncResult,
+  HostStats,
 } from '@connectty/shared';
 import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, RetroTermSettings, RetroTermPreset } from '../main/preload';
 import { Terminal } from 'xterm';
@@ -142,6 +143,9 @@ export default function App() {
   };
   const [showPluginPanel, setShowPluginPanel] = useState(false);
   const [pluginPanelData, setPluginPanelData] = useState<Record<string, unknown> | null>(null);
+  // Host stats for the active session
+  const [hostStats, setHostStats] = useState<HostStats | null>(null);
+  const [activeStatsSessionId, setActiveStatsSessionId] = useState<string | null>(null);
 
   // New tab menu (stores position for fixed positioning)
   const [newTabMenuPos, setNewTabMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -451,11 +455,18 @@ export default function App() {
     const unsubscribeSerial = window.connectty.serial.onEvent(handleSerialEvent);
     const unsubscribeRDP = window.connectty.rdp.onEvent(handleRDPEvent);
     const unsubscribeLocalShell = window.connectty.localShell.onEvent(handleLocalShellEvent);
+
+    // Listen for host stats events from the plugin service
+    const unsubscribeHostStats = window.connectty.plugins.onHostStats((stats) => {
+      setHostStats(stats);
+    });
+
     return () => {
       unsubscribeSSH();
       unsubscribeSerial();
       unsubscribeRDP();
       unsubscribeLocalShell();
+      unsubscribeHostStats();
     };
   }, []);
 
@@ -833,6 +844,12 @@ export default function App() {
       setSessions(prev => [...prev, newSession]);
       setActiveSessionId(sessionId);
       showNotification('success', `Connected to ${connection.name}`);
+
+      // Start host stats collection if plugin is enabled
+      if (getAppActivePlugin() === 'hostStats') {
+        window.connectty.plugins.startHostStats(connection.id, sessionId);
+        setActiveStatsSessionId(sessionId);
+      }
     } catch (err) {
       showNotification('error', `Failed to connect: ${(err as Error).message}`);
     }
@@ -851,6 +868,12 @@ export default function App() {
     if (!session) return;
 
     if (session.type === 'ssh') {
+      // Stop host stats collection if this was the active stats session
+      if (activeStatsSessionId === sessionId) {
+        window.connectty.plugins.stopHostStats(session.connectionId);
+        setActiveStatsSessionId(null);
+        setHostStats(null);
+      }
       await window.connectty.ssh.disconnect(sessionId);
     } else if (session.type === 'sftp') {
       await window.connectty.sftp.disconnect(session.sessionId);
@@ -1821,25 +1844,50 @@ export default function App() {
           <div className="plugin-panel-content">
             {getAppActivePlugin() === 'hostStats' && (
               <div className="plugin-output">
-                <p className="plugin-output-empty">
-                  Connect to a host to view real-time stats.
-                </p>
-                <div className="host-stats-placeholder">
+                {!hostStats ? (
+                  <p className="plugin-output-empty">
+                    Connect to a host to view real-time stats.
+                  </p>
+                ) : (
+                  <p className="plugin-host-name">{hostStats.connectionId}</p>
+                )}
+                <div className="host-stats-display">
                   <div className="stat-row">
                     <span className="stat-label">CPU</span>
-                    <div className="stat-bar"><div className="stat-fill" style={{ width: '0%' }}></div></div>
-                    <span className="stat-value">--</span>
+                    <div className="stat-bar">
+                      <div
+                        className={`stat-fill ${hostStats && hostStats.cpu > 80 ? 'high' : hostStats && hostStats.cpu > 50 ? 'medium' : ''}`}
+                        style={{ width: hostStats ? `${hostStats.cpu}%` : '0%' }}
+                      ></div>
+                    </div>
+                    <span className="stat-value">{hostStats ? `${hostStats.cpu.toFixed(1)}%` : '--'}</span>
                   </div>
                   <div className="stat-row">
                     <span className="stat-label">Memory</span>
-                    <div className="stat-bar"><div className="stat-fill" style={{ width: '0%' }}></div></div>
-                    <span className="stat-value">--</span>
+                    <div className="stat-bar">
+                      <div
+                        className={`stat-fill ${hostStats && hostStats.memory > 80 ? 'high' : hostStats && hostStats.memory > 50 ? 'medium' : ''}`}
+                        style={{ width: hostStats ? `${hostStats.memory}%` : '0%' }}
+                      ></div>
+                    </div>
+                    <span className="stat-value">{hostStats ? `${hostStats.memory.toFixed(1)}%` : '--'}</span>
                   </div>
                   <div className="stat-row">
                     <span className="stat-label">Disk</span>
-                    <div className="stat-bar"><div className="stat-fill" style={{ width: '0%' }}></div></div>
-                    <span className="stat-value">--</span>
+                    <div className="stat-bar">
+                      <div
+                        className={`stat-fill ${hostStats && hostStats.disk > 80 ? 'high' : hostStats && hostStats.disk > 50 ? 'medium' : ''}`}
+                        style={{ width: hostStats ? `${hostStats.disk}%` : '0%' }}
+                      ></div>
+                    </div>
+                    <span className="stat-value">{hostStats ? `${hostStats.disk.toFixed(1)}%` : '--'}</span>
                   </div>
+                  {hostStats && hostStats.loadAverage && (
+                    <div className="stat-row">
+                      <span className="stat-label">Load</span>
+                      <span className="stat-value-wide">{hostStats.loadAverage.join(' / ')}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
