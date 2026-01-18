@@ -1273,6 +1273,30 @@ export default function App() {
       return;
     }
     try {
+      // Close all existing sessions before switching
+      for (const session of sessions) {
+        try {
+          if (session.type === 'ssh') {
+            await window.connectty.ssh.disconnect(session.id);
+          } else if (session.type === 'sftp') {
+            await window.connectty.sftp.disconnect(session.sessionId);
+          } else if (session.type === 'rdp') {
+            await window.connectty.rdp.disconnect(session.id);
+          } else if (session.type === 'serial') {
+            await window.connectty.serial.disconnect(session.id);
+          } else if (session.type === 'localShell') {
+            await window.connectty.localShell.kill(session.id);
+          }
+        } catch {
+          // Ignore errors when closing sessions
+        }
+      }
+
+      // Clear session state
+      setSessions([]);
+      setActiveSessionId(null);
+      setCustomTabNames(new Map());
+
       await window.connectty.profiles.switch(profileId);
       await loadData();
       setShowProfileMenu(false);
