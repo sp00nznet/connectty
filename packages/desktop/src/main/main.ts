@@ -30,6 +30,23 @@ interface AppSettings {
   defaultShell?: string;
   pluginsEnabled?: boolean;
   enabledPlugins?: string[];
+  boxAnalysis?: {
+    pollingEnabled: boolean;
+    pollingInterval: number;
+    datadogEnabled: boolean;
+  };
+  datadogHealth?: {
+    enabled: boolean;
+    apiKey: string;
+    appKey: string;
+    pollInterval: number;
+    thresholds?: {
+      cpu: { yellow: number; red: number };
+      memory: { yellow: number; red: number };
+      disk: { yellow: number; red: number };
+    };
+  };
+  matrixRainEnabled?: boolean;
 }
 
 // Initialize settings store
@@ -414,6 +431,31 @@ function setupIpcHandlers(): void {
       mainWindow?.webContents.send('profiles:switched', profileId);
     }
     return success;
+  });
+
+  ipcMain.handle('profiles:setDefaultSessionState', async (_event, profileId: string, sessionStateId: string | null) => {
+    return db.setProfileDefaultSessionState(profileId, sessionStateId);
+  });
+
+  // Session state handlers
+  ipcMain.handle('sessionStates:list', async (_event, profileId?: string) => {
+    return db.getSessionStates(profileId);
+  });
+
+  ipcMain.handle('sessionStates:get', async (_event, id: string) => {
+    return db.getSessionState(id);
+  });
+
+  ipcMain.handle('sessionStates:create', async (_event, data: { name: string; description?: string; sessions: import('@connectty/shared').SavedSession[]; profileId?: string }) => {
+    return db.createSessionState(data);
+  });
+
+  ipcMain.handle('sessionStates:update', async (_event, id: string, updates: { name?: string; description?: string; sessions?: import('@connectty/shared').SavedSession[] }) => {
+    return db.updateSessionState(id, updates);
+  });
+
+  ipcMain.handle('sessionStates:delete', async (_event, id: string) => {
+    return db.deleteSessionState(id);
   });
 
   // Discovered hosts handlers

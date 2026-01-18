@@ -24,6 +24,8 @@ import type {
   Profile,
   ProviderSyncResult,
   HostStats,
+  SessionState,
+  SavedSession,
 } from '@connectty/shared';
 import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, RetroTermSettings, RetroTermPreset } from '../main/preload';
 import { Terminal } from 'xterm';
@@ -446,9 +448,45 @@ export default function App() {
     }
   }, [isAnyModalOpen, theme]);
 
-  // Load data on mount
+  // Load data on mount and auto-restore default session state
   useEffect(() => {
-    loadData();
+    const initializeApp = async () => {
+      await loadData();
+
+      // Check for default session state and auto-restore
+      try {
+        const activeProf = await window.connectty.profiles.getActive();
+        if (activeProf?.defaultSessionStateId) {
+          const defaultState = await window.connectty.sessionStates.get(activeProf.defaultSessionStateId);
+          if (defaultState && defaultState.sessions.length > 0) {
+            console.log('[Auto-restore] Loading default session state:', defaultState.name);
+            // Delay slightly to ensure connections are loaded
+            setTimeout(async () => {
+              try {
+                // Get fresh connections list
+                const conns = await window.connectty.connections.list();
+                for (const savedSession of defaultState.sessions) {
+                  if (savedSession.type === 'ssh' && savedSession.connectionId) {
+                    const connection = conns.find(c => c.id === savedSession.connectionId);
+                    if (connection) {
+                      await handleConnect(connection);
+                    }
+                  } else if (savedSession.type === 'localShell' && savedSession.shellId) {
+                    await handleNewLocalShell(savedSession.shellId);
+                  }
+                }
+              } catch (err) {
+                console.error('[Auto-restore] Failed to restore sessions:', err);
+              }
+            }, 500);
+          }
+        }
+      } catch (err) {
+        console.error('[Auto-restore] Error checking default session state:', err);
+      }
+    };
+
+    initializeApp();
 
     // Listen for SSH, serial, RDP, and local shell events
     const unsubscribeSSH = window.connectty.ssh.onEvent(handleSSHEvent);
@@ -1140,6 +1178,31 @@ export default function App() {
     const updated = await window.connectty.settings.set(settings);
     setAppSettings(updated);
     showNotification('success', 'Settings saved');
+  };
+
+  const handleLoadSessionState = async (sessionState: SessionState) => {
+    try {
+      showNotification('success', `Loading session state "${sessionState.name}"...`);
+
+      for (const savedSession of sessionState.sessions) {
+        if (savedSession.type === 'ssh' && savedSession.connectionId) {
+          // Find the connection
+          const connection = connections.find(c => c.id === savedSession.connectionId);
+          if (connection) {
+            // Connect to it
+            await handleConnect(connection);
+          } else {
+            console.warn(`Connection not found for session state: ${savedSession.connectionName || savedSession.connectionId}`);
+          }
+        } else if (savedSession.type === 'localShell' && savedSession.shellId) {
+          // Spawn the local shell
+          await handleNewLocalShell(savedSession.shellId);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load session state:', error);
+      showNotification('error', 'Failed to load some sessions');
+    }
   };
 
   const handleDiscoverAndImport = async (provider: Provider) => {
@@ -2064,6 +2127,26 @@ export default function App() {
           onClose={() => setShowSettingsModal(false)}
           onSave={handleSaveSettings}
           availableShells={availableShells}
+          currentSessions={sessions.map(s => {
+            if (s.type === 'ssh' || s.type === 'serial') {
+              return {
+                type: 'ssh' as const,
+                connectionId: s.connectionId,
+                connectionName: s.connectionName,
+              };
+            } else if (s.type === 'localShell') {
+              return {
+                type: 'localShell' as const,
+                shellId: s.shellId,
+                shellName: s.shellName,
+              };
+            }
+            return null;
+          }).filter((s): s is NonNullable<typeof s> => s !== null && (s.type === 'ssh' || s.type === 'localShell'))}
+          connections={connections}
+          activeProfile={activeProfile}
+          onLoadSessionState={handleLoadSessionState}
+          onNotification={showNotification}
         />
       )}
 
@@ -5773,9 +5856,15 @@ interface SettingsModalProps {
   onClose: () => void;
   onSave: (settings: Partial<AppSettings>) => Promise<void>;
   availableShells: LocalShellInfo[];
+  // Session state props
+  currentSessions: { type: 'ssh' | 'localShell'; connectionId?: string; connectionName?: string; shellId?: string; shellName?: string }[];
+  connections: ServerConnection[];
+  activeProfile: Profile | null;
+  onLoadSessionState: (sessionState: SessionState) => void;
+  onNotification: (type: 'success' | 'error', message: string) => void;
 }
 
-function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave, availableShells }: SettingsModalProps) {
+function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave, availableShells, currentSessions, connections, activeProfile, onLoadSessionState, onNotification }: SettingsModalProps) {
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
@@ -5808,6 +5897,19 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
     const saved = localStorage.getItem('settings-plugins-expanded');
     return saved !== null ? saved === 'true' : true;
   });
+  const [sessionStatesExpanded, setSessionStatesExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-sessionstates-expanded');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // Session states state
+  const [sessionStates, setSessionStates] = useState<SessionState[]>([]);
+  const [loadingSessionStates, setLoadingSessionStates] = useState(false);
+  const [creatingSessionState, setCreatingSessionState] = useState(false);
+  const [newSessionStateName, setNewSessionStateName] = useState('');
+  const [editingSessionStateId, setEditingSessionStateId] = useState<string | null>(null);
+  const [editingSessionStateName, setEditingSessionStateName] = useState('');
+  const [sessionStateMessage, setSessionStateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Plugin state - only one plugin can be active at a time
   type PluginType = 'none' | 'hostStats' | 'boxAnalyzer' | 'datadogHealth' | 'matrixRain';
@@ -5844,6 +5946,25 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   useEffect(() => {
     localStorage.setItem('settings-plugins-expanded', String(pluginsExpanded));
   }, [pluginsExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-sessionstates-expanded', String(sessionStatesExpanded));
+  }, [sessionStatesExpanded]);
+
+  // Load session states on mount
+  useEffect(() => {
+    const loadSessionStates = async () => {
+      setLoadingSessionStates(true);
+      try {
+        const states = await window.connectty.sessionStates.list();
+        setSessionStates(states);
+      } catch (error) {
+        console.error('Failed to load session states:', error);
+      } finally {
+        setLoadingSessionStates(false);
+      }
+    };
+    loadSessionStates();
+  }, []);
 
   // Sync accounts state
   const [syncAccounts, setSyncAccounts] = useState<SyncAccount[]>(settings.syncAccounts || []);
@@ -6016,6 +6137,98 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
       return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
       return dateString;
+    }
+  };
+
+  // Session state handlers
+  const handleSaveCurrentSessionState = async () => {
+    if (!newSessionStateName.trim()) return;
+
+    try {
+      // Convert current sessions to SavedSession format
+      const savedSessions: SavedSession[] = currentSessions.map(session => {
+        if (session.type === 'ssh') {
+          const connection = connections.find(c => c.id === session.connectionId);
+          return {
+            type: 'ssh' as const,
+            connectionId: session.connectionId,
+            connectionName: connection?.name || session.connectionName || 'Unknown',
+          };
+        } else {
+          return {
+            type: 'localShell' as const,
+            shellId: session.shellId,
+            shellName: session.shellName,
+          };
+        }
+      });
+
+      const newState = await window.connectty.sessionStates.create({
+        name: newSessionStateName.trim(),
+        sessions: savedSessions,
+      });
+
+      setSessionStates(prev => [...prev, newState]);
+      setNewSessionStateName('');
+      setCreatingSessionState(false);
+      setSessionStateMessage({ type: 'success', text: `Session state "${newState.name}" saved` });
+      setTimeout(() => setSessionStateMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to save session state:', error);
+      setSessionStateMessage({ type: 'error', text: 'Failed to save session state' });
+      setTimeout(() => setSessionStateMessage(null), 5000);
+    }
+  };
+
+  const handleUpdateSessionStateName = async (id: string, name: string) => {
+    if (!name.trim()) return;
+
+    try {
+      const updated = await window.connectty.sessionStates.update(id, { name: name.trim() });
+      if (updated) {
+        setSessionStates(prev => prev.map(s => s.id === id ? updated : s));
+      }
+      setEditingSessionStateId(null);
+      setEditingSessionStateName('');
+    } catch (error) {
+      console.error('Failed to update session state:', error);
+      setSessionStateMessage({ type: 'error', text: 'Failed to rename session state' });
+      setTimeout(() => setSessionStateMessage(null), 5000);
+    }
+  };
+
+  const handleDeleteSessionState = async (id: string) => {
+    try {
+      await window.connectty.sessionStates.delete(id);
+      setSessionStates(prev => prev.filter(s => s.id !== id));
+      setSessionStateMessage({ type: 'success', text: 'Session state deleted' });
+      setTimeout(() => setSessionStateMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to delete session state:', error);
+      setSessionStateMessage({ type: 'error', text: 'Failed to delete session state' });
+      setTimeout(() => setSessionStateMessage(null), 5000);
+    }
+  };
+
+  const handleLoadSessionState = async (sessionState: SessionState) => {
+    onLoadSessionState(sessionState);
+    onClose();
+  };
+
+  const handleSetDefaultSessionState = async (sessionStateId: string | null) => {
+    if (!activeProfile) return;
+
+    try {
+      await window.connectty.profiles.setDefaultSessionState(activeProfile.id, sessionStateId);
+      setSessionStateMessage({
+        type: 'success',
+        text: sessionStateId ? 'Default session state set' : 'Default session state cleared'
+      });
+      setTimeout(() => setSessionStateMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to set default session state:', error);
+      setSessionStateMessage({ type: 'error', text: 'Failed to set default session state' });
+      setTimeout(() => setSessionStateMessage(null), 5000);
     }
   };
 
@@ -6712,6 +6925,220 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                         </div>
                       </div>
                     </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Session States Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setSessionStatesExpanded(!sessionStatesExpanded)}
+              >
+                <span className={`collapse-icon ${sessionStatesExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Session States</h4>
+                {sessionStates.length > 0 && (
+                  <span className="settings-badge">{sessionStates.length} saved</span>
+                )}
+              </button>
+              {sessionStatesExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Save and restore your session arrangements. When loading a session state, Connectty will reconnect to saved SSH sessions and open saved local shells.
+                  </p>
+
+                  {/* Session State Message */}
+                  {sessionStateMessage && (
+                    <div className={`sync-message sync-message-${sessionStateMessage.type}`}>
+                      {sessionStateMessage.text}
+                    </div>
+                  )}
+
+                  {/* Current Sessions Info */}
+                  {currentSessions.length > 0 && (
+                    <div className="session-state-current">
+                      <div className="session-state-current-header">
+                        <strong>Current Sessions ({currentSessions.length})</strong>
+                      </div>
+                      <div className="session-state-current-list">
+                        {currentSessions.map((session, index) => (
+                          <span key={index} className="session-state-badge">
+                            {session.type === 'ssh' ? (
+                              <>SSH: {session.connectionName}</>
+                            ) : (
+                              <>{session.shellName}</>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Save Current State */}
+                  {creatingSessionState ? (
+                    <div className="session-state-create">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Enter session state name..."
+                        value={newSessionStateName}
+                        onChange={(e) => setNewSessionStateName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveCurrentSessionState();
+                          } else if (e.key === 'Escape') {
+                            setCreatingSessionState(false);
+                            setNewSessionStateName('');
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <div className="session-state-create-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={handleSaveCurrentSessionState}
+                          disabled={!newSessionStateName.trim() || currentSessions.length === 0}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => {
+                            setCreatingSessionState(false);
+                            setNewSessionStateName('');
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {currentSessions.length === 0 && (
+                        <p className="session-state-hint">No active sessions to save</p>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-secondary session-state-save-btn"
+                      onClick={() => setCreatingSessionState(true)}
+                      disabled={currentSessions.length === 0}
+                    >
+                      + Save Current Sessions as State
+                    </button>
+                  )}
+
+                  {/* Saved Session States List */}
+                  {loadingSessionStates ? (
+                    <div className="session-states-loading">Loading session states...</div>
+                  ) : sessionStates.length > 0 ? (
+                    <div className="session-states-list">
+                      {sessionStates.map(state => (
+                        <div key={state.id} className="session-state-item">
+                          {editingSessionStateId === state.id ? (
+                            <div className="session-state-edit">
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={editingSessionStateName}
+                                onChange={(e) => setEditingSessionStateName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleUpdateSessionStateName(state.id, editingSessionStateName);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingSessionStateId(null);
+                                    setEditingSessionStateName('');
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                onClick={() => handleUpdateSessionStateName(state.id, editingSessionStateName)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-secondary"
+                                onClick={() => {
+                                  setEditingSessionStateId(null);
+                                  setEditingSessionStateName('');
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="session-state-info">
+                                <div className="session-state-name">
+                                  {state.name}
+                                  {activeProfile?.defaultSessionStateId === state.id && (
+                                    <span className="session-state-default-badge">Default</span>
+                                  )}
+                                </div>
+                                <div className="session-state-details">
+                                  {state.sessions.length} session{state.sessions.length !== 1 ? 's' : ''}
+                                  {state.sessions.length > 0 && (
+                                    <span className="session-state-types">
+                                      {' '}({state.sessions.filter(s => s.type === 'ssh').length} SSH,{' '}
+                                      {state.sessions.filter(s => s.type === 'localShell').length} local)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="session-state-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-primary"
+                                  onClick={() => handleLoadSessionState(state)}
+                                  title="Load this session state"
+                                >
+                                  Load
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`btn btn-sm ${activeProfile?.defaultSessionStateId === state.id ? 'btn-secondary' : 'btn-outline'}`}
+                                  onClick={() => handleSetDefaultSessionState(
+                                    activeProfile?.defaultSessionStateId === state.id ? null : state.id
+                                  )}
+                                  title={activeProfile?.defaultSessionStateId === state.id ? 'Remove as default' : 'Set as default for this profile'}
+                                >
+                                  {activeProfile?.defaultSessionStateId === state.id ? 'Unset Default' : 'Set Default'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-icon-only"
+                                  onClick={() => {
+                                    setEditingSessionStateId(state.id);
+                                    setEditingSessionStateName(state.name);
+                                  }}
+                                  title="Rename"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-icon-only btn-danger"
+                                  onClick={() => handleDeleteSessionState(state.id)}
+                                  title="Delete"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="session-states-empty">No session states saved yet.</p>
                   )}
                 </div>
               )}

@@ -18,6 +18,8 @@ import type {
   CommandType,
   CommandTargetOS,
   CommandVariable,
+  SessionState,
+  SavedSession,
 } from '@connectty/shared';
 import { sysadminScripts } from './sysadmin-scripts';
 
@@ -178,8 +180,20 @@ export class DatabaseService {
         name TEXT NOT NULL UNIQUE,
         description TEXT,
         is_default INTEGER DEFAULT 0,
+        default_session_state_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS session_states (
+        id TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        sessions TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
       );
     `);
 
@@ -235,6 +249,8 @@ export class DatabaseService {
       { table: 'providers', column: 'profile_id', sql: 'ALTER TABLE providers ADD COLUMN profile_id TEXT' },
       { table: 'saved_commands', column: 'profile_id', sql: 'ALTER TABLE saved_commands ADD COLUMN profile_id TEXT' },
       { table: 'command_history', column: 'profile_id', sql: 'ALTER TABLE command_history ADD COLUMN profile_id TEXT' },
+      // Session state migrations
+      { table: 'profiles', column: 'default_session_state_id', sql: 'ALTER TABLE profiles ADD COLUMN default_session_state_id TEXT' },
     ];
 
     // Cache table schemas to avoid multiple PRAGMA calls (optimization)
@@ -385,6 +401,7 @@ export class DatabaseService {
       name: string;
       description: string | null;
       is_default: number;
+      default_session_state_id: string | null;
       created_at: string;
       updated_at: string;
     }>;
@@ -394,6 +411,7 @@ export class DatabaseService {
       name: row.name,
       description: row.description || undefined,
       isDefault: row.is_default === 1,
+      defaultSessionStateId: row.default_session_state_id || undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     }));
@@ -406,6 +424,7 @@ export class DatabaseService {
       name: string;
       description: string | null;
       is_default: number;
+      default_session_state_id: string | null;
       created_at: string;
       updated_at: string;
     } | undefined;
@@ -417,6 +436,7 @@ export class DatabaseService {
       name: row.name,
       description: row.description || undefined,
       isDefault: row.is_default === 1,
+      defaultSessionStateId: row.default_session_state_id || undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
@@ -536,6 +556,113 @@ export class DatabaseService {
     }
 
     return true;
+  }
+
+  // Session State methods
+  getSessionStates(profileId?: string): SessionState[] {
+    const targetProfileId = profileId || this.getActiveProfileId();
+    const stmt = this.db.prepare('SELECT * FROM session_states WHERE profile_id = ? ORDER BY name');
+    const rows = stmt.all(targetProfileId) as SessionStateRow[];
+    return rows.map(row => this.rowToSessionState(row));
+  }
+
+  getSessionState(id: string): SessionState | null {
+    const stmt = this.db.prepare('SELECT * FROM session_states WHERE id = ?');
+    const row = stmt.get(id) as SessionStateRow | undefined;
+    return row ? this.rowToSessionState(row) : null;
+  }
+
+  createSessionState(data: { name: string; description?: string; sessions: SavedSession[]; profileId?: string }): SessionState {
+    const id = generateId();
+    const now = new Date().toISOString();
+    const profileId = data.profileId || this.getActiveProfileId();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO session_states (id, profile_id, name, description, sessions, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      profileId,
+      data.name,
+      data.description || null,
+      JSON.stringify(data.sessions),
+      now,
+      now
+    );
+
+    return this.getSessionState(id)!;
+  }
+
+  updateSessionState(id: string, updates: { name?: string; description?: string; sessions?: SavedSession[] }): SessionState | null {
+    const existing = this.getSessionState(id);
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    const fields: string[] = ['updated_at = ?'];
+    const values: unknown[] = [now];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+
+    if (updates.description !== undefined) {
+      fields.push('description = ?');
+      values.push(updates.description);
+    }
+
+    if (updates.sessions !== undefined) {
+      fields.push('sessions = ?');
+      values.push(JSON.stringify(updates.sessions));
+    }
+
+    values.push(id);
+    const stmt = this.db.prepare(`UPDATE session_states SET ${fields.join(', ')} WHERE id = ?`);
+    stmt.run(...values);
+
+    return this.getSessionState(id);
+  }
+
+  deleteSessionState(id: string): boolean {
+    // Clear any profile default that references this session state
+    this.db.prepare('UPDATE profiles SET default_session_state_id = NULL WHERE default_session_state_id = ?').run(id);
+
+    const stmt = this.db.prepare('DELETE FROM session_states WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  setProfileDefaultSessionState(profileId: string, sessionStateId: string | null): boolean {
+    // Verify the session state exists and belongs to the profile (if not null)
+    if (sessionStateId !== null) {
+      const sessionState = this.getSessionState(sessionStateId);
+      if (!sessionState) {
+        throw new Error('Session state not found');
+      }
+      if (sessionState.profileId !== profileId) {
+        throw new Error('Session state does not belong to this profile');
+      }
+    }
+
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare('UPDATE profiles SET default_session_state_id = ?, updated_at = ? WHERE id = ?');
+    const result = stmt.run(sessionStateId, now, profileId);
+
+    return result.changes > 0;
+  }
+
+  private rowToSessionState(row: SessionStateRow): SessionState {
+    return {
+      id: row.id,
+      profileId: row.profile_id,
+      name: row.name,
+      description: row.description || undefined,
+      sessions: JSON.parse(row.sessions) as SavedSession[],
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
   }
 
   // Connection methods
@@ -1842,4 +1969,14 @@ interface CommandHistoryRow {
   started_at: string;
   completed_at: string | null;
   status: string;
+}
+
+interface SessionStateRow {
+  id: string;
+  profile_id: string;
+  name: string;
+  description: string | null;
+  sessions: string;
+  created_at: string;
+  updated_at: string;
 }
