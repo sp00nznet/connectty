@@ -1470,8 +1470,6 @@ export default function App() {
           <button className="btn btn-secondary btn-sm" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }}>
             Providers
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleImport}>Import</button>
-          <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
             Repeated Actions
           </button>
@@ -1981,6 +1979,8 @@ export default function App() {
           activeProfile={activeProfile}
           onLoadSessionState={handleLoadSessionState}
           onNotification={showNotification}
+          onImport={handleImport}
+          onExport={handleExport}
         />
       )}
 
@@ -5728,9 +5728,12 @@ interface SettingsModalProps {
   activeProfile: Profile | null;
   onLoadSessionState: (sessionState: SessionState) => void;
   onNotification: (type: 'success' | 'error', message: string) => void;
+  // Import/Export props
+  onImport: () => Promise<void>;
+  onExport: () => Promise<void>;
 }
 
-function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave, availableShells, currentSessions, connections, activeProfile, onLoadSessionState, onNotification }: SettingsModalProps) {
+function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave, availableShells, currentSessions, connections, activeProfile, onLoadSessionState, onNotification, onImport, onExport }: SettingsModalProps) {
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
@@ -5738,30 +5741,34 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [defaultShell, setDefaultShell] = useState<string | undefined>(settings.defaultShell);
   const [saving, setSaving] = useState(false);
 
-  // Collapsible section states - load from localStorage
+  // Collapsible section states - load from localStorage (default to collapsed)
   const [themesExpanded, setThemesExpanded] = useState(() => {
     const saved = localStorage.getItem('settings-themes-expanded');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
   });
   const [terminalExpanded, setTerminalExpanded] = useState(() => {
     const saved = localStorage.getItem('settings-terminal-expanded');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
   });
   const [trayExpanded, setTrayExpanded] = useState(() => {
     const saved = localStorage.getItem('settings-tray-expanded');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
   });
   const [syncExpanded, setSyncExpanded] = useState(() => {
     const saved = localStorage.getItem('settings-sync-expanded');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
   });
   const [defaultShellExpanded, setDefaultShellExpanded] = useState(() => {
     const saved = localStorage.getItem('settings-defaultshell-expanded');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
   });
   const [sessionStatesExpanded, setSessionStatesExpanded] = useState(() => {
     const saved = localStorage.getItem('settings-sessionstates-expanded');
-    return saved !== null ? saved === 'true' : true;
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [importExportExpanded, setImportExportExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-importexport-expanded');
+    return saved !== null ? saved === 'true' : false;
   });
 
   // Session states state
@@ -5792,6 +5799,13 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   useEffect(() => {
     localStorage.setItem('settings-sessionstates-expanded', String(sessionStatesExpanded));
   }, [sessionStatesExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-importexport-expanded', String(importExportExpanded));
+  }, [importExportExpanded]);
+
+  // Import/Export state
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Load session states on mount
   useEffect(() => {
@@ -6730,6 +6744,67 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                   ) : (
                     <p className="session-states-empty">No session states saved yet.</p>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* Import/Export Section - Collapsible */}
+            <div className="settings-section collapsible">
+              <button
+                type="button"
+                className="settings-section-header"
+                onClick={() => setImportExportExpanded(!importExportExpanded)}
+              >
+                <span className={`collapse-icon ${importExportExpanded ? 'expanded' : ''}`}>▶</span>
+                <h4>Import / Export</h4>
+              </button>
+              {importExportExpanded && (
+                <div className="settings-section-content">
+                  <p className="settings-description">
+                    Import or export your connections, credentials, and groups. This allows you to backup your configuration or transfer it to another device.
+                  </p>
+                  <div className="import-export-info" style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '6px' }}>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 500 }}>What gets exported:</p>
+                    <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      <li>All connections and their settings</li>
+                      <li>Groups and folder structure</li>
+                      <li>Credentials (usernames only - passwords are not exported for security)</li>
+                    </ul>
+                  </div>
+                  <div className="import-export-actions" style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={async () => {
+                        setImporting(true);
+                        try {
+                          await onImport();
+                        } finally {
+                          setImporting(false);
+                        }
+                      }}
+                      disabled={importing || exporting}
+                      style={{ flex: 1 }}
+                    >
+                      {importing ? 'Importing...' : 'Import Data'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={async () => {
+                        setExporting(true);
+                        try {
+                          await onExport();
+                        } finally {
+                          setExporting(false);
+                        }
+                      }}
+                      disabled={importing || exporting}
+                      style={{ flex: 1 }}
+                    >
+                      {exporting ? 'Exporting...' : 'Export Data'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
