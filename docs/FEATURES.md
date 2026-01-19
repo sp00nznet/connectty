@@ -43,7 +43,7 @@ Comprehensive documentation for all Connectty features.
 | **Connection Groups** | Nested | Folders | Folders | No | Folders | Yes |
 | **Import/Export** | JSON/CSV/SSH Config | Proprietary | Proprietary | Registry | Proprietary | Yes |
 | **System Tray** | Yes | Yes | Yes | No | Yes | Yes |
-| **Themes** | 18 | 8 | Limited | No | Limited | Yes |
+| **Themes** | 100+ | 8 | Limited | No | Limited | Yes |
 
 ### Detailed Comparisons
 
@@ -94,7 +94,7 @@ Comprehensive documentation for all Connectty features.
 | **Bulk Commands** | Yes | No |
 | **Credential Storage** | Encrypted vault | Registry (unencrypted) |
 | **SFTP** | Integrated dual-pane | Separate PSFTP tool |
-| **Themes** | 18 themes | Manual color config |
+| **Themes** | 100+ themes | Manual color config |
 | **Cross-Platform** | Yes | Windows-focused |
 
 **Bottom line:** PuTTY is lightweight and reliable. Connectty modernizes the experience with tabs, themes, and infrastructure integration.

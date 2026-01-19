@@ -158,18 +158,22 @@ SQLite database: `connectty.db`
 
 ### Themes
 
-The desktop app supports 8 built-in themes:
+The desktop app includes **100+ built-in themes** organized by category:
 
-| Theme | Description |
-|-------|-------------|
-| 🌙 Midnight | Default dark blue theme |
-| ☀️ Light | Clean light theme |
-| 🧛 Dracula | Popular dark purple theme |
-| 🏔️ Nord | Arctic, north-bluish palette |
-| 🌅 Solarized | Precision colors for machines and people |
-| 🎨 Monokai | Sublime Text inspired |
-| 🐙 GitHub Dark | GitHub's dark mode |
-| 🔲 High Contrast | Maximum visibility |
+| Category | Examples |
+|----------|----------|
+| **Dark - Blues** | Midnight (default), Cobalt, Night Owl, Pacific |
+| **Dark - Purples** | Dracula, Synthwave, Cyberpunk, Andromeda |
+| **Dark - Greens** | Everforest, Matrix, Vue, Hacker |
+| **Dark - Neutrals** | One Dark, GitHub Dark, VS Dark, Obsidian |
+| **Dark - Warm** | Gruvbox, Solarized, Tomorrow Night, Coffee |
+| **Dark - Pastels** | Catppuccin, Rose Pine, Kanagawa, Lavender |
+| **Light - Clean** | Light, GitHub Light, VS Light, Xcode |
+| **Light - Warm** | Solarized Light, Gruvbox Light, Paper, Sepia |
+| **Light - Cool** | Catppuccin Latte, Rose Pine Dawn, Notion |
+| **Neon** | Neon City, Miami, Arcade, Synthwave |
+| **Retro** | Amber CRT, Commodore, Apple II, VT220 |
+| **Accessibility** | High Contrast, High Contrast Light |
 
 Theme selection is stored in `localStorage` and persists between sessions.
 
