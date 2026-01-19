@@ -5839,7 +5839,6 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   const [showConfigPicker, setShowConfigPicker] = useState<string | null>(null); // accountId when showing picker
   const [availableConfigs, setAvailableConfigs] = useState<SyncConfigInfo[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [uploadingAccount, setUploadingAccount] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
