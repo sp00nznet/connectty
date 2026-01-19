@@ -4,6 +4,13 @@ Modern connection manager for DevOps professionals on Android. Manage SSH, RDP, 
 
 ## Features
 
+### 🆕 Android Terminal Integration (Android 15+)
+- **Native tabbed terminal** - Use your SSH connections in Android's Terminal app
+- **Set as default shell** - Make Connectty your system terminal provider
+- **Seamless experience** - All connections available as terminal tabs
+- **Full keyboard support** - Ctrl+C, Ctrl+V, and more shortcuts
+- See [ANDROID_TERMINAL_INTEGRATION.md](ANDROID_TERMINAL_INTEGRATION.md) for details
+
 ### Core Connection Types
 - **SSH** - Full terminal emulation with 256-color support
 - **RDP** - Remote Desktop Protocol support (via external RDP clients)

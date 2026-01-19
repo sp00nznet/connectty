@@ -74,6 +74,21 @@
             android:name=".ui.sftp.SFTPActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Terminal Session Provider for Android 15+ Terminal app -->
+        <!-- This allows Connectty to be set as the default shell provider -->
+        <provider
+            android:name=".terminal.ConnecttyTerminalProvider"
+            android:authorities="com.connectty.android.terminal"
+            android:exported="true"
+            android:permission="com.android.terminal.permission.RUN_COMMAND">
+            <intent-filter>
+                <action android:name="com.android.terminal.action.PROVIDE_TERMINAL_SESSIONS" />
+            </intent-filter>
+            <meta-data
+                android:name="com.android.terminal.provider_name"
+                android:value="Connectty SSH" />
+        </provider>
     </application>
 
 </manifest>
