@@ -32,7 +32,9 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "png-to-ico": "^2.1.8",
     "rimraf": "^5.0.5",
+    "sharp": "^0.33.2",
     "typescript": "^5.3.3"
   },
   "dependencies": {
