@@ -11,10 +11,12 @@ const { execSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ICON = path.join(PROJECT_ROOT, 'gfx', 'screen.png');
 const ASSETS_DIR = path.join(PROJECT_ROOT, 'packages', 'desktop', 'assets');
+const WEB_PUBLIC_DIR = path.join(PROJECT_ROOT, 'packages', 'web', 'public');
 
 console.log('=== Icon Generation Script ===');
 console.log(`Source: ${SOURCE_ICON}`);
-console.log(`Target: ${ASSETS_DIR}`);
+console.log(`Target (desktop): ${ASSETS_DIR}`);
+console.log(`Target (web): ${WEB_PUBLIC_DIR}`);
 
 // Check if source exists
 if (!fs.existsSync(SOURCE_ICON)) {
@@ -27,10 +29,18 @@ if (!fs.existsSync(ASSETS_DIR)) {
   fs.mkdirSync(ASSETS_DIR, { recursive: true });
 }
 
-// Copy source to icon.png
-console.log('Copying source icon to icon.png...');
+// Copy source to desktop icon.png
+console.log('Copying source icon to desktop assets...');
 fs.copyFileSync(SOURCE_ICON, path.join(ASSETS_DIR, 'icon.png'));
 console.log(`  Created: ${path.join(ASSETS_DIR, 'icon.png')}`);
+
+// Copy source to web public icon.png
+console.log('Copying source icon to web public...');
+if (!fs.existsSync(WEB_PUBLIC_DIR)) {
+  fs.mkdirSync(WEB_PUBLIC_DIR, { recursive: true });
+}
+fs.copyFileSync(SOURCE_ICON, path.join(WEB_PUBLIC_DIR, 'icon.png'));
+console.log(`  Created: ${path.join(WEB_PUBLIC_DIR, 'icon.png')}`);
 
 // Try to generate ICO using various methods
 function generateIco() {
