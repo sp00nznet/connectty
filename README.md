@@ -131,11 +131,11 @@ Migrate from other tools or backup your data.
 
 ---
 
-### 18 Built-in Themes
+### 100+ Built-in Themes
 
 ![Themes](screen/Themes.png)
 
-Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, and more.
+Choose from over 100 themes including Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, Synthwave, and many more. Dark, light, neon, pastel, and retro themes available.
 
 ---
 
