@@ -2904,6 +2904,31 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     setTestResult(null);
 
     try {
+      // Check if we're editing an existing provider and no new password was entered
+      const noNewPassword = !password;
+      const noNewSecretKey = !secretAccessKey;
+      const noNewServiceAccountKey = !serviceAccountKey;
+      const noNewClientSecret = !clientSecret;
+
+      // If editing existing provider without new credentials, test using stored credentials
+      if (provider) {
+        const needsPassword = type === 'esxi' || type === 'proxmox' || type === 'bigfix';
+        const needsSecretKey = type === 'aws';
+        const needsServiceAccountKey = type === 'gcp';
+        const needsClientSecret = type === 'azure';
+
+        if ((needsPassword && noNewPassword) ||
+            (needsSecretKey && noNewSecretKey) ||
+            (needsServiceAccountKey && noNewServiceAccountKey) ||
+            (needsClientSecret && noNewClientSecret)) {
+          // Use stored credentials by testing the existing provider
+          const success = await window.connectty.providers.test(provider.id);
+          setTestResult(success ? 'success' : 'failed');
+          return;
+        }
+      }
+
+      // Otherwise test with form values (new provider or new credentials entered)
       let testConfig: any;
 
       if (type === 'esxi') {
@@ -3031,6 +3056,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Production vSphere"
                 required
+                autoFocus
               />
             </div>
 
@@ -3041,6 +3067,7 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                 value={type}
                 onChange={(e) => setType(e.target.value as ProviderType)}
                 disabled={!!provider}
+                title={provider ? 'Provider type cannot be changed after creation' : ''}
               >
                 {providerTypes.map(pt => (
                   <option key={pt.value} value={pt.value}>
@@ -3048,6 +3075,11 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                   </option>
                 ))}
               </select>
+              {provider && (
+                <small style={{ color: '#a0aec0', marginTop: '4px', display: 'block' }}>
+                  Provider type cannot be changed. Delete and recreate to use a different type.
+                </small>
+              )}
             </div>
 
             {/* ESXi / Proxmox / BigFix Fields */}
