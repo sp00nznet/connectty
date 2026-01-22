@@ -76,7 +76,7 @@ build:linux:
   stage: build
   extends: .node_cache
   tags:
-    - linux
+    - debian-runner
   image: node:20
   before_script:
     - apt-get update
