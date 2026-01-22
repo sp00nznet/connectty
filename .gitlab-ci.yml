@@ -37,10 +37,12 @@ build:windows:
   tags:
     - windows
   before_script:
-    - choco install -y 7zip nodejs-lts --no-progress
+    # Install build dependencies for native modules (better-sqlite3, node-pty, etc.)
+    - choco install -y 7zip nodejs-lts python3 visualstudio2022buildtools visualstudio2022-workload-vctools --no-progress
     - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"; refreshenv
     - node --version
     - npm --version
+    - python --version
     # Create .env file from CI variables (PowerShell)
     - |
       @"
