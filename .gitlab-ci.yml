@@ -38,7 +38,8 @@ build:windows:
     - windows
   before_script:
     # Install build dependencies for native modules (better-sqlite3, node-pty, etc.)
-    - choco install -y 7zip nodejs-lts python3 visualstudio2022buildtools visualstudio2022-workload-vctools --no-progress
+    # Use Node 20 LTS (Iron) - Node 24 requires C++20 which breaks native module builds
+    - choco install -y 7zip nodejs --version=20.18.2 python3 visualstudio2022buildtools visualstudio2022-workload-vctools --no-progress
     - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"; refreshenv
     - node --version
     - npm --version
@@ -90,7 +91,7 @@ build:linux:
     - npm run build -w @connectty/shared
     - cd packages/desktop
     - npm run build
-    - npx electron-builder --linux deb AppImage
+    - npm exec electron-builder -- --linux deb AppImage
   artifacts:
     name: "connectty-linux-${CI_COMMIT_SHORT_SHA}"
     paths:
@@ -113,7 +114,7 @@ build:macos:
   tags:
     - macos
   before_script:
-    - node --version || brew install node
+    - node --version || brew install node@20
     - npm --version
     # Create .env file from CI variables
     - *create_env_unix
@@ -123,7 +124,7 @@ build:macos:
     - npm run build -w @connectty/shared
     - cd packages/desktop
     - npm run build
-    - npx electron-builder --mac
+    - npm exec electron-builder -- --mac
   artifacts:
     name: "connectty-macos-${CI_COMMIT_SHORT_SHA}"
     paths:
