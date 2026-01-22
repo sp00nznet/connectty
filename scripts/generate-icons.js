@@ -55,16 +55,16 @@ async function generateIcons() {
     const processedIconPath = path.join(ASSETS_DIR, 'icon-processed.png');
     await sharp(SOURCE_ICON)
       .flatten({ background: { r: 240, g: 240, b: 240 } }) // Light gray background
-      .resize(256, 256, { fit: 'contain', background: { r: 240, g: 240, b: 240 } })
+      .resize(512, 512, { fit: 'contain', background: { r: 240, g: 240, b: 240 } })
       .png()
       .toFile(processedIconPath);
 
-    // Copy original (with transparency) for PNG uses
+    // Create 512x512 PNG for macOS compatibility (minimum required size)
     await sharp(SOURCE_ICON)
-      .resize(256, 256, { fit: 'contain' })
+      .resize(512, 512, { fit: 'contain' })
       .png()
       .toFile(iconPng);
-    console.log(`  Created: ${iconPng}`);
+    console.log(`  Created: ${iconPng} (512x512 for macOS compatibility)`);
 
     // Copy to web public
     fs.copyFileSync(iconPng, webIconPng);
@@ -106,8 +106,8 @@ async function generateIcoFromPng(pngPath, icoPath, sharp) {
     const pngToIco = require('png-to-ico');
 
     if (sharp) {
-      // Generate multiple sizes for better ICO quality
-      const sizes = [256, 128, 64, 48, 32, 24, 16];
+      // Generate multiple sizes for better ICO quality (512 for macOS, 256 for Windows)
+      const sizes = [512, 256, 128, 64, 48, 32, 24, 16];
       const tempDir = path.join(ASSETS_DIR, 'temp-ico');
 
       if (!fs.existsSync(tempDir)) {
