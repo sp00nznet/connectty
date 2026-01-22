@@ -39,7 +39,8 @@ build:windows:
   before_script:
     # Install build dependencies for native modules (better-sqlite3, node-pty, etc.)
     # Use Node 20 LTS (Iron) - Node 24 requires C++20 which breaks native module builds
-    - choco install -y 7zip nodejs --version=20.18.2 python3 visualstudio2022buildtools visualstudio2022-workload-vctools --no-progress
+    - choco install -y 7zip python3 visualstudio2022buildtools visualstudio2022-workload-vctools --no-progress
+    - choco install -y nodejs --version=20.18.2 --allow-downgrade --no-progress
     - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"; refreshenv
     - node --version
     - npm --version
