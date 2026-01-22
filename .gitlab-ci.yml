@@ -1,0 +1,129 @@
+stages:
+  - build
+
+variables:
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+
+# Cache node_modules across builds (per-platform)
+.node_cache:
+  cache:
+    key: "${CI_JOB_NAME}-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .npm/
+      - node_modules/
+      - packages/*/node_modules/
+
+# ===================
+# Windows Build
+# ===================
+build:windows:
+  stage: build
+  extends: .node_cache
+  tags:
+    - windows
+  before_script:
+    - choco install -y 7zip nodejs-lts --no-progress
+    - refreshenv
+    - node --version
+    - npm --version
+  script:
+    - npm ci
+    - npm run dist:win
+  artifacts:
+    name: "connectty-windows-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - packages/desktop/release/*.exe
+      - packages/desktop/release/*.msi
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: true
+
+# ===================
+# Linux Build
+# ===================
+build:linux:
+  stage: build
+  extends: .node_cache
+  tags:
+    - linux
+  image: node:20
+  before_script:
+    - apt-get update
+    - apt-get install -y build-essential python3 ruby ruby-dev rpm libfuse2
+    - gem install fpm --no-document
+    - node --version
+    - npm --version
+  script:
+    - npm ci
+    - npm run generate-icons
+    - npm run build -w @connectty/shared
+    - cd packages/desktop
+    - npm run build
+    - npx electron-builder --linux deb AppImage
+  artifacts:
+    name: "connectty-linux-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - packages/desktop/release/*.deb
+      - packages/desktop/release/*.AppImage
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: true
+
+# ===================
+# macOS Build
+# ===================
+build:macos:
+  stage: build
+  extends: .node_cache
+  tags:
+    - macos
+  before_script:
+    - node --version || brew install node
+    - npm --version
+  script:
+    - npm ci
+    - npm run generate-icons
+    - npm run build -w @connectty/shared
+    - cd packages/desktop
+    - npm run build
+    - npx electron-builder --mac
+  artifacts:
+    name: "connectty-macos-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - packages/desktop/release/*.dmg
+      - packages/desktop/release/*.zip
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: true
+
+# ===================
+# Build All (triggered manually or by tag)
+# ===================
+build:all:
+  stage: build
+  tags:
+    - linux
+  image: alpine:latest
+  script:
+    - echo "Triggering all platform builds"
+  needs:
+    - job: build:windows
+      optional: true
+    - job: build:linux
+      optional: true
+    - job: build:macos
+      optional: true
+  rules:
+    - if: $CI_COMMIT_TAG
