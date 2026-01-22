@@ -38,7 +38,7 @@ build:windows:
     - windows
   before_script:
     - choco install -y 7zip nodejs-lts --no-progress
-    - refreshenv
+    - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"; refreshenv
     - node --version
     - npm --version
     # Create .env file from CI variables (PowerShell)
