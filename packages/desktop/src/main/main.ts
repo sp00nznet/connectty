@@ -2,10 +2,29 @@
  * Electron main process entry point
  */
 
-// Load environment variables from .env file (for local development)
+// Load environment variables from .env file
+// For packaged apps: check resources folder first
+// For development: check project root
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-dotenv.config({ path: path.join(__dirname, '..', '..', '..', '..', '.env') });
+import * as fs from 'fs';
+
+// Try multiple locations for .env file
+const envPaths = [
+  // Packaged app: resources folder (extraResources destination)
+  path.join(process.resourcesPath || '', '.env'),
+  // Development: project root (4 levels up from dist/main/main.js)
+  path.join(__dirname, '..', '..', '..', '..', '.env'),
+  // Fallback: current working directory
+  path.join(process.cwd(), '.env'),
+];
+
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as os from 'os';

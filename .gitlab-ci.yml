@@ -13,6 +13,21 @@ variables:
       - node_modules/
       - packages/*/node_modules/
 
+# Template for creating .env file from CI variables
+# Add these variables in GitLab Settings > CI/CD > Variables:
+#   - GOOGLE_CLIENT_ID
+#   - GOOGLE_CLIENT_SECRET
+#   - GH_OAUTH_CLIENT_ID
+#   - GH_OAUTH_CLIENT_SECRET
+.create_env_unix: &create_env_unix
+  - |
+    cat > .env << EOF
+    GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+    GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    GH_OAUTH_CLIENT_ID=${GH_OAUTH_CLIENT_ID:-}
+    GH_OAUTH_CLIENT_SECRET=${GH_OAUTH_CLIENT_SECRET:-}
+    EOF
+
 # ===================
 # Windows Build
 # ===================
@@ -26,6 +41,14 @@ build:windows:
     - refreshenv
     - node --version
     - npm --version
+    # Create .env file from CI variables (PowerShell)
+    - |
+      @"
+      GOOGLE_CLIENT_ID=$env:GOOGLE_CLIENT_ID
+      GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET
+      GH_OAUTH_CLIENT_ID=$env:GH_OAUTH_CLIENT_ID
+      GH_OAUTH_CLIENT_SECRET=$env:GH_OAUTH_CLIENT_SECRET
+      "@ | Out-File -FilePath .env -Encoding utf8
   script:
     - npm ci
     - npm run dist:win
@@ -57,6 +80,8 @@ build:linux:
     - gem install fpm --no-document
     - node --version
     - npm --version
+    # Create .env file from CI variables
+    - *create_env_unix
   script:
     - npm ci
     - npm run generate-icons
@@ -88,6 +113,8 @@ build:macos:
   before_script:
     - node --version || brew install node
     - npm --version
+    # Create .env file from CI variables
+    - *create_env_unix
   script:
     - npm ci
     - npm run generate-icons
