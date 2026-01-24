@@ -33,6 +33,7 @@ export function createSyncRoutes(db: DatabaseService): Router {
           description: group.description,
           parentId: group.parentId ? groupIdMap.get(group.parentId) : undefined,
           color: group.color,
+          membershipType: group.membershipType || 'static',
         });
         groupIdMap.set(group.id, newGroup.id);
         result.groups++;
@@ -178,6 +179,7 @@ export function createSyncRoutes(db: DatabaseService): Router {
               description: group.description,
               parentId: group.parentId ? groupIdMap.get(group.parentId) : undefined,
               color: group.color,
+              membershipType: group.membershipType || 'static',
             });
             groupIdMap.set(group.id, newGroup.id);
             result.groups++;

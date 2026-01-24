@@ -42,6 +42,7 @@ export function createGroupRoutes(db: DatabaseService): Router {
         description,
         parentId,
         color,
+        membershipType: req.body.membershipType || 'static',
       });
 
       res.status(201).json({

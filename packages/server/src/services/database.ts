@@ -1340,6 +1340,7 @@ export class DatabaseService {
       description: row.description as string | undefined,
       parentId: row.parent_id as string | undefined,
       color: row.color as string | undefined,
+      membershipType: (row.membership_type as ConnectionGroup['membershipType']) || 'static',
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),
     };
