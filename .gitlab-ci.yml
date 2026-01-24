@@ -108,7 +108,9 @@ build:linux:
     - npm run build -w @connectty/shared
     - cd packages/desktop
     - npm run build
-    - npm exec electron-builder -- --linux deb AppImage
+    # Build targets sequentially to avoid resource exhaustion
+    - npm exec electron-builder -- --linux AppImage
+    - npm exec electron-builder -- --linux deb
   artifacts:
     name: "connectty-linux-${CI_COMMIT_SHORT_SHA}"
     paths:
