@@ -5,9 +5,11 @@ variables:
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
 
 # Cache node_modules across builds (per-platform)
+# Note: Uses PLATFORM_CACHE_KEY variable instead of CI_JOB_NAME to avoid colons
+# (Windows doesn't allow : in file/folder names)
 .node_cache:
   cache:
-    key: "${CI_JOB_NAME}-${CI_COMMIT_REF_SLUG}"
+    key: "${PLATFORM_CACHE_KEY}-${CI_COMMIT_REF_SLUG}"
     paths:
       - .npm/
       - node_modules/
@@ -36,6 +38,8 @@ build:windows:
   extends: .node_cache
   tags:
     - windows
+  variables:
+    PLATFORM_CACHE_KEY: "build-windows"
   before_script:
     # Install build dependencies for native modules (better-sqlite3, node-pty, etc.)
     # Use Node 20 LTS (Iron) - Node 24 requires C++20 which breaks native module builds
@@ -80,6 +84,8 @@ build:linux:
   tags:
     - debian
   image: node:20
+  variables:
+    PLATFORM_CACHE_KEY: "build-linux"
   before_script:
     - apt-get update
     - apt-get install -y build-essential python3 ruby ruby-dev rpm libfuse2
@@ -116,6 +122,8 @@ build:macos:
   extends: .node_cache
   tags:
     - macos
+  variables:
+    PLATFORM_CACHE_KEY: "build-macos"
   before_script:
     - node --version || brew install node@20
     - npm --version
