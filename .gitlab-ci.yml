@@ -1,8 +1,13 @@
 stages:
   - build
+  - docker
 
 variables:
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
+  # Docker registry configuration
+  DOCKER_REGISTRY: $CI_REGISTRY
+  SERVER_IMAGE: $CI_REGISTRY_IMAGE/server
+  WEB_IMAGE: $CI_REGISTRY_IMAGE/web
 
 # Cache node_modules across builds (per-platform)
 # Note: Uses PLATFORM_CACHE_KEY variable instead of CI_JOB_NAME to avoid colons
@@ -153,21 +158,96 @@ build:macos:
       allow_failure: true
 
 # ===================
+# Server Docker Build
+# ===================
+build:server:
+  stage: docker
+  tags:
+    - debian
+  variables:
+    PLATFORM_CACHE_KEY: "build-server"
+  before_script:
+    # Install Docker if not present
+    - |
+      if ! command -v docker &> /dev/null; then
+        curl -fsSL https://get.docker.com | sh
+        systemctl start docker || service docker start || true
+      fi
+    - docker --version
+    # Login to GitLab Container Registry
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker build -f packages/server/Dockerfile -t $SERVER_IMAGE:latest -t $SERVER_IMAGE:$CI_COMMIT_SHORT_SHA .
+    - docker push $SERVER_IMAGE:latest
+    - docker push $SERVER_IMAGE:$CI_COMMIT_SHORT_SHA
+    # Tag with version if this is a tag build
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag $SERVER_IMAGE:latest $SERVER_IMAGE:$CI_COMMIT_TAG
+        docker push $SERVER_IMAGE:$CI_COMMIT_TAG
+      fi
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: true
+
+# ===================
+# Web Docker Build
+# ===================
+build:web:
+  stage: docker
+  tags:
+    - debian
+  variables:
+    PLATFORM_CACHE_KEY: "build-web"
+  before_script:
+    # Install Docker if not present
+    - |
+      if ! command -v docker &> /dev/null; then
+        curl -fsSL https://get.docker.com | sh
+        systemctl start docker || service docker start || true
+      fi
+    - docker --version
+    # Login to GitLab Container Registry
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker build -f packages/web/Dockerfile -t $WEB_IMAGE:latest -t $WEB_IMAGE:$CI_COMMIT_SHORT_SHA .
+    - docker push $WEB_IMAGE:latest
+    - docker push $WEB_IMAGE:$CI_COMMIT_SHORT_SHA
+    # Tag with version if this is a tag build
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag $WEB_IMAGE:latest $WEB_IMAGE:$CI_COMMIT_TAG
+        docker push $WEB_IMAGE:$CI_COMMIT_TAG
+      fi
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: true
+
+# ===================
 # Build All (triggered manually or by tag)
 # ===================
 build:all:
-  stage: build
+  stage: docker
   tags:
-    - linux
-  image: alpine:latest
+    - debian
   script:
-    - echo "Triggering all platform builds"
+    - echo "All platform builds completed"
   needs:
     - job: build:windows
       optional: true
     - job: build:linux
       optional: true
     - job: build:macos
+      optional: true
+    - job: build:server
+      optional: true
+    - job: build:web
       optional: true
   rules:
     - if: $CI_COMMIT_TAG
