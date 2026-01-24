@@ -299,6 +299,8 @@ deploy:macos:
   tags:
     - macos
   script:
+    # Clean up any stale mount from previous runs
+    - umount /tmp/releases 2>/dev/null || true
     - mkdir -p /tmp/releases
     - mount_smbfs //root:gitlab@192.168.100.22/releases /tmp/releases
     - mkdir -p /tmp/releases/$CI_PROJECT_NAME/$CI_COMMIT_REF_NAME
