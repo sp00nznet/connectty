@@ -83,13 +83,16 @@ build:linux:
   extends: .node_cache
   tags:
     - debian
-  image: node:20
+  # Note: image directive only works with Docker executors, not shell executors
   variables:
     PLATFORM_CACHE_KEY: "build-linux"
   before_script:
     - apt-get update
-    - apt-get install -y build-essential python3 ruby ruby-dev rpm libfuse2
+    - apt-get install -y build-essential python3 ruby ruby-dev rpm libfuse2 curl
     - gem install fpm --no-document
+    # Install Node.js 20 LTS via NodeSource
+    - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    - apt-get install -y nodejs
     - node --version
     - npm --version
     # Create .env file from CI variables
