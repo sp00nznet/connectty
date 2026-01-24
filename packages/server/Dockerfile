@@ -1,6 +1,9 @@
 # Connectty Server Dockerfile
 FROM node:20-alpine AS builder
 
+# Install build dependencies for native modules (node-pty)
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 # Copy package files
@@ -19,22 +22,21 @@ COPY packages/server ./packages/server
 RUN npm run build -w @connectty/shared
 RUN npm run build -w @connectty/server
 
+# Prune dev dependencies for production
+RUN npm prune --omit=dev
+
 # Production image
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy built files
+# Copy built files and production node_modules from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 COPY --from=builder /app/packages/server/package.json ./packages/server/
-
-# Copy root package.json for workspace resolution
-COPY package.json ./
-
-# Install production dependencies only
-RUN npm ci --omit=dev --workspace=@connectty/server
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
 
 # Set environment variables
 ENV NODE_ENV=production
