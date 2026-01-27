@@ -51,9 +51,35 @@ async function generateIcons() {
     // Process icon with sharp - add a light background to fix transparency issues on Windows taskbar
     console.log('Processing icon with background for Windows compatibility...');
 
+    // First, fix the dark shadow at the top of the monitor in the source image
+    // by lightening dark pixels in the top 25% of the image
+    const { data, info } = await sharp(SOURCE_ICON).raw().toBuffer({ resolveWithObject: true });
+    const fixedData = Buffer.from(data);
+    const topRows = Math.floor(info.height * 0.25); // Top 25% of image
+
+    for (let row = 0; row < topRows; row++) {
+      for (let x = 0; x < info.width; x++) {
+        const idx = (row * info.width + x) * info.channels;
+        const r = fixedData[idx], g = fixedData[idx + 1], b = fixedData[idx + 2];
+        const brightness = (r + g + b) / 3;
+        // Lighten dark pixels (< 120) to prevent black bar artifact on taskbar
+        if (brightness < 120) {
+          const lift = 100;
+          fixedData[idx] = Math.min(255, r + lift);
+          fixedData[idx + 1] = Math.min(255, g + lift);
+          fixedData[idx + 2] = Math.min(255, b + lift);
+        }
+      }
+    }
+
+    const fixedSourcePath = path.join(ASSETS_DIR, 'icon-fixed-source.png');
+    await sharp(fixedData, { raw: { width: info.width, height: info.height, channels: info.channels } })
+      .png()
+      .toFile(fixedSourcePath);
+
     // Create a version with solid background for ICO (fixes black bar on taskbar)
     const processedIconPath = path.join(ASSETS_DIR, 'icon-processed.png');
-    await sharp(SOURCE_ICON)
+    await sharp(fixedSourcePath)
       .flatten({ background: { r: 240, g: 240, b: 240 } }) // Light gray background
       .resize(512, 512, { fit: 'contain', background: { r: 240, g: 240, b: 240 } })
       .png()
@@ -73,8 +99,9 @@ async function generateIcons() {
     // Generate ICO using the processed (with background) version
     await generateIcoFromPng(processedIconPath, iconIco, sharp);
 
-    // Clean up processed file
+    // Clean up temp files
     fs.unlinkSync(processedIconPath);
+    fs.unlinkSync(fixedSourcePath);
   } else {
     // Fallback: direct copy
     console.log('Copying source icon to desktop assets...');
