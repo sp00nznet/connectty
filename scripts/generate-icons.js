@@ -117,11 +117,16 @@ async function generateIcoFromPng(pngPath, icoPath, sharp) {
       const pngFiles = [];
       for (const size of sizes) {
         const tempFile = path.join(tempDir, `icon-${size}.png`);
-        await sharp(pngPath)
+        let pipeline = sharp(pngPath)
           .resize(size, size, { fit: 'contain', background: { r: 240, g: 240, b: 240 } })
-          .flatten({ background: { r: 240, g: 240, b: 240 } })
-          .png()
-          .toFile(tempFile);
+          .flatten({ background: { r: 240, g: 240, b: 240 } });
+
+        // For small taskbar sizes, lift shadows to prevent dark monitor screen appearing as black bar
+        if (size <= 48) {
+          pipeline = pipeline.gamma(1.8).modulate({ brightness: 1.2 });
+        }
+
+        await pipeline.png().toFile(tempFile);
         pngFiles.push(tempFile);
       }
 
