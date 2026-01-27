@@ -133,8 +133,10 @@ async function generateIcoFromPng(pngPath, icoPath, sharp) {
     const pngToIco = require('png-to-ico');
 
     if (sharp) {
-      // Generate multiple sizes for better ICO quality (512 for macOS, 256 for Windows)
-      const sizes = [512, 256, 128, 64, 48, 32, 24, 16];
+      // Generate multiple sizes for ICO - keep file size small for NSIS compatibility
+      // (NSIS fails with "invalid icon file size" if ICO is too large, ~150KB limit)
+      // Using 128 max instead of 256 to reduce file size
+      const sizes = [128, 64, 48, 32, 16];
       const tempDir = path.join(ASSETS_DIR, 'temp-ico');
 
       if (!fs.existsSync(tempDir)) {
