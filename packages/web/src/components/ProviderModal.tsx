@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import type { Provider } from '../services/api';
+import type { Credential } from '@connectty/shared';
 
 interface ProviderModalProps {
   provider: Provider | null;
+  credentials?: Credential[];
   onClose: () => void;
   onSave: (data: Partial<Provider>) => void;
   onDelete?: () => void;
@@ -17,11 +19,19 @@ const PROVIDER_TYPES = [
   { value: 'bigfix', label: 'IBM BigFix' },
 ];
 
-export default function ProviderModal({ provider, onClose, onSave, onDelete }: ProviderModalProps) {
+export default function ProviderModal({ provider, credentials = [], onClose, onSave, onDelete }: ProviderModalProps) {
   const [name, setName] = useState(provider?.name || '');
   const [type, setType] = useState(provider?.type || 'vmware');
   const [autoDiscover, setAutoDiscover] = useState(provider?.autoDiscover ?? false);
   const [discoverInterval, setDiscoverInterval] = useState(provider?.discoverInterval ?? 3600);
+
+  // Credential mode: 'inline' for entering credentials directly, 'saved' for using saved credential
+  const [credentialMode, setCredentialMode] = useState<'inline' | 'saved'>(
+    (provider?.config?.credentialId as string) ? 'saved' : 'inline'
+  );
+  const [selectedCredentialId, setSelectedCredentialId] = useState(
+    (provider?.config?.credentialId as string) || ''
+  );
 
   // Config fields based on provider type
   const [host, setHost] = useState((provider?.config?.host as string) || '');
@@ -60,6 +70,12 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
     setPort(getDefaultPort(type));
   }, [type]);
 
+  // Check if this provider type supports saved credentials
+  const supportsCredentials = ['vmware', 'proxmox', 'bigfix'].includes(type);
+
+  // Filter credentials to password type only (these providers need username/password)
+  const passwordCredentials = credentials.filter(c => c.type === 'password');
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -69,16 +85,24 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
       case 'vmware':
         config.host = host;
         config.port = port;
-        config.username = username;
-        if (password) config.password = password;
+        if (credentialMode === 'saved' && selectedCredentialId) {
+          config.credentialId = selectedCredentialId;
+        } else {
+          config.username = username;
+          if (password) config.password = password;
+        }
         config.ignoreCert = ignoreCert;
         break;
 
       case 'proxmox':
         config.host = host;
         config.port = port;
-        config.username = username;
-        if (password) config.password = password;
+        if (credentialMode === 'saved' && selectedCredentialId) {
+          config.credentialId = selectedCredentialId;
+        } else {
+          config.username = username;
+          if (password) config.password = password;
+        }
         config.realm = realm;
         config.ignoreCert = ignoreCert;
         break;
@@ -104,8 +128,12 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
 
       case 'bigfix':
         config.host = host;
-        config.username = username;
-        if (password) config.password = password;
+        if (credentialMode === 'saved' && selectedCredentialId) {
+          config.credentialId = selectedCredentialId;
+        } else {
+          config.username = username;
+          if (password) config.password = password;
+        }
         break;
     }
 
@@ -116,6 +144,101 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
       autoDiscover,
       discoverInterval,
     });
+  };
+
+  // Render credential mode selector and fields
+  const renderCredentialFields = (usernamePlaceholder: string) => {
+    if (supportsCredentials && passwordCredentials.length > 0) {
+      return (
+        <>
+          <div className="form-row">
+            <label>Credentials</label>
+            <div className="credential-mode-toggle">
+              <button
+                type="button"
+                className={`mode-btn ${credentialMode === 'inline' ? 'active' : ''}`}
+                onClick={() => setCredentialMode('inline')}
+              >
+                Enter credentials
+              </button>
+              <button
+                type="button"
+                className={`mode-btn ${credentialMode === 'saved' ? 'active' : ''}`}
+                onClick={() => setCredentialMode('saved')}
+              >
+                Use saved credential
+              </button>
+            </div>
+          </div>
+          {credentialMode === 'saved' ? (
+            <div className="form-row">
+              <label>Select Credential</label>
+              <select
+                value={selectedCredentialId}
+                onChange={(e) => setSelectedCredentialId(e.target.value)}
+                required
+              >
+                <option value="">Select a credential...</option>
+                {passwordCredentials.map((cred) => (
+                  <option key={cred.id} value={cred.id}>
+                    {cred.name} ({cred.username})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div className="form-row">
+                <label>Username</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder={usernamePlaceholder}
+                  required
+                />
+              </div>
+              <div className="form-row">
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={provider ? '(unchanged)' : ''}
+                  required={!provider}
+                />
+              </div>
+            </>
+          )}
+        </>
+      );
+    }
+
+    // No saved credentials available, show inline fields only
+    return (
+      <>
+        <div className="form-row">
+          <label>Username</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder={usernamePlaceholder}
+            required
+          />
+        </div>
+        <div className="form-row">
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={provider ? '(unchanged)' : ''}
+            required={!provider}
+          />
+        </div>
+      </>
+    );
   };
 
   const renderConfigFields = () => {
@@ -141,26 +264,7 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
                 onChange={(e) => setPort(parseInt(e.target.value))}
               />
             </div>
-            <div className="form-row">
-              <label>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="administrator@vsphere.local"
-                required
-              />
-            </div>
-            <div className="form-row">
-              <label>Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={provider ? '(unchanged)' : ''}
-                required={!provider}
-              />
-            </div>
+            {renderCredentialFields('administrator@vsphere.local')}
             <div className="form-row checkbox">
               <label>
                 <input
@@ -195,16 +299,7 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
                 onChange={(e) => setPort(parseInt(e.target.value))}
               />
             </div>
-            <div className="form-row">
-              <label>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="root"
-                required
-              />
-            </div>
+            {renderCredentialFields('root')}
             <div className="form-row">
               <label>Realm</label>
               <select value={realm} onChange={(e) => setRealm(e.target.value)}>
@@ -212,16 +307,6 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
                 <option value="pve">Proxmox VE</option>
                 <option value="ldap">LDAP</option>
               </select>
-            </div>
-            <div className="form-row">
-              <label>Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={provider ? '(unchanged)' : ''}
-                required={!provider}
-              />
             </div>
             <div className="form-row checkbox">
               <label>
@@ -361,25 +446,7 @@ export default function ProviderModal({ provider, onClose, onSave, onDelete }: P
                 required
               />
             </div>
-            <div className="form-row">
-              <label>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-row">
-              <label>Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={provider ? '(unchanged)' : ''}
-                required={!provider}
-              />
-            </div>
+            {renderCredentialFields('DOMAIN\\username')}
           </>
         );
 

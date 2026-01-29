@@ -599,12 +599,16 @@ export interface ConnectionHealthStatus {
   issues?: string[];      // List of current issues (e.g., "High CPU usage: 95%")
 }
 
+export type WindowsElevationMethod = 'gsudo' | 'uac' | 'runas';
+
 export interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
   startMinimized: boolean;
   terminalTheme: 'sync' | 'classic';
   defaultShell: string;
+  // Windows elevation method for admin shells
+  windowsElevationMethod?: WindowsElevationMethod;
   // Plugin settings
   pluginsEnabled: boolean;
   enabledPlugins: string[]; // Plugin IDs

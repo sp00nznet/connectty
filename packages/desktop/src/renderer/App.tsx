@@ -121,6 +121,8 @@ export default function App() {
   const [showRepeatedActionsModal, setShowRepeatedActionsModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<ConnectionGroup | null>(null);
+  // Group selection popup for "Add to Group" context menu action
+  const [groupSelectConnection, setGroupSelectConnection] = useState<ServerConnection | null>(null);
   // FXP: track selected SFTP session for site-to-site transfer
   const [fxpSourceSession, setFxpSourceSession] = useState<string | null>(null);
   // Settings modal
@@ -1046,6 +1048,17 @@ export default function App() {
     }
   };
 
+  const handleAddToGroup = async (connectionId: string, groupId: string | undefined) => {
+    try {
+      await window.connectty.connections.update(connectionId, { group: groupId });
+      await loadData();
+      setGroupSelectConnection(null);
+      showNotification('success', groupId ? 'Connection added to group' : 'Connection removed from group');
+    } catch (err) {
+      showNotification('error', 'Failed to update connection group');
+    }
+  };
+
   const handleImport = async () => {
     const result = await window.connectty.import.file({
       format: 'json',
@@ -1489,6 +1502,18 @@ export default function App() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          {searchQuery && (
+            <button
+              className="search-clear-btn"
+              onClick={() => setSearchQuery('')}
+              title="Clear search"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="sidebar-content">
@@ -1525,6 +1550,7 @@ export default function App() {
                       onEdit={() => { setEditingConnection(conn); setShowConnectionModal(true); }}
                       onDelete={() => handleDeleteConnection(conn.id)}
                       onSFTP={() => handleOpenSFTP(conn)}
+                      onAddToGroup={() => setGroupSelectConnection(conn)}
                     />
                   ))}
                 </li>
@@ -1561,6 +1587,7 @@ export default function App() {
                     onEdit={() => { setEditingConnection(conn); setShowConnectionModal(true); }}
                     onDelete={() => handleDeleteConnection(conn.id)}
                     onSFTP={() => handleOpenSFTP(conn)}
+                    onAddToGroup={() => setGroupSelectConnection(conn)}
                   />
                 ))}
               </li>
@@ -1920,6 +1947,50 @@ export default function App() {
         />
       )}
 
+      {/* Group Selection Popup for "Add to Group" */}
+      {groupSelectConnection && (
+        <div className="modal-overlay" onClick={() => setGroupSelectConnection(null)}>
+          <div className="group-select-popup" onClick={e => e.stopPropagation()}>
+            <div className="group-select-header">
+              <h3>Add to Group</h3>
+              <span className="connection-label">{groupSelectConnection.name}</span>
+            </div>
+            <div className="group-select-list">
+              {groups.map(group => (
+                <div
+                  key={group.id}
+                  className={`group-select-item ${groupSelectConnection.group === group.id ? 'selected' : ''}`}
+                  onClick={() => handleAddToGroup(groupSelectConnection.id, group.id)}
+                >
+                  <span className="group-color-dot" style={{ backgroundColor: group.color || '#888' }} />
+                  <span className="group-name">{group.name}</span>
+                  {groupSelectConnection.group === group.id && (
+                    <span className="current-badge">Current</span>
+                  )}
+                </div>
+              ))}
+              {groups.length === 0 && (
+                <div className="group-select-empty">
+                  No groups available. Create a group first.
+                </div>
+              )}
+              {groupSelectConnection.group && (
+                <>
+                  <div className="group-select-divider" />
+                  <div
+                    className="group-select-item remove"
+                    onClick={() => handleAddToGroup(groupSelectConnection.id, undefined)}
+                  >
+                    <span className="remove-icon">×</span>
+                    <span>Remove from Group</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Provider Context Menu */}
       {providerContextMenu && (
         <div
@@ -2043,9 +2114,10 @@ interface ConnectionItemProps {
   onEdit: () => void;
   onDelete: () => void;
   onSFTP?: () => void;
+  onAddToGroup?: () => void;
 }
 
-function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete, onSFTP }: ConnectionItemProps) {
+function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete, onSFTP, onAddToGroup }: ConnectionItemProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
@@ -2088,6 +2160,11 @@ function ConnectionItem({ connection, isConnected, onConnect, onEdit, onDelete, 
             <div className="context-menu-item" onClick={() => { onEdit(); setShowMenu(false); }}>
               Edit
             </div>
+            {onAddToGroup && (
+              <div className="context-menu-item" onClick={() => { onAddToGroup(); setShowMenu(false); }}>
+                Add to Group
+              </div>
+            )}
             <div className="context-menu-divider" />
             <div className="context-menu-item danger" onClick={() => { onDelete(); setShowMenu(false); }}>
               Delete
@@ -5733,12 +5810,17 @@ interface SettingsModalProps {
   onExport: () => Promise<void>;
 }
 
+type WindowsElevationMethod = 'gsudo' | 'uac' | 'runas';
+
 function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave, availableShells, currentSessions, connections, activeProfile, onLoadSessionState, onNotification, onImport, onExport }: SettingsModalProps) {
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
   const [terminalTheme, setTerminalTheme] = useState<'sync' | 'classic'>(settings.terminalTheme || 'classic');
   const [defaultShell, setDefaultShell] = useState<string | undefined>(settings.defaultShell);
+  const [windowsElevationMethod, setWindowsElevationMethod] = useState<WindowsElevationMethod>(
+    (settings as any).windowsElevationMethod || 'gsudo'
+  );
   const [saving, setSaving] = useState(false);
 
   // Collapsible section states - load from localStorage (default to collapsed)
@@ -5768,6 +5850,10 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   });
   const [importExportExpanded, setImportExportExpanded] = useState(() => {
     const saved = localStorage.getItem('settings-importexport-expanded');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [elevationExpanded, setElevationExpanded] = useState(() => {
+    const saved = localStorage.getItem('settings-elevation-expanded');
     return saved !== null ? saved === 'true' : false;
   });
 
@@ -5802,6 +5888,9 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
   useEffect(() => {
     localStorage.setItem('settings-importexport-expanded', String(importExportExpanded));
   }, [importExportExpanded]);
+  useEffect(() => {
+    localStorage.setItem('settings-elevation-expanded', String(elevationExpanded));
+  }, [elevationExpanded]);
 
   // Import/Export state
   const [importing, setImporting] = useState(false);
@@ -5864,8 +5953,9 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
         startMinimized,
         terminalTheme,
         defaultShell,
+        windowsElevationMethod,
         syncAccounts,
-      });
+      } as any);
       onClose();
     } finally {
       setSaving(false);
@@ -6143,6 +6233,86 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                           </label>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Windows Elevation Method Section - Collapsible (Windows only) */}
+            {availableShells.some(s => s.elevated) && (
+              <div className="settings-section collapsible">
+                <button
+                  type="button"
+                  className="settings-section-header"
+                  onClick={() => setElevationExpanded(!elevationExpanded)}
+                >
+                  <span className={`collapse-icon ${elevationExpanded ? 'expanded' : ''}`}>▶</span>
+                  <h4>Windows Elevation Method</h4>
+                  <span className="settings-badge">{windowsElevationMethod}</span>
+                </button>
+                {elevationExpanded && (
+                  <div className="settings-section-content">
+                    <p className="settings-description">
+                      Choose how administrator shells are launched. This affects shells marked with "(Administrator)".
+                    </p>
+                    <div className="form-group">
+                      <div className="elevation-options">
+                        <label className="radio-label elevation-radio">
+                          <input
+                            type="radio"
+                            name="elevationMethod"
+                            value="gsudo"
+                            checked={windowsElevationMethod === 'gsudo'}
+                            onChange={() => setWindowsElevationMethod('gsudo')}
+                          />
+                          <span className="radio-text">
+                            <strong>gsudo (Recommended)</strong>
+                            <span className="radio-description">
+                              Runs admin shell in the same tab. Requires gsudo to be installed.
+                              <br />
+                              <code style={{ fontSize: '11px', marginTop: '4px', display: 'inline-block' }}>winget install gsudo</code>
+                            </span>
+                          </span>
+                        </label>
+                        <label className="radio-label elevation-radio">
+                          <input
+                            type="radio"
+                            name="elevationMethod"
+                            value="uac"
+                            checked={windowsElevationMethod === 'uac'}
+                            onChange={() => setWindowsElevationMethod('uac')}
+                          />
+                          <span className="radio-text">
+                            <strong>UAC (New Window)</strong>
+                            <span className="radio-description">
+                              Shows UAC prompt and opens admin shell in a separate window.
+                              <br />
+                              Works with any Windows version, no additional software needed.
+                            </span>
+                          </span>
+                        </label>
+                        <label className="radio-label elevation-radio">
+                          <input
+                            type="radio"
+                            name="elevationMethod"
+                            value="runas"
+                            checked={windowsElevationMethod === 'runas'}
+                            onChange={() => setWindowsElevationMethod('runas')}
+                          />
+                          <span className="radio-text">
+                            <strong>runas (Password Prompt)</strong>
+                            <span className="radio-description">
+                              Prompts for Administrator password in the console.
+                              <br />
+                              Useful if UAC is disabled or for domain environments.
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="elevation-note" style={{ marginTop: '12px', padding: '10px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>Note:</strong> Some antivirus software may flag gsudo. If you experience issues, try the UAC method instead.
                     </div>
                   </div>
                 )}

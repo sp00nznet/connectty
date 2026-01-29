@@ -27,6 +27,7 @@ export default function ProviderPanel({
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<ProviderSyncResult | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Import options
   const [importCredentialId, setImportCredentialId] = useState('');
@@ -175,8 +176,22 @@ export default function ProviderPanel({
   const handleImport = async () => {
     if (!selectedProvider || selectedHosts.size === 0) return;
 
+    const total = selectedHosts.size;
+
     try {
       setImporting(true);
+      setImportProgress({ current: 0, total });
+
+      // Simulate progress while the import is running
+      const progressInterval = setInterval(() => {
+        setImportProgress(prev => {
+          if (!prev) return { current: 0, total };
+          // Progress up to 90% while waiting for actual completion
+          const newCurrent = Math.min(prev.current + 1, Math.floor(total * 0.9));
+          return { current: newCurrent, total };
+        });
+      }, 200);
+
       const result = await api.importHosts(
         selectedProvider.id,
         Array.from(selectedHosts),
@@ -186,6 +201,11 @@ export default function ProviderPanel({
           ipPreference,
         }
       );
+
+      clearInterval(progressInterval);
+
+      // Show 100% completion
+      setImportProgress({ current: total, total });
 
       if (result.imported > 0) {
         onNotification('success', `Imported ${result.imported} hosts`);
@@ -198,8 +218,14 @@ export default function ProviderPanel({
         console.error('Import errors:', result.errorDetails);
         onNotification('error', `${result.errors} hosts failed to import`);
       }
+
+      // Clear progress after a brief delay
+      setTimeout(() => {
+        setImportProgress(null);
+      }, 1000);
     } catch (err) {
       onNotification('error', (err as Error).message);
+      setImportProgress(null);
     } finally {
       setImporting(false);
     }
@@ -412,13 +438,25 @@ export default function ProviderPanel({
                     </select>
                   </div>
 
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleImport}
-                    disabled={selectedHosts.size === 0 || importing}
-                  >
-                    {importing ? 'Importing...' : `Import Selected (${selectedHosts.size})`}
-                  </button>
+                  <div className="import-button-container">
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleImport}
+                      disabled={selectedHosts.size === 0 || importing}
+                    >
+                      {importing && importProgress
+                        ? `Importing ${importProgress.current}/${importProgress.total}...`
+                        : `Import Selected (${selectedHosts.size})`}
+                    </button>
+                    {importing && importProgress && (
+                      <div className="import-progress-bar">
+                        <div
+                          className="import-progress-fill"
+                          style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <table className="host-table">
@@ -497,6 +535,7 @@ export default function ProviderPanel({
       {showProviderModal && (
         <ProviderModal
           provider={editingProvider}
+          credentials={credentials}
           onClose={() => {
             setShowProviderModal(false);
             setEditingProvider(null);

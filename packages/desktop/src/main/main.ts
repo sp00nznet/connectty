@@ -41,12 +41,15 @@ import { LocalShellService } from './local-shell';
 import { getProviderService } from './providers';
 
 // App settings interface
+type WindowsElevationMethod = 'gsudo' | 'uac' | 'runas';
+
 interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
   startMinimized: boolean;
   terminalTheme?: 'sync' | 'classic';
   defaultShell?: string;
+  windowsElevationMethod?: WindowsElevationMethod;
 }
 
 // Initialize settings store
@@ -1129,7 +1132,9 @@ function setupIpcHandlers(): void {
     if (!shellInfo) {
       throw new Error(`Shell not found: ${shellId}`);
     }
-    return localShellService.spawn(shellInfo);
+    // Get elevation method from settings (default to 'gsudo')
+    const elevationMethod = settingsStore.get('windowsElevationMethod', 'gsudo') as WindowsElevationMethod;
+    return localShellService.spawn(shellInfo, elevationMethod);
   });
 
   ipcMain.handle('localShell:write', async (_event, sessionId: string, data: string) => {

@@ -9,6 +9,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 
+export type WindowsElevationMethod = 'gsudo' | 'uac' | 'runas';
+
 export interface LocalShellInfo {
   id: string;
   name: string;
@@ -346,34 +348,62 @@ export class LocalShellService {
 
   /**
    * Spawn a new local shell session
+   * @param shellInfo - Shell configuration
+   * @param elevationMethod - Windows elevation method ('gsudo', 'uac', 'runas'). Defaults to 'gsudo'.
    */
-  spawn(shellInfo: LocalShellInfo): string {
+  spawn(shellInfo: LocalShellInfo, elevationMethod: WindowsElevationMethod = 'gsudo'): string {
     const sessionId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     let shell = shellInfo.path;
     let args = shellInfo.args || [];
 
-    // For elevated shells on Windows, use gsudo if available
+    // For elevated shells on Windows, use the configured elevation method
     if (shellInfo.elevated && this.platform === 'win32') {
-      const gsudoPath = this.findGsudo();
       const targetShell = shellInfo.path;
       const isCmd = targetShell.toLowerCase().includes('cmd');
 
-      if (gsudoPath) {
-        // Use gsudo to run elevated in-tab
-        shell = gsudoPath;
-        args = isCmd ? [targetShell, '/k'] : [targetShell];
-      } else {
-        // Fall back to PowerShell Start-Process (opens external window)
+      if (elevationMethod === 'gsudo') {
+        const gsudoPath = this.findGsudo();
+        if (gsudoPath) {
+          // Use gsudo to run elevated in-tab
+          shell = gsudoPath;
+          args = isCmd ? [targetShell, '/k'] : [targetShell];
+        } else {
+          // Fall back to UAC with helpful message
+          shell = 'powershell.exe';
+          args = [
+            '-NoProfile',
+            '-Command',
+            `Write-Host 'gsudo not found. Launching elevated window via UAC...' -ForegroundColor Yellow; ` +
+            `Write-Host 'To run admin shells in this tab, install gsudo: winget install gsudo' -ForegroundColor Gray; ` +
+            `Write-Host 'Or change elevation method in Settings > Windows Elevation Method' -ForegroundColor Gray; ` +
+            `Write-Host ''; ` +
+            `Start-Process "${targetShell}" -Verb RunAs; ` +
+            `Start-Sleep -Seconds 2`
+          ];
+        }
+      } else if (elevationMethod === 'uac') {
+        // Use PowerShell Start-Process with -Verb RunAs (opens UAC prompt, new window)
         shell = 'powershell.exe';
         args = [
           '-NoProfile',
           '-Command',
-          `Write-Host 'gsudo not found. Launching elevated window via UAC...' -ForegroundColor Yellow; ` +
-          `Write-Host 'To run admin shells in this tab, install gsudo: winget install gsudo' -ForegroundColor Gray; ` +
+          `Write-Host 'Launching elevated window via UAC...' -ForegroundColor Cyan; ` +
+          `Write-Host 'Admin shell will open in a separate window.' -ForegroundColor Gray; ` +
           `Write-Host ''; ` +
           `Start-Process "${targetShell}" -Verb RunAs; ` +
           `Start-Sleep -Seconds 2`
+        ];
+      } else if (elevationMethod === 'runas') {
+        // Use runas command (prompts for admin password in console)
+        shell = 'powershell.exe';
+        args = [
+          '-NoProfile',
+          '-Command',
+          `Write-Host 'Starting elevated shell with runas...' -ForegroundColor Cyan; ` +
+          `Write-Host 'You will be prompted for the Administrator password.' -ForegroundColor Gray; ` +
+          `Write-Host ''; ` +
+          `runas /user:Administrator "${targetShell}"`
         ];
       }
     }

@@ -104,6 +104,8 @@ export interface SyncConfigInfo {
 }
 
 // App settings types
+export type WindowsElevationMethod = 'gsudo' | 'uac' | 'runas';
+
 export interface AppSettings {
   minimizeToTray: boolean;
   closeToTray: boolean;
@@ -111,6 +113,7 @@ export interface AppSettings {
   syncAccounts?: SyncAccount[];
   terminalTheme: 'sync' | 'classic';  // 'sync' = match app theme, 'classic' = black background
   defaultShell?: string;  // ID of the default shell to open when clicking +
+  windowsElevationMethod?: WindowsElevationMethod;  // Windows admin shell elevation method
 }
 
 // Local shell types
