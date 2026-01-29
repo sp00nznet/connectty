@@ -136,7 +136,11 @@ build:macos:
   variables:
     PLATFORM_CACHE_KEY: "build-macos"
   before_script:
-    - node --version || brew install node@20
+    # Force Node 20 LTS - Node 24+ requires C++20 which breaks native module builds
+    - brew install node@20 2>/dev/null || true
+    - brew unlink node 2>/dev/null || true
+    - brew link --overwrite node@20
+    - node --version
     - npm --version
     # Create .env file from CI variables
     - *create_env_unix
