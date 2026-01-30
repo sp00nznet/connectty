@@ -92,10 +92,10 @@ build:linux:
   # Note: image directive only works with Docker executors, not shell executors
   variables:
     PLATFORM_CACHE_KEY: "build-linux"
+    # Redirect caches to scratch drive (root partition may be small)
+    npm_config_cache: "$CI_PROJECT_DIR/.npm"
+    npm_config_devdir: "$CI_PROJECT_DIR/.node-gyp"
   before_script:
-    # Clean up caches to free disk space
-    - rm -rf /root/.cache/node-gyp 2>/dev/null || true
-    - npm cache clean --force 2>/dev/null || true
     - apt-get update
     - apt-get install -y build-essential python3 ruby ruby-dev rpm libfuse2 curl
     - gem install fpm --no-document
@@ -104,6 +104,8 @@ build:linux:
     - apt-get install -y nodejs
     - node --version
     - npm --version
+    # Pre-install node-gyp headers to prevent race condition during npm ci
+    - npx node-gyp install
     # Create .env file from CI variables
     - *create_env_unix
   script:
