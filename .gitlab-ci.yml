@@ -93,6 +93,9 @@ build:linux:
   variables:
     PLATFORM_CACHE_KEY: "build-linux"
   before_script:
+    # Clean up caches to free disk space
+    - rm -rf /root/.cache/node-gyp 2>/dev/null || true
+    - npm cache clean --force 2>/dev/null || true
     - apt-get update
     - apt-get install -y build-essential python3 ruby ruby-dev rpm libfuse2 curl
     - gem install fpm --no-document
