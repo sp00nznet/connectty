@@ -4,8 +4,8 @@
 
 **The Modern Connection Manager for DevOps & SysAdmins**
 
-[![Desktop](https://img.shields.io/badge/desktop-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge)](../../releases)
-[![Web](https://img.shields.io/badge/web-SSH%20Terminal-4A90D9?style=for-the-badge)](../../releases)
+[![Desktop](https://img.shields.io/badge/desktop-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge)](https://sp00.nz/releases/connectty/)
+[![Web](https://img.shields.io/badge/web-SSH%20Terminal-4A90D9?style=for-the-badge)](https://sp00.nz/releases/connectty/)
 [![License](https://img.shields.io/badge/license-MIT-00C853?style=for-the-badge)](LICENSE)
 
 [Features](#features) • [Comparison](#comparison) • [Quick Start](#quick-start) • [Documentation](#documentation)
@@ -153,7 +153,7 @@ Quick access to local shells and recent connections on startup.
 
 ```bash
 # Clone and install
-git clone https://github.com/your-org/connectty.git
+git clone https://github.com/sp00nznet/connectty.git
 cd connectty
 npm install
 
@@ -183,7 +183,7 @@ docker-compose up -d
 
 ### Pre-built Binaries
 
-Download from [Releases](../../releases):
+Download from [Releases](https://sp00.nz/releases/connectty/):
 
 | Platform | Package |
 |:---------|:--------|
