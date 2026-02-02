@@ -534,6 +534,7 @@ export default function ProviderPanel({
 
       {showProviderModal && (
         <ProviderModal
+          key={editingProvider?.id || 'new'}
           provider={editingProvider}
           credentials={credentials}
           onClose={() => {
