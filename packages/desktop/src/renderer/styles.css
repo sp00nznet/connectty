@@ -3015,6 +3015,35 @@ body {
   cursor: pointer;
 }
 
+/* Credential Mode Toggle */
+.credential-mode-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.credential-mode-toggle .mode-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.credential-mode-toggle .mode-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.credential-mode-toggle .mode-btn.active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

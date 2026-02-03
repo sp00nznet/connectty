@@ -1987,6 +1987,7 @@ export default function App() {
           key={editingProvider?.id || 'new'}
           provider={editingProvider}
           providers={providers}
+          credentials={credentials}
           onClose={() => { setShowProviderModal(false); setEditingProvider(null); }}
           onSave={handleCreateProvider}
           onEdit={(prov) => { setEditingProvider(prov); }}
@@ -2875,6 +2876,7 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
 interface ProviderModalProps {
   provider: Provider | null;
   providers: Provider[];
+  credentials: Credential[];
   onClose: () => void;
   onSave: (data: Partial<Provider>) => Promise<void>;
   onEdit: (provider: Provider) => void;
@@ -2886,12 +2888,19 @@ interface ProviderModalProps {
   isSyncing: string | null;
 }
 
-function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete, onDiscover, onSync, onDeleteConnections, isDiscovering, isSyncing }: ProviderModalProps) {
+function ProviderModal({ provider, providers, credentials, onClose, onSave, onEdit, onDelete, onDiscover, onSync, onDeleteConnections, isDiscovering, isSyncing }: ProviderModalProps) {
   const [showForm, setShowForm] = useState(!!provider);
   const [name, setName] = useState(provider?.name || '');
   const [type, setType] = useState<ProviderType>(provider?.type || 'esxi');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'failed' | null>(null);
+  // Credential mode: 'inline' for entering credentials directly, 'saved' for using saved credential
+  const [credentialMode, setCredentialMode] = useState<'inline' | 'saved'>(
+    (provider?.config as any)?.credentialId ? 'saved' : 'inline'
+  );
+  const [selectedCredentialId, setSelectedCredentialId] = useState(
+    (provider?.config as any)?.credentialId || ''
+  );
   // ESXi/Proxmox fields
   const [host, setHost] = useState((provider?.config as any)?.host || '');
   const [port, setPort] = useState((provider?.config as any)?.port || (type === 'esxi' ? 443 : type === 'proxmox' ? 8006 : 443));
@@ -2947,6 +2956,8 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
       setPassword(''); // Don't populate password for security
       setRealm((provider.config as any)?.realm || 'pam');
       setIgnoreCertErrors((provider.config as any)?.ignoreCertErrors ?? true);
+      setCredentialMode((provider.config as any)?.credentialId ? 'saved' : 'inline');
+      setSelectedCredentialId((provider.config as any)?.credentialId || '');
       setAccessKeyId((provider.config as any)?.accessKeyId || '');
       setSecretAccessKey('');
       setRegion((provider.config as any)?.region || 'us-east-1');
@@ -2970,6 +2981,8 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
     setPassword('');
     setRealm('pam');
     setIgnoreCertErrors(true);
+    setCredentialMode('inline');
+    setSelectedCredentialId('');
     setAccessKeyId('');
     setSecretAccessKey('');
     setRegion('us-east-1');
@@ -2992,20 +3005,28 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
         type: 'esxi',
         host,
         port,
-        username,
         ignoreCertErrors,
       };
-      if (password) config.password = password;
+      if (credentialMode === 'saved' && selectedCredentialId) {
+        config.credentialId = selectedCredentialId;
+      } else {
+        config.username = username;
+        if (password) config.password = password;
+      }
     } else if (type === 'proxmox') {
       config = {
         type: 'proxmox',
         host,
         port,
-        username,
         realm,
         ignoreCertErrors,
       };
-      if (password) config.password = password;
+      if (credentialMode === 'saved' && selectedCredentialId) {
+        config.credentialId = selectedCredentialId;
+      } else {
+        config.username = username;
+        if (password) config.password = password;
+      }
     } else if (type === 'aws') {
       config = {
         type: 'aws',
@@ -3032,10 +3053,14 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
         type: 'bigfix',
         host,
         port,
-        username,
         ignoreCertErrors,
       };
-      if (password) config.password = password;
+      if (credentialMode === 'saved' && selectedCredentialId) {
+        config.credentialId = selectedCredentialId;
+      } else {
+        config.username = username;
+        if (password) config.password = password;
+      }
     }
 
     const data: Partial<Provider> = {
@@ -3260,29 +3285,73 @@ function ProviderModal({ provider, providers, onClose, onSave, onEdit, onDelete,
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Username *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder={type === 'esxi' ? 'root' : type === 'proxmox' ? 'root@pam' : 'DOMAIN\\user or user@domain.com'}
-                    required
-                  />
-                </div>
+                {/* Credential mode toggle - only show if saved credentials exist */}
+                {credentials.filter(c => c.type === 'password').length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">Credentials</label>
+                    <div className="credential-mode-toggle">
+                      <button
+                        type="button"
+                        className={`mode-btn ${credentialMode === 'inline' ? 'active' : ''}`}
+                        onClick={() => setCredentialMode('inline')}
+                      >
+                        Enter credentials
+                      </button>
+                      <button
+                        type="button"
+                        className={`mode-btn ${credentialMode === 'saved' ? 'active' : ''}`}
+                        onClick={() => setCredentialMode('saved')}
+                      >
+                        Use saved credential
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                <div className="form-group">
-                  <label className="form-label">Password {provider ? '' : '*'}</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={provider ? '(unchanged)' : 'Enter password'}
-                    required={!provider}
-                  />
-                </div>
+                {credentialMode === 'saved' && credentials.filter(c => c.type === 'password').length > 0 ? (
+                  <div className="form-group">
+                    <label className="form-label">Select Credential *</label>
+                    <select
+                      className="form-select"
+                      value={selectedCredentialId}
+                      onChange={(e) => setSelectedCredentialId(e.target.value)}
+                      required
+                    >
+                      <option value="">Select a credential...</option>
+                      {credentials.filter(c => c.type === 'password').map((cred) => (
+                        <option key={cred.id} value={cred.id}>
+                          {cred.name} ({cred.username})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Username *</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder={type === 'esxi' ? 'root' : type === 'proxmox' ? 'root@pam' : 'DOMAIN\\user or user@domain.com'}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Password {provider ? '' : '*'}</label>
+                      <input
+                        type="password"
+                        className="form-input"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={provider ? '(unchanged)' : 'Enter password'}
+                        required={!provider}
+                      />
+                    </div>
+                  </>
+                )}
 
                 {type === 'proxmox' && (
                   <div className="form-group">
