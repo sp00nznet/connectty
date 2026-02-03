@@ -2872,6 +2872,20 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
   );
 }
 
+// Animated Progress Text Component - cycles through dots for visual feedback
+function AnimatedProgressText({ text }: { text: string }) {
+  const [dots, setDots] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(d => (d + 1) % 4);
+    }, 400);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <>{text}{'.'.repeat(dots + 1)}</>;
+}
+
 // Provider Modal Component
 interface ProviderModalProps {
   provider: Provider | null;
@@ -3169,16 +3183,18 @@ function ProviderModal({ provider, providers, credentials, onClose, onSave, onEd
                         onClick={() => onSync(prov)}
                         disabled={isSyncing === prov.id || isDiscovering === prov.id}
                         title="Incremental sync - detect new, removed, and changed hosts"
+                        style={{ minWidth: '80px' }}
                       >
-                        {isSyncing === prov.id ? 'Syncing...' : 'Sync'}
+                        {isSyncing === prov.id ? <AnimatedProgressText text="Syncing" /> : 'Sync'}
                       </button>
                       <button
                         className="btn btn-sm btn-primary"
                         onClick={() => onDiscover(prov)}
                         disabled={isDiscovering === prov.id || isSyncing === prov.id}
                         title="Full discovery - fetch all hosts"
+                        style={{ minWidth: '110px' }}
                       >
-                        {isDiscovering === prov.id ? 'Scanning...' : 'Import Hosts'}
+                        {isDiscovering === prov.id ? <AnimatedProgressText text="Scanning" /> : 'Import Hosts'}
                       </button>
                       <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(prov); setShowForm(true); }}>
                         Edit
@@ -7158,6 +7174,10 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
   const [selectAll, setSelectAll] = useState(false);
   const [selectedCredential, setSelectedCredential] = useState<string>('');
   const [nameFilter, setNameFilter] = useState<string>('');
+  // Additional filters
+  const [hasIpFilter, setHasIpFilter] = useState<'all' | 'hasIp' | 'noIp'>('all');
+  const [stateFilter, setStateFilter] = useState<'all' | 'running' | 'stopped' | 'suspended'>('all');
+  const [osTypeFilter, setOsTypeFilter] = useState<'all' | 'windows' | 'linux' | 'unix' | 'esxi' | 'unknown'>('all');
 
   // Convert wildcard pattern to regex
   const matchesFilter = (name: string, pattern: string): boolean => {
@@ -7170,10 +7190,31 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
     return regex.test(name);
   };
 
-  // Filter to show only non-imported hosts, then apply name filter
+  // Check if host has an IP address
+  const hostHasIp = (host: DiscoveredHost): boolean => {
+    return !!(host.publicIp || host.privateIp);
+  };
+
+  // Filter to show only non-imported hosts, then apply all filters
   const allAvailableHosts = hosts.filter(h => !h.imported);
-  const availableHosts = allAvailableHosts.filter(h => matchesFilter(h.name, nameFilter));
+  const availableHosts = allAvailableHosts.filter(h => {
+    // Name filter
+    if (!matchesFilter(h.name, nameFilter)) return false;
+    // Has IP filter
+    if (hasIpFilter === 'hasIp' && !hostHasIp(h)) return false;
+    if (hasIpFilter === 'noIp' && hostHasIp(h)) return false;
+    // State filter
+    if (stateFilter !== 'all' && h.state !== stateFilter) return false;
+    // OS type filter
+    if (osTypeFilter !== 'all' && h.osType !== osTypeFilter) return false;
+    return true;
+  });
   const importedHosts = hosts.filter(h => h.imported);
+
+  // Get unique OS types and states from available hosts for filter options
+  const availableOsTypes = [...new Set(allAvailableHosts.map(h => h.osType))].sort();
+  const availableStates = [...new Set(allAvailableHosts.map(h => h.state))].sort();
+  const hasAnyFilters = nameFilter || hasIpFilter !== 'all' || stateFilter !== 'all' || osTypeFilter !== 'all';
 
   const handleToggleHost = (hostId: string) => {
     const newSelected = new Set(selectedHosts);
@@ -7247,34 +7288,93 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
             <>
               {allAvailableHosts.length > 0 && (
                 <>
-                  {/* Filter input */}
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label>Filter by Name</label>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="e.g., *-dev, prod-*, web*"
-                        value={nameFilter}
-                        onChange={(e) => setNameFilter(e.target.value)}
-                        style={{ flex: 1 }}
-                      />
-                      {nameFilter && (
+                  {/* Filter inputs */}
+                  <div className="host-filters" style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: '0.5rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+                      {/* Name filter */}
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: '0.75rem', marginBottom: '0.25rem', display: 'block' }}>Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="*-dev, prod-*"
+                          value={nameFilter}
+                          onChange={(e) => setNameFilter(e.target.value)}
+                          style={{ padding: '0.5rem', fontSize: '0.875rem' }}
+                        />
+                      </div>
+
+                      {/* Has IP filter */}
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: '0.75rem', marginBottom: '0.25rem', display: 'block' }}>IP Address</label>
+                        <select
+                          className="form-select"
+                          value={hasIpFilter}
+                          onChange={(e) => setHasIpFilter(e.target.value as 'all' | 'hasIp' | 'noIp')}
+                          style={{ padding: '0.5rem', fontSize: '0.875rem' }}
+                        >
+                          <option value="all">All</option>
+                          <option value="hasIp">Has IP</option>
+                          <option value="noIp">No IP</option>
+                        </select>
+                      </div>
+
+                      {/* State filter */}
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: '0.75rem', marginBottom: '0.25rem', display: 'block' }}>State</label>
+                        <select
+                          className="form-select"
+                          value={stateFilter}
+                          onChange={(e) => setStateFilter(e.target.value as 'all' | 'running' | 'stopped' | 'suspended')}
+                          style={{ padding: '0.5rem', fontSize: '0.875rem' }}
+                        >
+                          <option value="all">All States</option>
+                          {availableStates.includes('running') && <option value="running">Running</option>}
+                          {availableStates.includes('stopped') && <option value="stopped">Stopped</option>}
+                          {availableStates.includes('suspended') && <option value="suspended">Suspended</option>}
+                        </select>
+                      </div>
+
+                      {/* OS Type filter */}
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: '0.75rem', marginBottom: '0.25rem', display: 'block' }}>OS Type</label>
+                        <select
+                          className="form-select"
+                          value={osTypeFilter}
+                          onChange={(e) => setOsTypeFilter(e.target.value as 'all' | 'windows' | 'linux' | 'unix' | 'esxi' | 'unknown')}
+                          style={{ padding: '0.5rem', fontSize: '0.875rem' }}
+                        >
+                          <option value="all">All OS</option>
+                          {availableOsTypes.includes('windows') && <option value="windows">Windows</option>}
+                          {availableOsTypes.includes('linux') && <option value="linux">Linux</option>}
+                          {availableOsTypes.includes('unix') && <option value="unix">Unix</option>}
+                          {availableOsTypes.includes('esxi') && <option value="esxi">ESXi</option>}
+                          {availableOsTypes.includes('unknown') && <option value="unknown">Unknown</option>}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Filter summary and clear */}
+                    <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        Showing {availableHosts.length} of {allAvailableHosts.length} hosts
+                      </div>
+                      {hasAnyFilters && (
                         <button
                           type="button"
                           className="btn btn-sm btn-secondary"
-                          onClick={() => setNameFilter('')}
-                          title="Clear filter"
+                          onClick={() => {
+                            setNameFilter('');
+                            setHasIpFilter('all');
+                            setStateFilter('all');
+                            setOsTypeFilter('all');
+                          }}
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                         >
-                          ×
+                          Clear Filters
                         </button>
                       )}
                     </div>
-                    {nameFilter && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                        Showing {availableHosts.length} of {allAvailableHosts.length} hosts
-                      </div>
-                    )}
                   </div>
 
                   <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -7285,12 +7385,12 @@ function HostSelectionModal({ provider, hosts, credentials, onClose, onImport }:
                         onChange={handleSelectAll}
                         disabled={availableHosts.length === 0}
                       />
-                      <span>Select All ({availableHosts.length} {nameFilter ? 'matching' : 'available'})</span>
+                      <span>Select All ({availableHosts.length} {hasAnyFilters ? 'matching' : 'available'})</span>
                     </label>
                     <span style={{ color: '#a0aec0', fontSize: '0.875rem' }}>
                       {selectedHosts.size} selected
                     </span>
-                    {nameFilter && availableHosts.length > 0 && selectedHosts.size !== availableHosts.length && (
+                    {hasAnyFilters && availableHosts.length > 0 && selectedHosts.size !== availableHosts.length && (
                       <button
                         type="button"
                         className="btn btn-sm btn-primary"
