@@ -3347,6 +3347,38 @@ body {
   margin: 6px 0;
 }
 
+/* Terminal Context Menu (right-click in terminal for copy/paste) */
+.terminal-context-menu {
+  position: fixed;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 120px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  z-index: 1100;
+}
+
+.terminal-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.terminal-context-menu-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
 /* Rename Tab Modal */
 .rename-tab-modal {
   max-width: 400px;

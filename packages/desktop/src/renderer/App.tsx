@@ -147,6 +147,10 @@ export default function App() {
   // Tab context menu (right-click on existing tabs)
   const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
   const tabContextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Terminal context menu (right-click in terminal for copy/paste)
+  const [terminalContextMenu, setTerminalContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const terminalContextMenuRef = useRef<HTMLDivElement>(null);
   const [customTabNames, setCustomTabNames] = useState<Map<string, string>>(new Map());
   const [renamingTab, setRenamingTab] = useState<{ sessionId: string; currentName: string } | null>(null);
 
@@ -563,6 +567,20 @@ export default function App() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [tabContextMenu]);
+
+  // Close terminal context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (terminalContextMenuRef.current && !terminalContextMenuRef.current.contains(event.target as Node)) {
+        setTerminalContextMenu(null);
+      }
+    };
+
+    if (terminalContextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [terminalContextMenu]);
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -1723,6 +1741,56 @@ export default function App() {
           </div>
         )}
 
+        {/* Terminal Context Menu (right-click in terminal for copy/paste) */}
+        {terminalContextMenu && (
+          <div
+            ref={terminalContextMenuRef}
+            className="terminal-context-menu"
+            style={{ left: terminalContextMenu.x, top: terminalContextMenu.y }}
+          >
+            <button
+              className="terminal-context-menu-item"
+              onClick={async () => {
+                const activeSession = sessions.find(s => s.id === activeSessionId);
+                if (activeSession && 'terminal' in activeSession && activeSession.terminal) {
+                  const selection = activeSession.terminal.getSelection();
+                  if (selection) {
+                    await navigator.clipboard.writeText(selection);
+                  }
+                }
+                setTerminalContextMenu(null);
+              }}
+            >
+              Copy
+            </button>
+            <button
+              className="terminal-context-menu-item"
+              onClick={async () => {
+                const activeSession = sessions.find(s => s.id === activeSessionId);
+                if (activeSession) {
+                  try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) {
+                      if (activeSession.type === 'ssh') {
+                        window.connectty.ssh.write(activeSession.id, text);
+                      } else if (activeSession.type === 'serial') {
+                        window.connectty.serial.write(activeSession.id, text);
+                      } else if (activeSession.type === 'localShell') {
+                        window.connectty.localShell.write(activeSession.id, text);
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Failed to paste:', err);
+                  }
+                }
+                setTerminalContextMenu(null);
+              }}
+            >
+              Paste
+            </button>
+          </div>
+        )}
+
         {/* New Tab Menu (left-click on + button) */}
         {newTabMenuPos && (
           <div
@@ -1775,7 +1843,14 @@ export default function App() {
 
               if (activeSession.type === 'ssh' || activeSession.type === 'serial' || activeSession.type === 'localShell') {
                 return (
-                  <div className="terminal-container" ref={terminalContainerRef} />
+                  <div
+                    className="terminal-container"
+                    ref={terminalContainerRef}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setTerminalContextMenu({ x: e.clientX, y: e.clientY });
+                    }}
+                  />
                 );
               } else if (activeSession.type === 'sftp') {
                 const otherSftpSessions = sessions.filter(
