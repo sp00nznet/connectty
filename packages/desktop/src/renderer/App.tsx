@@ -83,7 +83,19 @@ interface LocalShellSession {
   fitAddon: FitAddon;
 }
 
-type Session = SSHSession | SerialSession | SFTPSession | RDPSession | LocalShellSession;
+interface CommandResultsSession {
+  id: string;
+  type: 'commandResults';
+  executionId: string;
+  commandName: string;
+  command: string;
+  targetConnections: Array<{ connectionId: string; connectionName: string; hostname: string }>;
+  results: Map<string, Partial<CommandResult>>;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  startedAt: Date;
+}
+
+type Session = SSHSession | SerialSession | SFTPSession | RDPSession | LocalShellSession | CommandResultsSession;
 
 export default function App() {
   const [connections, setConnections] = useState<ServerConnection[]>([]);
@@ -503,6 +515,20 @@ export default function App() {
       terminalContainerRef.current.innerHTML = '';
       activeSession.terminal.open(terminalContainerRef.current);
       activeSession.fitAddon.fit();
+
+      // Attach context menu handler directly to xterm's element (xterm captures events internally)
+      const handleContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
+        setTerminalContextMenu({ x: e.clientX, y: e.clientY });
+      };
+
+      const termElement = activeSession.terminal.element;
+      if (termElement) {
+        termElement.addEventListener('contextmenu', handleContextMenu);
+        return () => {
+          termElement.removeEventListener('contextmenu', handleContextMenu);
+        };
+      }
     }
   }, [activeSessionId, sessions]);
 
@@ -595,6 +621,37 @@ export default function App() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProfileMenu]);
+
+  // Command results IPC wiring - subscribe to progress/complete for open result tabs
+  useEffect(() => {
+    const unsubProgress = window.connectty.commands.onProgress((execId, connId, result) => {
+      setSessions(prev => prev.map(s => {
+        if (s.type === 'commandResults' && s.executionId === execId) {
+          const newResults = new Map(s.results);
+          newResults.set(connId, result);
+          return { ...s, results: newResults };
+        }
+        return s;
+      }));
+    });
+
+    const unsubComplete = window.connectty.commands.onComplete((execId) => {
+      setSessions(prev => prev.map(s => {
+        if (s.type === 'commandResults' && s.executionId === execId) {
+          // Determine final status from results
+          const results = Array.from(s.results.values());
+          const hasErrors = results.some(r => r.status === 'error');
+          return { ...s, status: hasErrors ? 'failed' : 'completed' } as CommandResultsSession;
+        }
+        return s;
+      }));
+    });
+
+    return () => {
+      unsubProgress();
+      unsubComplete();
+    };
+  }, []);
 
   const loadData = async () => {
     const [conns, creds, grps, provs, settings, plat, shells, profileList, activeProf] = await Promise.all([
@@ -897,9 +954,66 @@ export default function App() {
     }
   };
 
+  const handleOpenCommandResults = (params: {
+    executionId: string;
+    commandName: string;
+    command: string;
+    targetConnections: Array<{ connectionId: string; connectionName: string; hostname: string }>;
+    initialResults?: Map<string, Partial<CommandResult>>;
+    initialStatus?: 'running' | 'completed' | 'failed' | 'cancelled';
+  }) => {
+    // Deduplicate by executionId - if tab already exists, just switch to it
+    const existing = sessions.find(
+      s => s.type === 'commandResults' && s.executionId === params.executionId
+    ) as CommandResultsSession | undefined;
+    if (existing) {
+      setActiveSessionId(existing.id);
+      return;
+    }
+
+    const sessionId = `cmd-${Date.now()}`;
+    const newSession: CommandResultsSession = {
+      id: sessionId,
+      type: 'commandResults',
+      executionId: params.executionId,
+      commandName: params.commandName,
+      command: params.command,
+      targetConnections: params.targetConnections,
+      results: params.initialResults || new Map(),
+      status: params.initialStatus || 'running',
+      startedAt: new Date(),
+    };
+
+    setSessions(prev => [...prev, newSession]);
+    setActiveSessionId(sessionId);
+    setShowRepeatedActionsModal(false);
+  };
+
   const handleDisconnect = async (sessionId: string) => {
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
+
+    if (session.type === 'commandResults') {
+      // Cancel execution if still running
+      if (session.status === 'running') {
+        try {
+          await window.connectty.commands.cancel(session.executionId);
+        } catch (_) { /* ignore cancel errors */ }
+      }
+      setSessions(prev => {
+        const remaining = prev.filter(s => s.id !== sessionId);
+        if (activeSessionId === sessionId) {
+          setActiveSessionId(remaining[0]?.id || null);
+        }
+        return remaining;
+      });
+      setCustomTabNames(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(sessionId);
+        return newMap;
+      });
+      return;
+    }
 
     if (session.type === 'ssh') {
       await window.connectty.ssh.disconnect(sessionId);
@@ -936,6 +1050,9 @@ export default function App() {
 
     setTabContextMenu(null);
 
+    // Cannot duplicate command results tabs
+    if (session.type === 'commandResults') return;
+
     if (session.type === 'localShell') {
       // Find the shell info and spawn a new one
       const shellInfo = availableShells.find(s => s.id === session.shellId);
@@ -961,10 +1078,10 @@ export default function App() {
     // Get current display name
     let currentName = customTabNames.get(sessionId);
     if (!currentName) {
-      currentName = session.type === 'localShell' ? session.shellName : session.connectionName;
+      currentName = session.type === 'localShell' ? session.shellName : session.type === 'commandResults' ? session.commandName : session.connectionName;
     }
 
-    setRenamingTab({ sessionId, currentName });
+    setRenamingTab({ sessionId, currentName: currentName || '' });
   };
 
   // Apply the rename
@@ -1639,9 +1756,10 @@ export default function App() {
                  session.type === 'sftp' ? 'SFTP' :
                  session.type === 'rdp' ? 'RDP' :
                  session.type === 'serial' ? 'Serial' :
-                 session.type === 'localShell' ? 'Shell' : ''}
+                 session.type === 'localShell' ? 'Shell' :
+                 session.type === 'commandResults' ? 'CMD' : ''}
               </span>
-              {customTabNames.get(session.id) || (session.type === 'localShell' ? session.shellName : session.connectionName)}
+              {customTabNames.get(session.id) || (session.type === 'localShell' ? session.shellName : session.type === 'commandResults' ? session.commandName : session.connectionName)}
               <span className="close-btn" onClick={(e) => { e.stopPropagation(); handleDisconnect(session.id); }}>
                 ×
               </span>
@@ -1910,6 +2028,18 @@ export default function App() {
                     />
                   </div>
                 );
+              } else if (activeSession.type === 'commandResults') {
+                return (
+                  <CommandResultsView
+                    session={activeSession}
+                    onCancel={async () => {
+                      await window.connectty.commands.cancel(activeSession.executionId);
+                      setSessions(prev => prev.map(s =>
+                        s.id === activeSession.id ? { ...s, status: 'cancelled' as const } : s
+                      ));
+                    }}
+                  />
+                );
               }
               return null;
             })()}
@@ -2093,6 +2223,7 @@ export default function App() {
           terminalCommands={terminalCommands}
           onClose={() => setShowRepeatedActionsModal(false)}
           onNotification={showNotification}
+          onOpenCommandResults={handleOpenCommandResults}
         />
       )}
 
@@ -3738,6 +3869,140 @@ function GroupModal({ group, groups, onClose, onSave, onEdit, onDelete }: GroupM
   );
 }
 
+// Command Results View Component
+function CommandResultsView({ session, onCancel }: { session: CommandResultsSession; onCancel: () => void }) {
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+
+  const results = session.results;
+  const targets = session.targetConnections;
+
+  // Compute summary counts
+  const successCount = Array.from(results.values()).filter(r => r.status === 'success').length;
+  const errorCount = Array.from(results.values()).filter(r => r.status === 'error').length;
+  const runningCount = Array.from(results.values()).filter(r => r.status === 'running').length;
+  const pendingCount = targets.length - results.size + Array.from(results.values()).filter(r => r.status === 'pending').length;
+
+  const selectedResult = selectedConnectionId ? results.get(selectedConnectionId) : null;
+  const selectedTarget = selectedConnectionId ? targets.find(t => t.connectionId === selectedConnectionId) : null;
+
+  const getStatusDotColor = (status?: string) => {
+    switch (status) {
+      case 'success': return '#4ade80';
+      case 'error': return '#ef4444';
+      case 'running': return '#f59e0b';
+      case 'skipped': return '#6b7280';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusText = (connectionId: string) => {
+    const result = results.get(connectionId);
+    if (!result || !result.status || result.status === 'pending') return 'Pending';
+    if (result.status === 'running') return 'Running...';
+    if (result.status === 'success') return `Exit ${result.exitCode ?? 0}`;
+    if (result.status === 'error') return result.error ? 'Error' : `Exit ${result.exitCode ?? 1}`;
+    if (result.status === 'skipped') return 'Skipped';
+    return result.status;
+  };
+
+  return (
+    <div className="command-results-view">
+      {/* Header bar */}
+      <div className="command-results-header">
+        <div className="command-results-header-info">
+          <div className="command-results-title">{session.commandName}</div>
+          <code className="command-results-command">{session.command}</code>
+        </div>
+        <div className="command-results-summary">
+          {successCount > 0 && <span className="summary-badge success">{successCount} success</span>}
+          {errorCount > 0 && <span className="summary-badge error">{errorCount} failed</span>}
+          {runningCount > 0 && <span className="summary-badge running">{runningCount} running</span>}
+          {pendingCount > 0 && <span className="summary-badge pending">{pendingCount} pending</span>}
+          {session.status === 'running' && (
+            <button className="btn btn-danger btn-sm" style={{ marginLeft: '8px' }} onClick={onCancel}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Split pane */}
+      <div className="command-results-panels">
+        {/* Left panel - server list */}
+        <div className="command-results-server-list">
+          {targets.map(target => {
+            const result = results.get(target.connectionId);
+            const status = result?.status || 'pending';
+            const isSelected = selectedConnectionId === target.connectionId;
+            return (
+              <div
+                key={target.connectionId}
+                className={`server-list-item ${status} ${isSelected ? 'selected' : ''}`}
+                onClick={() => setSelectedConnectionId(target.connectionId)}
+              >
+                <span className={`status-dot ${status}`} style={{ backgroundColor: getStatusDotColor(status) }} />
+                <div className="server-list-item-info">
+                  <div className="server-list-item-name">{target.connectionName}</div>
+                  <div className="server-list-item-host">{target.hostname}</div>
+                </div>
+                <span className="server-list-item-status">{getStatusText(target.connectionId)}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right panel - detail */}
+        <div className="command-results-detail">
+          {selectedConnectionId && selectedTarget ? (
+            <>
+              <div className="detail-header">
+                <span className="detail-header-name">{selectedTarget.connectionName}</span>
+                <span className="detail-header-host">{selectedTarget.hostname}</span>
+                {selectedResult && selectedResult.exitCode !== undefined && (
+                  <span className={`detail-header-exit ${selectedResult.exitCode === 0 ? 'success' : 'error'}`}>
+                    Exit code: {selectedResult.exitCode}
+                  </span>
+                )}
+              </div>
+              <div className="detail-output">
+                {(!selectedResult || !selectedResult.status || selectedResult.status === 'pending') && (
+                  <div className="detail-placeholder">Waiting...</div>
+                )}
+                {selectedResult?.status === 'running' && (
+                  <div className="detail-placeholder running">Running...</div>
+                )}
+                {selectedResult?.stdout && (
+                  <div className="output-section">
+                    <div className="output-section-label">stdout</div>
+                    <pre className="output-content">{selectedResult.stdout}</pre>
+                  </div>
+                )}
+                {selectedResult?.stderr && (
+                  <div className="output-section stderr">
+                    <div className="output-section-label">stderr</div>
+                    <pre className="output-content">{selectedResult.stderr}</pre>
+                  </div>
+                )}
+                {selectedResult?.error && (
+                  <div className="output-section error">
+                    <div className="output-section-label">error</div>
+                    <div className="output-content error-text">{selectedResult.error}</div>
+                  </div>
+                )}
+                {selectedResult?.status && ['success', 'error', 'skipped'].includes(selectedResult.status) && !selectedResult.stdout && !selectedResult.stderr && !selectedResult.error && (
+                  <div className="detail-placeholder">No output</div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="detail-placeholder centered">Select a server to view its output</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Repeated Actions Modal Component
 interface TerminalCommandEntry {
   command: string;
@@ -3752,6 +4017,14 @@ interface RepeatedActionsModalProps {
   terminalCommands: TerminalCommandEntry[];
   onClose: () => void;
   onNotification: (type: 'success' | 'error', message: string) => void;
+  onOpenCommandResults: (params: {
+    executionId: string;
+    commandName: string;
+    command: string;
+    targetConnections: Array<{ connectionId: string; connectionName: string; hostname: string }>;
+    initialResults?: Map<string, Partial<CommandResult>>;
+    initialStatus?: 'running' | 'completed' | 'failed' | 'cancelled';
+  }) => void;
 }
 
 interface SavedScript {
@@ -3765,7 +4038,7 @@ interface SavedScript {
   updatedAt: Date;
 }
 
-function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, onNotification }: RepeatedActionsModalProps) {
+function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, onNotification, onOpenCommandResults }: RepeatedActionsModalProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<'execute' | 'saved' | 'scripts' | 'history'>('execute');
 
@@ -4046,7 +4319,23 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
         // Fetch the execution to track progress
         const execution = await window.connectty.commands.getExecution(result.executionId);
         setCurrentExecution(execution);
-        onNotification('success', `Executing command on ${result.targetCount} hosts...`);
+
+        // Build target connections from filtered connections
+        const targets = filteredConnections.map(c => ({
+          connectionId: c.id,
+          connectionName: c.name,
+          hostname: c.hostname,
+        }));
+
+        // Open command results tab
+        onOpenCommandResults({
+          executionId: result.executionId,
+          commandName,
+          command,
+          targetConnections: targets,
+        });
+
+        setIsExecuting(false);
       }
     } catch (err) {
       onNotification('error', `Execution failed: ${(err as Error).message}`);
@@ -4330,36 +4619,7 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
                 </div>
               </div>
 
-              {/* Execution Results */}
-              {(isExecuting || executionResults.size > 0) && (
-                <div className="bulk-section">
-                  <h4>Execution Progress</h4>
-                  <div className="execution-results">
-                    {filteredConnections.map(conn => {
-                      const result = executionResults.get(conn.id);
-                      return (
-                        <div key={conn.id} className={`result-item ${result?.status || 'pending'}`}>
-                          <div className="result-header">
-                            <span className="result-host">{conn.name}</span>
-                            <span className={`result-status ${result?.status || 'pending'}`}>
-                              {result?.status || 'pending'}
-                            </span>
-                          </div>
-                          {result?.stdout && (
-                            <pre className="result-output">{result.stdout}</pre>
-                          )}
-                          {result?.stderr && (
-                            <pre className="result-error">{result.stderr}</pre>
-                          )}
-                          {result?.error && (
-                            <div className="result-error">{result.error}</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* Execution results now shown in dedicated CommandResults tab */}
             </div>
           )}
 
@@ -4756,6 +5016,33 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
                             <span className="skipped">
                               {exec.results.filter(r => r.status === 'skipped').length} skipped
                             </span>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              style={{ marginLeft: 'auto', padding: '2px 10px', fontSize: '11px' }}
+                              onClick={async () => {
+                                const fullExec = await window.connectty.commands.getExecution(exec.id);
+                                if (!fullExec) return;
+                                const resultsMap = new Map<string, Partial<CommandResult>>();
+                                for (const r of fullExec.results) {
+                                  resultsMap.set(r.connectionId, r);
+                                }
+                                const targets = fullExec.results.map(r => ({
+                                  connectionId: r.connectionId,
+                                  connectionName: r.connectionName,
+                                  hostname: r.hostname,
+                                }));
+                                onOpenCommandResults({
+                                  executionId: fullExec.id,
+                                  commandName: fullExec.commandName,
+                                  command: fullExec.command,
+                                  targetConnections: targets,
+                                  initialResults: resultsMap,
+                                  initialStatus: fullExec.status as 'completed' | 'failed' | 'cancelled',
+                                });
+                              }}
+                            >
+                              View
+                            </button>
                           </div>
                         )}
                       </div>
@@ -4773,19 +5060,13 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
           </button>
           {activeTab === 'execute' && (
             <>
-              {isExecuting ? (
-                <button className="btn btn-danger" onClick={handleCancelExecution}>
-                  Cancel Execution
-                </button>
-              ) : (
-                <button
-                  className="btn btn-primary"
-                  onClick={handleExecute}
-                  disabled={filteredConnections.length === 0}
-                >
-                  Execute on {filteredConnections.length} Hosts
-                </button>
-              )}
+              <button
+                className="btn btn-primary"
+                onClick={handleExecute}
+                disabled={filteredConnections.length === 0 || isExecuting}
+              >
+                Execute on {filteredConnections.length} Hosts
+              </button>
             </>
           )}
           {activeTab === 'saved' && !showCommandForm && (
