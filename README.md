@@ -21,12 +21,23 @@
 Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RDP files, and spreadsheets. Connectty brings everything together in one powerful interface with cloud provider integration, bulk command execution, and secure credential management.
 
 **Key Differentiators:**
+- **Native performance** - Built with Tauri 2 (Rust + WebView2), sub-second startup, ~5MB binary
+- **Tmux-like paneling** - Split terminals into flexible layouts up to 4x4, with preset and custom tiling
 - **Cloud-native discovery** - Auto-import servers from VMware, Proxmox, AWS, Azure, GCP, BigFix
 - **Bulk command execution** - Run commands across hundreds of servers simultaneously
-- **Unified interface** - SSH, RDP, Serial, SFTP, and local shells in tabbed sessions
+- **Unified interface** - SSH, RDP, Serial, SFTP, and local shells in tabbed or paneled sessions
 - **Free & open source** - No subscriptions, no seat licenses, no feature gates
 
 > **Note:** The web client provides SSH terminal access for teams. Full features (RDP, Serial, SFTP, Providers, Bulk Commands) require the desktop app.
+
+---
+
+## What's New in v2.0
+
+- **Native desktop app** - Migrated from Electron to Tauri 2 (Rust backend, OS-native WebView). Startup is near-instant vs the multi-second Electron cold start.
+- **Terminal paneling** - Tmux-style split panes with draggable dividers, 9 preset layouts (single through 4x4), keyboard shortcuts for splitting/navigating/closing panes.
+- **Collapsible sidebar** - `Ctrl+B` toggles the connection list between full and icon-only mode for maximum terminal space.
+- **Cross-platform native** - Windows (WebView2), macOS (WKWebView), Linux (WebKitGTK). Each platform uses its OS-native web renderer.
 
 ---
 
@@ -36,12 +47,12 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 |:--------|:---------:|:-------:|:---------:|:-----:|:---------:|
 | **Pricing** | Free | $10/mo+ | $119+ | Free | Free/$70 |
 | **Open Source** | Yes | No | No | Yes | No |
+| **Native App** | Tauri/Rust | Electron | Native | Native | Native |
 | **SSH / RDP / Serial** | All | SSH only | SSH+Serial | SSH+Serial | All |
+| **Terminal Paneling** | Yes | No | No | No | Pro only |
 | **Cloud Discovery** | 6 providers | No | No | No | No |
 | **Bulk Commands** | Yes | No | No | No | Pro only |
 | **Credential Vault** | Encrypted | Encrypted | Yes | No | Yes |
-
-[See full comparison →](docs/FEATURES.md#comparison-with-other-clients)
 
 ---
 
@@ -60,6 +71,19 @@ Connect to anything: SSH, RDP, Serial/COM, SFTP, and local shells—all in one t
 | **Serial** | Baud 300-921600, all parity/flow options |
 | **SFTP** | Dual-pane browser with FXP site-to-site transfer |
 | **Local Shell** | cmd, PowerShell, bash, zsh, fish, WSL distros |
+
+---
+
+### Terminal Paneling
+
+Split your terminal into flexible layouts with tmux-style paneling.
+
+- **9 preset layouts** - Single, side-by-side, 2x2, 1+2, 2+1, 3-column, 3x3, 4x4
+- **Custom splits** - Split any pane horizontally or vertically
+- **Draggable dividers** - Resize panes by dragging
+- **Keyboard driven** - `Ctrl+Shift+|` split vertical, `Ctrl+Shift+-` split horizontal, `Ctrl+Shift+Arrow` navigate
+
+Toggle between classic tab mode and panel mode with `Ctrl+Shift+T`.
 
 ---
 
@@ -135,21 +159,15 @@ Migrate from other tools or backup your data.
 
 ![Themes](screen/Themes.png)
 
-Choose from over 100 themes including Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, Synthwave, and many more. Dark, light, neon, pastel, and retro themes available.
-
----
-
-### Welcome Screen
-
-Quick access to local shells and recent connections on startup.
-
-![Welcome Screen](screen/WelcomeScreen.png)
+Choose from over 100 themes including Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, Synthwave, and many more.
 
 ---
 
 ## Quick Start
 
-### Desktop App
+### Desktop App (Tauri - Recommended)
+
+Requires [Rust](https://rustup.rs/) and [Node.js](https://nodejs.org/).
 
 ```bash
 # Clone and install
@@ -157,10 +175,18 @@ git clone https://github.com/sp00nznet/connectty.git
 cd connectty
 npm install
 
-# Build shared package first
+# Build shared package
 npm run build -w @connectty/shared
 
-# Run desktop app
+# Run native desktop app
+cd packages/tauri
+cargo tauri dev
+```
+
+### Desktop App (Electron - Legacy)
+
+```bash
+npm run build -w @connectty/shared
 npm run start -w @connectty/desktop
 ```
 
@@ -195,10 +221,31 @@ Download from [Releases](https://sp00.nz/releases/connectty/):
 ### Build from Source
 
 ```bash
+# Tauri (native)
+cd packages/tauri
+cargo tauri build
+
+# Electron (legacy)
 npm run dist:win -w @connectty/desktop    # Windows
 npm run dist:linux -w @connectty/desktop  # Linux
 npm run dist:mac -w @connectty/desktop    # macOS
 ```
+
+---
+
+## Architecture
+
+Connectty is a monorepo with four packages:
+
+| Package | Technology | Purpose |
+|:--------|:-----------|:--------|
+| `packages/tauri` | Rust + Tauri 2 | Native desktop app (primary) |
+| `packages/desktop` | Electron + React | Legacy desktop app |
+| `packages/server` | Express + PostgreSQL | Web backend + API |
+| `packages/web` | React + xterm.js | Web SSH client |
+| `packages/shared` | TypeScript | Shared types & utilities |
+
+The Tauri app uses an adapter pattern (`connectty-api.ts`) that maps the same `window.connectty` interface to Tauri's `invoke()`/`listen()` API, allowing the React frontend to work unchanged across both Electron and Tauri shells.
 
 ---
 
@@ -245,6 +292,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 **[Report Bug](../../issues) · [Request Feature](../../issues) · [Discussions](../../discussions)**
 
-Built with Electron, React, and xterm.js
+Built with Tauri, Rust, React, and xterm.js
 
 </div>

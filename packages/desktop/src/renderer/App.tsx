@@ -25,11 +25,15 @@ import type {
   ProviderSyncResult,
   SessionState,
   SavedSession,
+  PanelLayout,
+  LayoutMode,
+  PresetLayout,
 } from '@connectty/shared';
 import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, RetroTermSettings, RetroTermPreset } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
+import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves } from './panels';
 
 declare global {
   interface Window {
@@ -165,6 +169,19 @@ export default function App() {
   const terminalContextMenuRef = useRef<HTMLDivElement>(null);
   const [customTabNames, setCustomTabNames] = useState<Map<string, string>>(new Map());
   const [renamingTab, setRenamingTab] = useState<{ sessionId: string; currentName: string } | null>(null);
+
+  // Collapsible sidebar
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('connectty-sidebar-collapsed') === 'true';
+  });
+
+  // Panel layout mode (tabs vs panels)
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => {
+    return (localStorage.getItem('connectty-layout-mode') as LayoutMode) || 'tabs';
+  });
+  const [panelLayout, setPanelLayout] = useState<PanelLayout | null>(null);
+  const [showLayoutPicker, setShowLayoutPicker] = useState(false);
+  const [sessionPickerPanelId, setSessionPickerPanelId] = useState<string | null>(null);
 
   // Collapsible sidebar groups
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
@@ -373,6 +390,53 @@ export default function App() {
       brightCyan: '#a4ffff',
     };
   }, [theme, appSettings.terminalTheme]);
+
+  // Persist sidebar collapsed state and layout mode
+  useEffect(() => {
+    localStorage.setItem('connectty-sidebar-collapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem('connectty-layout-mode', layoutMode);
+  }, [layoutMode]);
+
+  // Global keyboard shortcuts: Ctrl+B (sidebar), Ctrl+Shift+T (panel mode), Ctrl+Shift+P (layout picker)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      // Ctrl+B toggles sidebar
+      if (e.ctrlKey && e.key === 'b' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setSidebarCollapsed(prev => !prev);
+      }
+
+      // Ctrl+Shift+T toggles panel mode
+      if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't') && !e.altKey) {
+        e.preventDefault();
+        setLayoutMode(prev => {
+          const next = prev === 'tabs' ? 'panels' : 'tabs';
+          if (next === 'panels' && !panelLayout) {
+            // Initialize with a single panel showing the active session
+            const leaf = createLeaf(activeSessionId || null);
+            setPanelLayout({ root: leaf, activePanelId: leaf.id });
+          }
+          return next;
+        });
+      }
+
+      // Ctrl+Shift+P opens layout picker (only in panel mode)
+      if (e.ctrlKey && e.shiftKey && (e.key === 'P' || e.key === 'p') && !e.altKey) {
+        if (layoutMode === 'panels') {
+          e.preventDefault();
+          setShowLayoutPicker(prev => !prev);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [layoutMode, panelLayout, activeSessionId]);
 
   // Update existing terminals when theme changes
   useEffect(() => {
@@ -1506,14 +1570,28 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header">
-          <h1>Connectty</h1>
-          <p className="subtitle">SSH &amp; RDP Connection Manager</p>
+          <div className="sidebar-header-row">
+            {!sidebarCollapsed && <h1>Connectty</h1>}
+            <button
+              className="sidebar-toggle-btn"
+              onClick={() => setSidebarCollapsed(prev => !prev)}
+              title={sidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                {sidebarCollapsed
+                  ? <polyline points="9 18 15 12 9 6" />
+                  : <polyline points="15 18 9 12 15 6" />
+                }
+              </svg>
+            </button>
+          </div>
+          {!sidebarCollapsed && <p className="subtitle">SSH &amp; RDP Connection Manager</p>}
         </div>
 
         {/* Profile Selector */}
-        <div className="profile-selector" ref={profileMenuRef}>
+        {!sidebarCollapsed && <div className="profile-selector" ref={profileMenuRef}>
           <button
             className="profile-selector-button"
             onClick={() => setShowProfileMenu(!showProfileMenu)}
@@ -1603,30 +1681,61 @@ export default function App() {
               )}
             </div>
           )}
-        </div>
+        </div>}
 
-        <div className="sidebar-actions sidebar-actions-grid">
-          <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
-            + New Connection
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowCredentialModal(true)}>
-            Credentials
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowGroupModal(true)}>
-            Groups
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }}>
-            Providers
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
-            Repeated Actions
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowSettingsModal(true)}>
-            Settings
-          </button>
-        </div>
+        {!sidebarCollapsed ? (
+          <div className="sidebar-actions sidebar-actions-grid">
+            <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
+              + New Connection
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowCredentialModal(true)}>
+              Credentials
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowGroupModal(true)}>
+              Groups
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }}>
+              Providers
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
+              Repeated Actions
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowSettingsModal(true)}>
+              Settings
+            </button>
+          </div>
+        ) : (
+          <div className="sidebar-actions-collapsed">
+            <button className="sidebar-icon-btn" onClick={() => setShowConnectionModal(true)} title="New Connection">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <button className="sidebar-icon-btn" onClick={() => setShowCredentialModal(true)} title="Credentials">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+            </button>
+            <button className="sidebar-icon-btn" onClick={() => setShowGroupModal(true)} title="Groups">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+              </svg>
+            </button>
+            <button className="sidebar-icon-btn" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }} title="Providers">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+              </svg>
+            </button>
+            <button className="sidebar-icon-btn" onClick={() => setShowSettingsModal(true)} title="Settings">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+              </svg>
+            </button>
+          </div>
+        )}
 
-        <div className="search-input">
+        {!sidebarCollapsed && <div className="search-input">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
@@ -1649,9 +1758,9 @@ export default function App() {
               </svg>
             </button>
           )}
-        </div>
+        </div>}
 
-        <div className="sidebar-content">
+        {!sidebarCollapsed && <div className="sidebar-content">
           <ul className="connection-list">
             {/* Grouped connections */}
             {groups.map(group => (
@@ -1734,7 +1843,7 @@ export default function App() {
               </div>
             )}
           </ul>
-        </div>
+        </div>}
       </aside>
 
       {/* Main Content */}
@@ -1793,6 +1902,45 @@ export default function App() {
             >
               +
             </button>
+          </div>
+
+          {/* Panel Mode Toggle */}
+          <div className="panel-mode-toggle">
+            <button
+              className={`panel-mode-btn ${layoutMode === 'tabs' ? 'active' : ''}`}
+              onClick={() => setLayoutMode('tabs')}
+              title="Tab mode"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+              </svg>
+            </button>
+            <button
+              className={`panel-mode-btn ${layoutMode === 'panels' ? 'active' : ''}`}
+              onClick={() => {
+                setLayoutMode('panels');
+                if (!panelLayout) {
+                  const leaf = createLeaf(activeSessionId || null);
+                  setPanelLayout({ root: leaf, activePanelId: leaf.id });
+                }
+              }}
+              title="Panel mode (Ctrl+Shift+T)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="12" y2="12"/>
+              </svg>
+            </button>
+            {layoutMode === 'panels' && (
+              <button
+                className="panel-mode-btn"
+                onClick={() => setShowLayoutPicker(true)}
+                title="Layout presets (Ctrl+Shift+P)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1955,7 +2103,32 @@ export default function App() {
         {/* Content based on session type or welcome screen */}
         {sessions.length > 0 ? (
           <div className="content-body">
-            {(() => {
+            {layoutMode === 'panels' && panelLayout ? (
+              <PanelContainer
+                layout={panelLayout}
+                sessions={sessions}
+                onLayoutChange={setPanelLayout}
+                onActivePanelChange={(panelId) => {
+                  setPanelLayout(prev => prev ? { ...prev, activePanelId: panelId } : prev);
+                  // Also update active session to match the panel's session
+                  const leaves = panelLayout ? getLeaves(panelLayout.root) : [];
+                  const leaf = leaves.find(l => l.id === panelId);
+                  if (leaf?.sessionId) setActiveSessionId(leaf.sessionId);
+                }}
+                onSessionSelect={(panelId) => setSessionPickerPanelId(panelId)}
+                onResize={(sessionId, cols, rows, sessionType) => {
+                  if (sessionType === 'ssh') {
+                    window.connectty.ssh.resize(sessionId, cols, rows);
+                  } else if (sessionType === 'localShell') {
+                    window.connectty.localShell.resize(sessionId, cols, rows);
+                  }
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setTerminalContextMenu({ x: e.clientX, y: e.clientY });
+                }}
+              />
+            ) : (() => {
               const activeSession = sessions.find(s => s.id === activeSessionId);
               if (!activeSession) return null;
 
@@ -2073,6 +2246,60 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Layout Picker */}
+      {showLayoutPicker && (
+        <LayoutPicker
+          onSelect={(preset) => {
+            const sessionIds = sessions.map(s => s.id);
+            setPanelLayout(createLayout(preset, sessionIds));
+          }}
+          onClose={() => setShowLayoutPicker(false)}
+        />
+      )}
+
+      {/* Session Picker for empty panels */}
+      {sessionPickerPanelId && (
+        <div className="layout-picker-overlay" onClick={() => setSessionPickerPanelId(null)}>
+          <div className="layout-picker" onClick={e => e.stopPropagation()}>
+            <div className="layout-picker-header">
+              <h3>Assign Session</h3>
+              <button className="pane-action-btn" onClick={() => setSessionPickerPanelId(null)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="session-picker-list">
+              {sessions
+                .filter(s => s.type === 'ssh' || s.type === 'serial' || s.type === 'localShell')
+                .map(s => (
+                  <button
+                    key={s.id}
+                    className="session-picker-item"
+                    onClick={() => {
+                      if (panelLayout) {
+                        setPanelLayout({
+                          ...panelLayout,
+                          root: assignSession(panelLayout.root, sessionPickerPanelId, s.id),
+                        });
+                      }
+                      setSessionPickerPanelId(null);
+                    }}
+                  >
+                    <span className={`session-type-badge ${s.type}`}>
+                      {s.type === 'ssh' ? 'SSH' : s.type === 'serial' ? 'Serial' : 'Shell'}
+                    </span>
+                    {s.type === 'localShell' ? (s as any).shellName : (s as any).connectionName}
+                  </button>
+                ))}
+              {sessions.filter(s => s.type === 'ssh' || s.type === 'serial' || s.type === 'localShell').length === 0 && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '8px' }}>No terminal sessions available</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Connection Modal */}
       {showConnectionModal && (

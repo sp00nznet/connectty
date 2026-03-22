@@ -1,0 +1,17 @@
+{
+  "name": "@connectty/tauri",
+  "version": "2.0.0",
+  "private": true,
+  "description": "connectty native desktop app (Tauri 2)",
+  "scripts": {
+    "dev": "cargo tauri dev",
+    "build": "cargo tauri build",
+    "build:win": "cargo tauri build --target x86_64-pc-windows-msvc",
+    "build:linux": "cargo tauri build --target x86_64-unknown-linux-gnu",
+    "build:mac": "cargo tauri build --target x86_64-apple-darwin"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

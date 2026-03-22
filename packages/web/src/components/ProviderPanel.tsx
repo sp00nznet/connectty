@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { api, Provider, DiscoveredHost } from '../services/api';
-import type { Credential, ConnectionGroup, ProviderSyncResult } from '@connectty/shared';
+import type { Credential, ConnectionGroup, ProviderSyncResult, ServerConnection } from '@connectty/shared';
 import ProviderModal from './ProviderModal';
 
 interface ProviderPanelProps {
   credentials: Credential[];
   groups: ConnectionGroup[];
+  connections: ServerConnection[];
   onHostsImported: () => void;
   onNotification: (type: 'success' | 'error', message: string) => void;
 }
@@ -13,6 +14,7 @@ interface ProviderPanelProps {
 export default function ProviderPanel({
   credentials,
   groups,
+  connections,
   onHostsImported,
   onNotification,
 }: ProviderPanelProps) {
@@ -33,6 +35,38 @@ export default function ProviderPanel({
   const [importCredentialId, setImportCredentialId] = useState('');
   const [importGroupId, setImportGroupId] = useState('');
   const [ipPreference, setIpPreference] = useState<'private' | 'public' | 'hostname'>('private');
+
+  // Build lookup maps for detecting duplicate hosts across providers
+  const existingConnectionMap = useMemo(() => {
+    const byName = new Map<string, ServerConnection>();
+    const byHostname = new Map<string, ServerConnection>();
+    for (const conn of connections) {
+      byName.set(conn.name.toLowerCase(), conn);
+      if (conn.hostname) {
+        byHostname.set(conn.hostname.toLowerCase(), conn);
+      }
+    }
+    return { byName, byHostname };
+  }, [connections]);
+
+  // Find an existing connection that matches a discovered host (case-insensitive)
+  const findMatchingConnection = (host: DiscoveredHost): ServerConnection | null => {
+    // Don't flag as duplicate if it was imported from this same provider
+    const matchByName = existingConnectionMap.byName.get(host.name.toLowerCase());
+    if (matchByName && matchByName.providerId !== host.providerId) return matchByName;
+
+    if (host.hostname) {
+      const matchByHostname = existingConnectionMap.byHostname.get(host.hostname.toLowerCase());
+      if (matchByHostname && matchByHostname.providerId !== host.providerId) return matchByHostname;
+    }
+
+    if (host.privateIp) {
+      const matchByIp = existingConnectionMap.byHostname.get(host.privateIp.toLowerCase());
+      if (matchByIp && matchByIp.providerId !== host.providerId) return matchByIp;
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     loadProviders();
@@ -477,42 +511,57 @@ export default function ProviderPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {discoveredHosts.map((host) => (
-                      <tr key={host.id} className={host.imported ? 'imported' : ''}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selectedHosts.has(host.id)}
-                            onChange={() => handleToggleHost(host.id)}
-                            disabled={host.imported}
-                          />
-                        </td>
-                        <td>{host.name}</td>
-                        <td>
-                          {host.hostname || host.privateIp || host.publicIp || '-'}
-                          {host.privateIp && host.publicIp && (
-                            <span className="ip-alt" title={`Public: ${host.publicIp}`}>
-                              ({host.publicIp})
-                            </span>
-                          )}
-                        </td>
-                        <td>{host.osName || host.osType || '-'}</td>
-                        <td>
-                          <span
-                            className="state-indicator"
-                            style={{ backgroundColor: getStateColor(host.state) }}
-                          />
-                          {host.state || '-'}
-                        </td>
-                        <td>
-                          {host.imported ? (
-                            <span className="badge imported">Imported</span>
-                          ) : (
-                            <span className="badge new">New</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {discoveredHosts.map((host) => {
+                      const matchingConn = findMatchingConnection(host);
+                      return (
+                        <tr key={host.id} className={`${host.imported ? 'imported' : ''} ${matchingConn ? 'duplicate-host' : ''}`}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedHosts.has(host.id)}
+                              onChange={() => handleToggleHost(host.id)}
+                              disabled={host.imported}
+                            />
+                          </td>
+                          <td>
+                            {host.name}
+                            {matchingConn && (
+                              <span
+                                className="badge duplicate"
+                                title={`Already exists as "${matchingConn.name}" (imported from another provider)`}
+                              >
+                                Exists: {matchingConn.name}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {host.hostname || host.privateIp || host.publicIp || '-'}
+                            {host.privateIp && host.publicIp && (
+                              <span className="ip-alt" title={`Public: ${host.publicIp}`}>
+                                ({host.publicIp})
+                              </span>
+                            )}
+                          </td>
+                          <td>{host.osName || host.osType || '-'}</td>
+                          <td>
+                            <span
+                              className="state-indicator"
+                              style={{ backgroundColor: getStateColor(host.state) }}
+                            />
+                            {host.state || '-'}
+                          </td>
+                          <td>
+                            {host.imported ? (
+                              <span className="badge imported">Imported</span>
+                            ) : matchingConn ? (
+                              <span className="badge duplicate">Duplicate</span>
+                            ) : (
+                              <span className="badge new">New</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </>

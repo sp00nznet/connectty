@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/schemas/main/tauri/tauri.conf.schema.json",
+  "productName": "Connectty",
+  "identifier": "com.connectty.desktop",
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "./dist/renderer",
+    "beforeDevCommand": "npx vite",
+    "beforeBuildCommand": "npx vite build"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "app"],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libssl3"]
+      }
+    }
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "Connectty",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

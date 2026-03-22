@@ -167,6 +167,7 @@ export interface BigFixConfig {
   port: number;
   username: string;        // AD username (e.g., DOMAIN\\user or user@domain.com)
   password?: string;
+  credentialId?: string;   // Reference to saved credential
   ignoreCertErrors: boolean;
 }
 
@@ -665,3 +666,44 @@ export interface SessionState {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// ============================================================================
+// Panel Layout Types (tmux-like terminal paneling)
+// ============================================================================
+
+export type SplitDirection = 'horizontal' | 'vertical';
+
+export interface PanelLeaf {
+  type: 'leaf';
+  id: string;
+  sessionId: string | null; // null = empty panel (show placeholder)
+}
+
+export interface PanelSplit {
+  type: 'split';
+  id: string;
+  direction: SplitDirection;
+  ratio: number; // 0.0-1.0, proportion for first child
+  first: PanelNode;
+  second: PanelNode;
+}
+
+export type PanelNode = PanelLeaf | PanelSplit;
+
+export interface PanelLayout {
+  root: PanelNode;
+  activePanelId: string;
+}
+
+export type LayoutMode = 'tabs' | 'panels';
+
+export type PresetLayout =
+  | 'single'
+  | 'side-by-side'
+  | 'top-bottom'
+  | '2x2'
+  | '1-plus-2'
+  | '2-plus-1'
+  | '3-column'
+  | '3x3'
+  | '4x4';

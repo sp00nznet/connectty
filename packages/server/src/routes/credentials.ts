@@ -80,7 +80,7 @@ export function createCredentialRoutes(db: DatabaseService): Router {
         return;
       }
 
-      if (!['password', 'privateKey', 'agent'].includes(type)) {
+      if (!['password', 'privateKey', 'agent', 'domain'].includes(type)) {
         res.status(400).json({
           success: false,
           error: 'Invalid credential type',

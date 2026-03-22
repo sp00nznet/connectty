@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/schemas/main/tauri/capability.schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for connectty",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "store:default"
+  ]
+}

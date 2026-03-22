@@ -1,0 +1,42 @@
+[package]
+name = "connectty"
+version = "2.0.0"
+edition = "2021"
+description = "connectty - SSH & RDP Connection Manager"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-store = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+russh = "0.44"
+russh-keys = "0.44"
+russh-sftp = "2"
+portable-pty = "0.8"
+serialport = "4"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+getrandom = "0.2"
+dirs = "6"
+async-trait = "0.1"
+ssh-key = "0.6"
+hostname = "0.4"
+open = "5"
+log = "0.4"
+env_logger = "0.11"
+thiserror = "1"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

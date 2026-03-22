@@ -80,6 +80,8 @@ export default function CredentialModal({ onClose, onNotification }: CredentialM
     } else if (credentialType === 'privateKey') {
       if (privateKey) data.privateKey = privateKey;
       if (passphrase) data.passphrase = passphrase;
+    } else if (credentialType === 'domain') {
+      if (password) data.password = password;
     }
 
     try {
@@ -204,6 +206,7 @@ export default function CredentialModal({ onClose, onNotification }: CredentialM
                 >
                   <option value="password">Password</option>
                   <option value="privateKey">SSH Private Key</option>
+                  <option value="domain">Domain Account</option>
                 </select>
               </div>
 
@@ -272,6 +275,30 @@ export default function CredentialModal({ onClose, onNotification }: CredentialM
                       type="password"
                       value={passphrase}
                       onChange={(e) => setPassphrase(e.target.value)}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </>
+              )}
+
+              {credentialType === 'domain' && (
+                <>
+                  <div className="form-row">
+                    <label>Domain</label>
+                    <input
+                      type="text"
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      placeholder="MYDOMAIN"
+                      required
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>Password {editing && '(leave blank to keep current)'}</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
                     />
                   </div>

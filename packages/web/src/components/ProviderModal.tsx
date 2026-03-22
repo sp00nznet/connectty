@@ -73,8 +73,8 @@ export default function ProviderModal({ provider, credentials = [], onClose, onS
   // Check if this provider type supports saved credentials
   const supportsCredentials = ['vmware', 'proxmox', 'bigfix'].includes(type);
 
-  // Filter credentials to password type only (these providers need username/password)
-  const passwordCredentials = credentials.filter(c => c.type === 'password');
+  // Filter credentials to types usable by providers (password, domain, privateKey)
+  const usableCredentials = credentials.filter(c => c.type === 'password' || c.type === 'domain' || c.type === 'privateKey');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,12 +128,14 @@ export default function ProviderModal({ provider, credentials = [], onClose, onS
 
       case 'bigfix':
         config.host = host;
+        config.port = port;
         if (credentialMode === 'saved' && selectedCredentialId) {
           config.credentialId = selectedCredentialId;
         } else {
           config.username = username;
           if (password) config.password = password;
         }
+        config.ignoreCert = ignoreCert;
         break;
     }
 
@@ -148,7 +150,7 @@ export default function ProviderModal({ provider, credentials = [], onClose, onS
 
   // Render credential mode selector and fields
   const renderCredentialFields = (usernamePlaceholder: string) => {
-    if (supportsCredentials && passwordCredentials.length > 0) {
+    if (supportsCredentials && usableCredentials.length > 0) {
       return (
         <>
           <div className="form-row">
@@ -179,9 +181,9 @@ export default function ProviderModal({ provider, credentials = [], onClose, onS
                 required
               >
                 <option value="">Select a credential...</option>
-                {passwordCredentials.map((cred) => (
+                {usableCredentials.map((cred) => (
                   <option key={cred.id} value={cred.id}>
-                    {cred.name} ({cred.username})
+                    {cred.name} ({cred.type === 'domain' ? `${cred.domain}\\${cred.username}` : cred.username}{cred.type !== 'password' ? ` - ${cred.type}` : ''})
                   </option>
                 ))}
               </select>
@@ -442,11 +444,29 @@ export default function ProviderModal({ provider, credentials = [], onClose, onS
                 type="text"
                 value={host}
                 onChange={(e) => setHost(e.target.value)}
-                placeholder="bigfix.example.com:52311"
+                placeholder="bigfix.example.com"
                 required
               />
             </div>
+            <div className="form-row">
+              <label>Port</label>
+              <input
+                type="number"
+                value={port}
+                onChange={(e) => setPort(parseInt(e.target.value))}
+              />
+            </div>
             {renderCredentialFields('DOMAIN\\username')}
+            <div className="form-row checkbox">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={ignoreCert}
+                  onChange={(e) => setIgnoreCert(e.target.checked)}
+                />
+                Ignore SSL certificate errors
+              </label>
+            </div>
           </>
         );
 

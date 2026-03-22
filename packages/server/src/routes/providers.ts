@@ -9,6 +9,21 @@ import type { ProviderDiscoveryService } from '../services/provider-discovery';
 export function createProviderRoutes(db: DatabaseService, providerService: ProviderDiscoveryService): Router {
   const router = Router();
 
+  // Resolve saved credentials into provider config (injects username/password)
+  async function resolveProviderCredentials(userId: string, provider: { config: Record<string, unknown> }): Promise<void> {
+    const credentialId = provider.config.credentialId as string | undefined;
+    if (!credentialId) return;
+
+    const credential = await db.getCredential(userId, credentialId);
+    if (!credential) return;
+
+    // Inject username/password from the saved credential
+    provider.config.username = credential.domain
+      ? `${credential.domain}\\${credential.username}`
+      : credential.username;
+    provider.config.password = credential.secret || credential.password;
+  }
+
   // List providers (optionally including shared)
   router.get('/', async (req, res) => {
     try {
@@ -176,6 +191,9 @@ export function createProviderRoutes(db: DatabaseService, providerService: Provi
         return;
       }
 
+      // Resolve saved credential into config if needed
+      await resolveProviderCredentials(req.userId!, provider);
+
       const result = await providerService.testConnection(provider);
 
       res.json({
@@ -203,6 +221,9 @@ export function createProviderRoutes(db: DatabaseService, providerService: Provi
         return;
       }
 
+      // Resolve saved credential into config if needed
+      await resolveProviderCredentials(req.userId!, provider);
+
       const hosts = await providerService.discover(provider);
 
       // Save discovered hosts to database
@@ -220,6 +241,98 @@ export function createProviderRoutes(db: DatabaseService, providerService: Provi
         success: true,
         data: savedHosts,
         count: savedHosts.length,
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: (err as Error).message,
+      });
+    }
+  });
+
+  // Sync provider (incremental discovery - compares with previous results)
+  router.post('/:id/sync', async (req, res) => {
+    try {
+      const provider = await db.getProvider(req.userId!, req.params.id);
+
+      if (!provider) {
+        res.status(404).json({
+          success: false,
+          error: 'Provider not found',
+        });
+        return;
+      }
+
+      // Resolve saved credential into config if needed
+      await resolveProviderCredentials(req.userId!, provider);
+
+      // Get previously discovered hosts before re-discovering
+      const previousHosts = await db.getDiscoveredHosts(req.userId!, provider.id);
+      const previousMap = new Map(previousHosts.map(h => [h.providerHostId, h]));
+
+      // Run fresh discovery
+      const freshHosts = await providerService.discover(provider);
+
+      // Save discovered hosts to database
+      await db.bulkUpsertDiscoveredHosts(req.userId!, provider.id, freshHosts);
+
+      // Update provider last discovery time
+      await db.updateProvider(req.userId!, provider.id, {
+        lastDiscoveryAt: new Date(),
+      });
+
+      // Compare results
+      const freshMap = new Map(freshHosts.map(h => [h.providerHostId, h]));
+      const newHosts: typeof previousHosts = [];
+      const removedHosts: typeof previousHosts = [];
+      const changedHosts: Array<{ host: typeof previousHosts[0]; previousState: string; currentState: string }> = [];
+      const existingHosts: typeof previousHosts = [];
+
+      // Find new and changed hosts
+      const savedHosts = await db.getDiscoveredHosts(req.userId!, provider.id);
+      const savedMap = new Map(savedHosts.map(h => [h.providerHostId, h]));
+
+      for (const fresh of freshHosts) {
+        const prev = previousMap.get(fresh.providerHostId);
+        const saved = savedMap.get(fresh.providerHostId);
+        if (!prev) {
+          if (saved) newHosts.push(saved);
+        } else if (prev.state !== fresh.state) {
+          if (saved) changedHosts.push({ host: saved, previousState: prev.state || 'unknown', currentState: fresh.state || 'unknown' });
+        } else {
+          if (saved) existingHosts.push(saved);
+        }
+      }
+
+      // Find removed hosts (were in previous, not in current)
+      for (const prev of previousHosts) {
+        if (!freshMap.has(prev.providerHostId)) {
+          removedHosts.push(prev);
+        }
+      }
+
+      const importedCount = savedHosts.filter(h => h.imported).length;
+
+      res.json({
+        success: true,
+        data: {
+          providerId: provider.id,
+          providerName: provider.name,
+          success: true,
+          syncedAt: new Date(),
+          newHosts,
+          removedHosts,
+          existingHosts,
+          changedHosts,
+          summary: {
+            total: freshHosts.length,
+            new: newHosts.length,
+            removed: removedHosts.length,
+            existing: existingHosts.length,
+            changed: changedHosts.length,
+            imported: importedCount,
+          },
+        },
       });
     } catch (err) {
       res.status(500).json({
