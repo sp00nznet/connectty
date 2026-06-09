@@ -81,7 +81,7 @@
     }
   },
   "dependencies": {
-    "@connectty/shared": "1.0.0",
+    "@connectty/shared": "2.0.0",
     "axios": "^1.6.5",
     "better-sqlite3": "^9.3.0",
     "dotenv": "^17.2.3",
