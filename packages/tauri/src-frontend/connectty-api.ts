@@ -134,6 +134,12 @@ interface ConnecttyAPI {
   window: {
     minimize: () => Promise<void>;
   };
+  aiSessions: {
+    list: () => Promise<any[]>;
+    transcript: (filePath: string) => Promise<any[]>;
+    watchStart: () => Promise<void>;
+    onUpdate: (callback: (sessions: any[]) => void) => () => void;
+  };
 }
 
 // Helper to create event listener with cleanup
@@ -323,6 +329,19 @@ export const connecttyApi: ConnecttyAPI = {
   window: {
     setTitleBarOverlay: () => Promise.resolve(true),
     minimize: () => Promise.resolve(),
+  },
+  // AI session monitoring (Claude Code / Copilot)
+  aiSessions: {
+    list: () => invoke('ai_sessions_list'),
+    transcript: (filePath: string) => invoke('ai_session_transcript', { filePath }),
+    watchStart: () => invoke('ai_sessions_watch_start'),
+    onUpdate: (callback: (sessions: any[]) => void) => {
+      let unlisten: UnlistenFn | null = null;
+      listen('ai:sessions', (event) => callback(event.payload as any[])).then((fn) => {
+        unlisten = fn;
+      });
+      return () => unlisten?.();
+    },
   },
 };
 

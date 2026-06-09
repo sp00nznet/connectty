@@ -36,6 +36,7 @@ import 'xterm/css/xterm.css';
 import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves, clearSessions, assignSessionsInOrder } from './panels';
 import type { PanelNode } from '@connectty/shared';
 import { CommandPalette, type PaletteCommand } from './CommandPalette';
+import { AiSessionsPanel, AiTranscriptModal, type AiSession, type AiTranscriptEntry } from './AiSessions';
 
 declare global {
   interface Window {
@@ -277,6 +278,11 @@ export default function App() {
   // Command palette (Ctrl+Shift+K)
   const [showCommandPalette, setShowCommandPalette] = useState(false);
 
+  // AI session monitoring (Ctrl+Shift+A)
+  const [aiSessions, setAiSessions] = useState<AiSession[]>([]);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiTranscript, setAiTranscript] = useState<{ session: AiSession; entries: AiTranscriptEntry[]; loading: boolean } | null>(null);
+
   // Collapsible sidebar groups
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('connectty-collapsed-groups');
@@ -513,6 +519,14 @@ export default function App() {
         return;
       }
 
+      // Ctrl+Shift+A toggles the AI Sessions panel. (Ctrl+Shift+C, tmax's
+      // binding, collides with terminal copy.)
+      if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a') && !e.altKey) {
+        e.preventDefault();
+        setShowAiPanel(prev => !prev);
+        return;
+      }
+
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
@@ -547,6 +561,16 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [layoutMode, panelLayout, activeSessionId]);
+
+  // Start watching AI agent sessions and subscribe to live updates.
+  useEffect(() => {
+    const api = (window.connectty as any).aiSessions;
+    if (!api) return; // not available (e.g. Electron build)
+    api.watchStart?.();
+    api.list?.().then(setAiSessions).catch(() => {});
+    const unsub = api.onUpdate?.((list: AiSession[]) => setAiSessions(list)) || (() => {});
+    return () => unsub();
+  }, []);
 
   // Update existing terminals when theme changes
   useEffect(() => {
@@ -1293,6 +1317,36 @@ export default function App() {
     persistLayouts(next);
   };
 
+  // Resume an AI session: open a local shell and run the agent's --resume in
+  // the session's working directory.
+  const handleResumeAiSession = async (session: AiSession) => {
+    setShowAiPanel(false);
+    const shell = availableShells.find(s => s.id === 'bash')
+      || availableShells.find(s => s.id === 'zsh')
+      || availableShells[0];
+    if (!shell) {
+      showNotification('error', 'No local shell available to resume the session');
+      return;
+    }
+    const sid = await handleSpawnLocalShell(shell);
+    if (!sid) return;
+    const bin = session.agent === 'copilot' ? 'copilot' : 'claude';
+    const cwd = session.cwd ? session.cwd.replace(/'/g, `'\\''`) : '';
+    const cmd = `${cwd ? `cd '${cwd}' && ` : ''}${bin} --resume ${session.id}\n`;
+    // Give the shell a moment to print its prompt before sending the command.
+    setTimeout(() => { window.connectty.localShell.write(sid, cmd); }, 350);
+  };
+
+  const handleOpenAiTranscript = async (session: AiSession) => {
+    setAiTranscript({ session, entries: [], loading: true });
+    try {
+      const entries = await (window.connectty as any).aiSessions.transcript(session.filePath);
+      setAiTranscript({ session, entries, loading: false });
+    } catch {
+      setAiTranscript({ session, entries: [], loading: false });
+    }
+  };
+
   // Duplicate an existing tab
   const handleDuplicateTab = async (sessionId: string) => {
     const session = sessions.find(s => s.id === sessionId);
@@ -1386,8 +1440,10 @@ export default function App() {
       setSessions(prev => [...prev, newSession]);
       setActiveSessionId(sessionId);
       showNotification('success', `Opened ${shell.name}`);
+      return sessionId;
     } catch (err) {
       showNotification('error', `Failed to open shell: ${(err as Error).message}`);
+      return undefined;
     }
   };
 
@@ -1767,6 +1823,7 @@ export default function App() {
       { id: 'act-bulk', category: 'Run', title: 'Run Bulk Command…', keywords: 'repeated actions execute many hosts', run: () => setShowRepeatedActionsModal(true) },
       { id: 'act-settings', category: 'App', title: 'Open Settings…', hint: '', keywords: 'preferences theme', run: () => setShowSettingsModal(true) },
       { id: 'act-toggle-sidebar', category: 'View', title: 'Toggle Sidebar', hint: 'Ctrl+B', run: () => setSidebarCollapsed(p => !p) },
+      { id: 'act-ai-sessions', category: 'AI', title: 'AI Sessions Panel', hint: 'Ctrl+Shift+A', keywords: 'claude copilot monitor resume transcript', run: () => setShowAiPanel(p => !p) },
       {
         id: 'act-toggle-panels', category: 'View', title: 'Toggle Panel Mode', hint: 'Ctrl+Shift+T',
         keywords: 'split tile tmux',
@@ -2646,6 +2703,24 @@ export default function App() {
         <CommandPalette
           commands={buildPaletteCommands()}
           onClose={() => setShowCommandPalette(false)}
+        />
+      )}
+
+      {/* AI Sessions panel + transcript */}
+      {showAiPanel && (
+        <AiSessionsPanel
+          sessions={aiSessions}
+          onResume={handleResumeAiSession}
+          onOpenTranscript={handleOpenAiTranscript}
+          onClose={() => setShowAiPanel(false)}
+        />
+      )}
+      {aiTranscript && (
+        <AiTranscriptModal
+          session={aiTranscript.session}
+          entries={aiTranscript.entries}
+          loading={aiTranscript.loading}
+          onClose={() => setAiTranscript(null)}
         />
       )}
 

@@ -14,3 +14,4 @@ pub mod session_states;
 pub mod sync;
 pub mod settings;
 pub mod app_info;
+pub mod ai_sessions;

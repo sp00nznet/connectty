@@ -36,6 +36,7 @@ open = "5"
 log = "0.4"
 env_logger = "0.11"
 thiserror = "1"
+notify = "6"
 
 [features]
 default = ["custom-protocol"]
