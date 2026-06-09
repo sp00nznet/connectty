@@ -1346,6 +1346,24 @@ export default function App() {
   };
   const handleResumeAiSession = (session: AiSession) => resumeAgentSession(session.agent, session.cwd, session.id);
 
+  // Start a fresh agent session in a project directory (the per-project "+").
+  const handleSpawnAgentInDir = async (cwd: string, agent: string) => {
+    setShowAiPanel(false);
+    const shell = availableShells.find(s => s.id === 'bash')
+      || availableShells.find(s => s.id === 'zsh')
+      || availableShells[0];
+    if (!shell) {
+      showNotification('error', 'No local shell available');
+      return;
+    }
+    const sid = await handleSpawnLocalShell(shell);
+    if (!sid) return;
+    const bin = agent === 'copilot' ? 'copilot' : 'claude';
+    const safeCwd = cwd ? cwd.replace(/'/g, `'\\''`) : '';
+    const cmd = `${safeCwd ? `cd '${safeCwd}' && ` : ''}${bin}\n`;
+    setTimeout(() => { window.connectty.localShell.write(sid, cmd); }, 350);
+  };
+
   const handleOpenAiTranscript = async (session: AiSession) => {
     setAiTranscript({ session, entries: [], loading: true });
     try {
@@ -2722,6 +2740,7 @@ export default function App() {
           sessions={aiSessions}
           onResume={handleResumeAiSession}
           onOpenTranscript={handleOpenAiTranscript}
+          onSpawn={handleSpawnAgentInDir}
           onClose={() => setShowAiPanel(false)}
         />
       )}

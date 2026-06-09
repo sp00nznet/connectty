@@ -62,6 +62,121 @@ fn claude_projects_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".claude").join("projects"))
 }
 
+fn copilot_state_dir() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".copilot").join("session-state"))
+}
+
+/// Best-effort Copilot CLI session parser. The on-disk schema isn't documented
+/// here and there's no local sample to validate against, so this pulls fields
+/// by common key names and degrades gracefully (no panics, no effect on the
+/// Claude path) when the shape differs.
+fn parse_copilot_file(path: &Path) -> Option<AiSession> {
+    let meta = std::fs::metadata(path).ok()?;
+    if !meta.is_file() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    let id = path.file_stem()?.to_string_lossy().to_string();
+    let mut cwd = String::new();
+    let mut title: Option<String> = None;
+    let mut message_count = 0u32;
+
+    let mut glean = |v: &serde_json::Value| {
+        if cwd.is_empty() {
+            for key in ["cwd", "workingDirectory", "directory", "workspace", "folder"] {
+                if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
+                    if !s.is_empty() {
+                        cwd = s.to_string();
+                        break;
+                    }
+                }
+            }
+        }
+        if title.is_none() {
+            for key in ["title", "summary", "name", "description"] {
+                if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
+                    if !s.is_empty() {
+                        title = Some(s.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+        // Whole-file JSON object/array.
+        glean(&v);
+        if let Some(arr) = v.get("messages").and_then(|x| x.as_array()) {
+            message_count = arr.len() as u32;
+        }
+    } else {
+        // JSONL event stream.
+        for line in content.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                glean(&v);
+                message_count += 1;
+            }
+        }
+    }
+
+    let mtime_ms = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let status = if now_ms().saturating_sub(mtime_ms) < ACTIVE_WINDOW_MS {
+        "active"
+    } else {
+        "idle"
+    };
+    let project = if !cwd.is_empty() {
+        Path::new(&cwd)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| cwd.clone())
+    } else {
+        "copilot".to_string()
+    };
+
+    Some(AiSession {
+        id,
+        agent: "copilot".to_string(),
+        title: title.unwrap_or_else(|| "Copilot session".to_string()),
+        project,
+        cwd,
+        git_branch: None,
+        message_count,
+        tool_count: 0,
+        last_prompt: None,
+        last_activity: None,
+        last_activity_ms: mtime_ms,
+        status: status.to_string(),
+        file_path: path.to_string_lossy().to_string(),
+    })
+}
+
+fn scan_copilot() -> Vec<AiSession> {
+    let mut out = Vec::new();
+    if let Some(dir) = copilot_state_dir() {
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for e in entries.flatten() {
+                let p = e.path();
+                if p.is_file() {
+                    if let Some(s) = parse_copilot_file(&p) {
+                        out.push(s);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -245,6 +360,7 @@ fn scan_all() -> Vec<AiSession> {
             }
         }
     }
+    out.extend(scan_copilot());
     out.sort_by(|a, b| b.last_activity_ms.cmp(&a.last_activity_ms));
     out
 }
@@ -454,6 +570,12 @@ pub fn ai_sessions_watch_start(app: AppHandle) -> Result<(), String> {
         if let Err(e) = watcher.watch(&dir, RecursiveMode::Recursive) {
             log::warn!("ai_sessions: failed to watch {:?}: {}", dir, e);
             return;
+        }
+        // Also watch the Copilot session-state dir if it exists.
+        if let Some(copilot) = copilot_state_dir() {
+            if copilot.exists() {
+                let _ = watcher.watch(&copilot, RecursiveMode::Recursive);
+            }
         }
 
         // Debounce: on any event, drain the burst over a short window, then

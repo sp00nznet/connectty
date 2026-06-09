@@ -57,10 +57,11 @@ interface PanelProps {
   sessions: AiSession[];
   onResume: (s: AiSession) => void;
   onOpenTranscript: (s: AiSession) => void;
+  onSpawn: (cwd: string, agent: string) => void;
   onClose: () => void;
 }
 
-export function AiSessionsPanel({ sessions, onResume, onOpenTranscript, onClose }: PanelProps) {
+export function AiSessionsPanel({ sessions, onResume, onOpenTranscript, onSpawn, onClose }: PanelProps) {
   const [filter, setFilter] = useState<'all' | 'claude' | 'copilot'>('all');
   const [query, setQuery] = useState('');
 
@@ -68,6 +69,18 @@ export function AiSessionsPanel({ sessions, onResume, onOpenTranscript, onClose 
     () => sessions.filter(s => (filter === 'all' || s.agent === filter) && matches(s, query)),
     [sessions, filter, query],
   );
+
+  // Group by project, preserving the recency order of first appearance.
+  const groups = useMemo(() => {
+    const map = new Map<string, AiSession[]>();
+    for (const s of filtered) {
+      const key = s.project || '(no project)';
+      const arr = map.get(key);
+      if (arr) arr.push(s);
+      else map.set(key, [s]);
+    }
+    return Array.from(map.entries());
+  }, [filtered]);
 
   return (
     <div className="ai-panel">
@@ -93,36 +106,50 @@ export function AiSessionsPanel({ sessions, onResume, onOpenTranscript, onClose 
         onChange={e => setQuery(e.target.value)}
       />
       <div className="ai-panel-list">
-        {filtered.length === 0 ? (
+        {groups.length === 0 ? (
           <div className="ai-panel-empty">No sessions</div>
         ) : (
-          filtered.map(s => (
-            <div className="ai-session-row" key={s.id + s.filePath}>
-              <span
-                className={`status-dot ${s.status === 'active' ? 'connected' : 'closed'}`}
-                title={s.status === 'active' ? 'Active' : 'Idle'}
-              />
-              <div
-                className="ai-session-main"
-                onClick={() => onOpenTranscript(s)}
-                title="View transcript"
-              >
-                <div className="ai-session-title">{s.title}</div>
-                <div className="ai-session-meta">
-                  <span className="ai-session-project">{s.project}</span>
-                  {s.gitBranch && <span className="ai-session-branch">⎇ {s.gitBranch}</span>}
-                  <span>{s.messageCount} msg</span>
-                  {s.toolCount > 0 && <span>{s.toolCount} tools</span>}
-                  <span className="ai-session-time">{relativeTime(s.lastActivityMs)}</span>
-                </div>
+          groups.map(([project, rows]) => (
+            <div className="ai-project-group" key={project}>
+              <div className="ai-project-header">
+                <span className="ai-project-name">{project}</span>
+                <span className="ai-project-count">{rows.length}</span>
+                <button
+                  className="ai-project-spawn"
+                  title={`New ${rows[0].agent === 'copilot' ? 'Copilot' : 'Claude'} session here`}
+                  onClick={() => onSpawn(rows[0].cwd, rows[0].agent)}
+                >
+                  +
+                </button>
               </div>
-              <button
-                className="ai-session-resume"
-                onClick={() => onResume(s)}
-                title="Resume in a new shell"
-              >
-                Resume
-              </button>
+              {rows.map(s => (
+                <div className="ai-session-row" key={s.id + s.filePath}>
+                  <span
+                    className={`status-dot ${s.status === 'active' ? 'connected' : 'closed'}`}
+                    title={s.status === 'active' ? 'Active' : 'Idle'}
+                  />
+                  <div
+                    className="ai-session-main"
+                    onClick={() => onOpenTranscript(s)}
+                    title="View transcript"
+                  >
+                    <div className="ai-session-title">{s.title}</div>
+                    <div className="ai-session-meta">
+                      {s.gitBranch && <span className="ai-session-branch">⎇ {s.gitBranch}</span>}
+                      <span>{s.messageCount} msg</span>
+                      {s.toolCount > 0 && <span>{s.toolCount} tools</span>}
+                      <span className="ai-session-time">{relativeTime(s.lastActivityMs)}</span>
+                    </div>
+                  </div>
+                  <button
+                    className="ai-session-resume"
+                    onClick={() => onResume(s)}
+                    title="Resume in a new shell"
+                  >
+                    Resume
+                  </button>
+                </div>
+              ))}
             </div>
           ))
         )}
