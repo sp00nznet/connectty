@@ -6868,3 +6868,48 @@ body {
   50% { opacity: 0.3; }
 }
 
+/* ===== Tab groups (colored, collapsible) ===== */
+.tab-group {
+  display: flex;
+  align-items: stretch;
+  border-left: 3px solid var(--tab-group-color, var(--accent));
+  -webkit-app-region: no-drag;
+}
+.tab-group-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  background-color: var(--bg-tertiary);
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.tab-group-header:hover {
+  filter: brightness(1.15);
+}
+.tab-group-color {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.tab-group-caret {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.tab-group-name {
+  font-weight: 600;
+}
+.tab-group-count {
+  background-color: var(--bg-secondary);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+

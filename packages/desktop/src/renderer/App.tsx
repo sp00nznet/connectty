@@ -213,6 +213,54 @@ export default function App() {
     localStorage.setItem('connectty-saved-layouts', JSON.stringify(next));
   };
 
+  // Tab groups: named, colored groups with collapsible headers. Group
+  // definitions persist; membership (session -> group) is per-run since session
+  // IDs are ephemeral.
+  interface TabGroup { id: string; name: string; color: string; }
+  const TAB_GROUP_COLORS = ['#e94560', '#4ade80', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6', '#22d3ee', '#fb923c'];
+  const [tabGroups, setTabGroups] = useState<TabGroup[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('connectty-tab-groups') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [tabGroupMembership, setTabGroupMembership] = useState<Map<string, string>>(new Map());
+  const [collapsedTabGroups, setCollapsedTabGroups] = useState<Set<string>>(new Set());
+  const [creatingGroupForSession, setCreatingGroupForSession] = useState<string | null>(null);
+  const persistTabGroups = (next: TabGroup[]) => {
+    setTabGroups(next);
+    localStorage.setItem('connectty-tab-groups', JSON.stringify(next));
+  };
+  const createTabGroup = (sessionId: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) { setCreatingGroupForSession(null); return; }
+    const id = `g${Date.now().toString(36)}`;
+    const color = TAB_GROUP_COLORS[tabGroups.length % TAB_GROUP_COLORS.length];
+    persistTabGroups([...tabGroups, { id, name: trimmed, color }]);
+    setTabGroupMembership(prev => new Map(prev).set(sessionId, id));
+    setCreatingGroupForSession(null);
+  };
+  const addToTabGroup = (sessionId: string, groupId: string) => {
+    setTabGroupMembership(prev => new Map(prev).set(sessionId, groupId));
+    setTabContextMenu(null);
+  };
+  const removeFromTabGroup = (sessionId: string) => {
+    setTabGroupMembership(prev => {
+      const next = new Map(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    setTabContextMenu(null);
+  };
+  const toggleTabGroup = (groupId: string) => {
+    setCollapsedTabGroups(prev => {
+      const next = new Set(prev);
+      next.has(groupId) ? next.delete(groupId) : next.add(groupId);
+      return next;
+    });
+  };
+
   // Collapsible sidebar
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('connectty-sidebar-collapsed') === 'true';
@@ -1803,6 +1851,33 @@ export default function App() {
     return cmds;
   };
 
+  // Render a single session tab button (shared by grouped + ungrouped strips).
+  const renderSessionTab = (session: Session) => (
+    <button
+      key={session.id}
+      className={`session-tab ${session.type} ${activeSessionId === session.id ? 'active' : ''}`}
+      onClick={() => setActiveSessionId(session.id)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setTabContextMenu({ x: e.clientX, y: e.clientY, sessionId: session.id });
+      }}
+    >
+      <span className={`status-dot ${sessionStatuses.get(session.id) === 'error' ? 'error' : 'connected'}`} title={sessionStatuses.get(session.id) === 'error' ? 'Error' : 'Connected'} />
+      <span className={`session-type-badge ${session.type}`}>
+        {session.type === 'ssh' ? 'SSH' :
+         session.type === 'sftp' ? 'SFTP' :
+         session.type === 'rdp' ? 'RDP' :
+         session.type === 'serial' ? 'Serial' :
+         session.type === 'localShell' ? 'Shell' :
+         session.type === 'commandResults' ? 'CMD' : ''}
+      </span>
+      {customTabNames.get(session.id) || (session.type === 'localShell' ? session.shellName : session.type === 'commandResults' ? session.commandName : session.connectionName)}
+      <span className="close-btn" onClick={(e) => { e.stopPropagation(); handleDisconnect(session.id); }}>
+        ×
+      </span>
+    </button>
+  );
+
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -2086,31 +2161,30 @@ export default function App() {
       <main className="main-content">
         {/* Session Tabs - always visible for consistent title bar alignment */}
         <div className="session-tabs">
-          {sessions.map(session => (
-            <button
-              key={session.id}
-              className={`session-tab ${session.type} ${activeSessionId === session.id ? 'active' : ''}`}
-              onClick={() => setActiveSessionId(session.id)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setTabContextMenu({ x: e.clientX, y: e.clientY, sessionId: session.id });
-              }}
-            >
-              <span className={`status-dot ${sessionStatuses.get(session.id) === 'error' ? 'error' : 'connected'}`} title={sessionStatuses.get(session.id) === 'error' ? 'Error' : 'Connected'} />
-              <span className={`session-type-badge ${session.type}`}>
-                {session.type === 'ssh' ? 'SSH' :
-                 session.type === 'sftp' ? 'SFTP' :
-                 session.type === 'rdp' ? 'RDP' :
-                 session.type === 'serial' ? 'Serial' :
-                 session.type === 'localShell' ? 'Shell' :
-                 session.type === 'commandResults' ? 'CMD' : ''}
-              </span>
-              {customTabNames.get(session.id) || (session.type === 'localShell' ? session.shellName : session.type === 'commandResults' ? session.commandName : session.connectionName)}
-              <span className="close-btn" onClick={(e) => { e.stopPropagation(); handleDisconnect(session.id); }}>
-                ×
-              </span>
-            </button>
-          ))}
+          {/* Grouped tabs: one collapsible section per non-empty group */}
+          {tabGroups.map(group => {
+            const members = sessions.filter(s => tabGroupMembership.get(s.id) === group.id);
+            if (members.length === 0) return null;
+            const collapsed = collapsedTabGroups.has(group.id);
+            return (
+              <div className="tab-group" key={group.id} style={{ ['--tab-group-color' as any]: group.color }}>
+                <button
+                  className="tab-group-header"
+                  onClick={() => toggleTabGroup(group.id)}
+                  title={collapsed ? 'Expand group' : 'Collapse group'}
+                >
+                  <span className="tab-group-color" style={{ background: group.color }} />
+                  <span className="tab-group-caret">{collapsed ? '▸' : '▾'}</span>
+                  <span className="tab-group-name">{group.name}</span>
+                  <span className="tab-group-count">{members.length}</span>
+                </button>
+                {!collapsed && members.map(renderSessionTab)}
+              </div>
+            );
+          })}
+
+          {/* Ungrouped tabs */}
+          {sessions.filter(s => !tabGroupMembership.has(s.id)).map(renderSessionTab)}
 
           {/* New Tab Button */}
           <div className="new-tab-container">
@@ -2230,6 +2304,34 @@ export default function App() {
               <span className="menu-icon">✏️</span>
               Rename Tab
             </button>
+            <div className="tab-context-menu-divider" />
+            {/* Tab grouping */}
+            <button
+              className="tab-context-menu-item"
+              onClick={() => { const sid = tabContextMenu.sessionId; setTabContextMenu(null); setCreatingGroupForSession(sid); }}
+            >
+              <span className="menu-icon">🏷️</span>
+              New Tab Group…
+            </button>
+            {tabGroups.map(group => (
+              <button
+                key={group.id}
+                className="tab-context-menu-item"
+                onClick={() => addToTabGroup(tabContextMenu.sessionId, group.id)}
+              >
+                <span className="menu-icon" style={{ color: group.color }}>●</span>
+                Add to: {group.name}
+              </button>
+            ))}
+            {tabGroupMembership.has(tabContextMenu.sessionId) && (
+              <button
+                className="tab-context-menu-item"
+                onClick={() => removeFromTabGroup(tabContextMenu.sessionId)}
+              >
+                <span className="menu-icon">⊘</span>
+                Remove from Group
+              </button>
+            )}
             <div className="tab-context-menu-divider" />
             <button
               className="tab-context-menu-item danger"
@@ -2812,6 +2914,47 @@ export default function App() {
                 }}
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Tab Group modal */}
+      {creatingGroupForSession !== null && (
+        <div className="modal-overlay">
+          <div className="modal rename-tab-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>New Tab Group</h2>
+              <button className="close-btn" onClick={() => setCreatingGroupForSession(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Group name"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    createTabGroup(creatingGroupForSession, (e.target as HTMLInputElement).value);
+                  } else if (e.key === 'Escape') {
+                    setCreatingGroupForSession(null);
+                  }
+                }}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setCreatingGroupForSession(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={(e) => {
+                  const input = (e.target as HTMLElement).closest('.modal')?.querySelector('input');
+                  if (input) createTabGroup(creatingGroupForSession, input.value);
+                }}
+              >
+                Create
               </button>
             </div>
           </div>
