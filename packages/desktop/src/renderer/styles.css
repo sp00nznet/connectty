@@ -6757,3 +6757,114 @@ body {
   background: var(--bg-hover);
 }
 
+/* ===== Command Palette (Ctrl+Shift+K) ===== */
+.command-palette-overlay {
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+.command-palette {
+  width: 620px;
+  max-width: 90vw;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.command-palette-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 15px;
+  padding: 14px 16px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.command-palette-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.command-palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.command-palette-item.selected {
+  background-color: var(--accent);
+  color: #fff;
+}
+.command-palette-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-palette-item-cat {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.command-palette-item.selected .command-palette-item-cat {
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.command-palette-item-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-family: monospace;
+}
+.command-palette-item.selected .command-palette-item-hint {
+  color: rgba(255, 255, 255, 0.85);
+}
+.command-palette-empty {
+  padding: 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ===== Per-pane / per-tab status indicators ===== */
+.session-tab .status-dot,
+.terminal-pane-header .status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  min-width: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  flex-shrink: 0;
+  background-color: var(--text-muted);
+  vertical-align: middle;
+}
+.session-tab .status-dot.connecting,
+.terminal-pane-header .status-dot.connecting {
+  background-color: var(--warning);
+  animation: status-pulse 1s ease-in-out infinite;
+}
+.session-tab .status-dot.connected,
+.terminal-pane-header .status-dot.connected { background-color: var(--success); }
+.session-tab .status-dot.error,
+.terminal-pane-header .status-dot.error { background-color: var(--error); }
+.session-tab .status-dot.closed,
+.terminal-pane-header .status-dot.closed { background-color: var(--text-muted); }
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+

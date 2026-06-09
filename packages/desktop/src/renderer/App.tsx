@@ -34,6 +34,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves } from './panels';
+import { CommandPalette, type PaletteCommand } from './CommandPalette';
 
 declare global {
   interface Window {
@@ -170,6 +171,22 @@ export default function App() {
   const [customTabNames, setCustomTabNames] = useState<Map<string, string>>(new Map());
   const [renamingTab, setRenamingTab] = useState<{ sessionId: string; currentName: string } | null>(null);
 
+  // Per-session live status for tab/pane indicators. Absence = connected (green);
+  // an 'error' entry shows red until the next data arrives. Sessions are only
+  // added to the list after connect() resolves, so "present" already means connected.
+  const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'error'>>(new Map());
+  const markSessionError = useCallback((sessionId: string) => {
+    setSessionStatuses(prev => (prev.get(sessionId) === 'error' ? prev : new Map(prev).set(sessionId, 'error')));
+  }, []);
+  const clearSessionError = useCallback((sessionId: string) => {
+    setSessionStatuses(prev => {
+      if (!prev.has(sessionId)) return prev; // cheap no-op on the hot data path
+      const next = new Map(prev);
+      next.delete(sessionId);
+      return next;
+    });
+  }, []);
+
   // Collapsible sidebar
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('connectty-sidebar-collapsed') === 'true';
@@ -182,6 +199,9 @@ export default function App() {
   const [panelLayout, setPanelLayout] = useState<PanelLayout | null>(null);
   const [showLayoutPicker, setShowLayoutPicker] = useState(false);
   const [sessionPickerPanelId, setSessionPickerPanelId] = useState<string | null>(null);
+
+  // Command palette (Ctrl+Shift+K)
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   // Collapsible sidebar groups
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
@@ -403,6 +423,14 @@ export default function App() {
   // Global keyboard shortcuts: Ctrl+B (sidebar), Ctrl+Shift+T (panel mode), Ctrl+Shift+P (layout picker)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Shift+K toggles the command palette. Handled before the form-field
+      // guard so it also works while a terminal (xterm textarea) is focused.
+      if (e.ctrlKey && e.shiftKey && (e.key === 'K' || e.key === 'k') && !e.altKey) {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+        return;
+      }
+
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
@@ -747,18 +775,21 @@ export default function App() {
 
       switch (event.type) {
         case 'data':
+          clearSessionError(sessionId);
           session.terminal.write(event.data || '');
           break;
         case 'close':
+          clearSessionError(sessionId);
           showNotification('success', `Disconnected from ${session.connectionName}`);
           return prev.filter(s => s.id !== sessionId);
         case 'error':
+          markSessionError(sessionId);
           showNotification('error', event.message || 'Connection error');
           break;
       }
       return prev;
     });
-  }, []);
+  }, [markSessionError, clearSessionError]);
 
   const handleSerialEvent = useCallback((sessionId: string, event: SSHSessionEvent) => {
     setSessions(prev => {
@@ -767,18 +798,21 @@ export default function App() {
 
       switch (event.type) {
         case 'data':
+          clearSessionError(sessionId);
           session.terminal.write(event.data || '');
           break;
         case 'close':
+          clearSessionError(sessionId);
           showNotification('success', `Disconnected from ${session.connectionName}`);
           return prev.filter(s => s.id !== sessionId);
         case 'error':
+          markSessionError(sessionId);
           showNotification('error', event.message || 'Connection error');
           break;
       }
       return prev;
     });
-  }, []);
+  }, [markSessionError, clearSessionError]);
 
   const handleRDPEvent = useCallback((sessionId: string, event: any) => {
     setSessions(prev => {
@@ -826,15 +860,17 @@ export default function App() {
           }
           break;
         case 'close':
+          clearSessionError(sessionId);
           showNotification('success', `Disconnected from ${session.connectionName}`);
           return prev.filter(s => s.id !== sessionId);
         case 'error':
+          clearSessionError(sessionId);
           showNotification('error', event.message || 'RDP connection error');
           return prev.filter(s => s.id !== sessionId);
       }
       return prev;
     });
-  }, []);
+  }, [clearSessionError]);
 
   const handleLocalShellEvent = useCallback((sessionId: string, event: LocalShellSessionEvent) => {
     setSessions(prev => {
@@ -843,18 +879,21 @@ export default function App() {
 
       switch (event.type) {
         case 'data':
+          clearSessionError(sessionId);
           session.terminal.write(event.data || '');
           break;
         case 'close':
+          clearSessionError(sessionId);
           showNotification('success', `Closed ${session.shellName}`);
           return prev.filter(s => s.id !== sessionId);
         case 'error':
+          markSessionError(sessionId);
           showNotification('error', event.message || 'Shell error');
           break;
       }
       return prev;
     });
-  }, []);
+  }, [markSessionError, clearSessionError]);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -1567,6 +1606,78 @@ export default function App() {
     });
   };
 
+  // Build the command palette entries from current state. Cheap to recompute;
+  // only consumed while the palette is open.
+  const buildPaletteCommands = (): PaletteCommand[] => {
+    const cmds: PaletteCommand[] = [];
+
+    // Global actions
+    cmds.push(
+      { id: 'act-new-connection', category: 'New', title: 'New Connection…', run: () => setShowConnectionModal(true) },
+      { id: 'act-new-credential', category: 'New', title: 'New Credential…', run: () => setShowCredentialModal(true) },
+      { id: 'act-new-group', category: 'New', title: 'New Group…', run: () => setShowGroupModal(true) },
+      { id: 'act-new-provider', category: 'New', title: 'Add Cloud Provider…', keywords: 'aws azure gcp vmware proxmox bigfix discover', run: () => setShowProviderModal(true) },
+      { id: 'act-bulk', category: 'Run', title: 'Run Bulk Command…', keywords: 'repeated actions execute many hosts', run: () => setShowRepeatedActionsModal(true) },
+      { id: 'act-settings', category: 'App', title: 'Open Settings…', hint: '', keywords: 'preferences theme', run: () => setShowSettingsModal(true) },
+      { id: 'act-toggle-sidebar', category: 'View', title: 'Toggle Sidebar', hint: 'Ctrl+B', run: () => setSidebarCollapsed(p => !p) },
+      {
+        id: 'act-toggle-panels', category: 'View', title: 'Toggle Panel Mode', hint: 'Ctrl+Shift+T',
+        keywords: 'split tile tmux',
+        run: () => setLayoutMode(prev => {
+          const next = prev === 'tabs' ? 'panels' : 'tabs';
+          if (next === 'panels' && !panelLayout) {
+            const leaf = createLeaf(activeSessionId || null);
+            setPanelLayout({ root: leaf, activePanelId: leaf.id });
+          }
+          return next;
+        }),
+      },
+      {
+        id: 'act-choose-layout', category: 'View', title: 'Choose Pane Layout…', hint: 'Ctrl+Shift+P',
+        keywords: 'tile grid 2x2 split',
+        run: () => {
+          if (layoutMode !== 'panels') {
+            const leaf = createLeaf(activeSessionId || null);
+            setPanelLayout({ root: leaf, activePanelId: leaf.id });
+            setLayoutMode('panels');
+          }
+          setShowLayoutPicker(true);
+        },
+      },
+    );
+
+    // Current-tab actions
+    if (activeSessionId) {
+      cmds.push(
+        { id: 'act-rename-tab', category: 'Tab', title: 'Rename Current Tab…', run: () => handleRenameTab(activeSessionId) },
+        { id: 'act-dup-tab', category: 'Tab', title: 'Duplicate Current Tab', run: () => handleDuplicateTab(activeSessionId) },
+        { id: 'act-close-tab', category: 'Tab', title: 'Close Current Tab', keywords: 'disconnect', run: () => handleDisconnect(activeSessionId) },
+      );
+    }
+
+    // Local shells
+    for (const shell of availableShells) {
+      cmds.push({
+        id: `shell-${shell.id}`, category: 'Shell', title: shell.name,
+        keywords: 'local terminal bash pwsh cmd', run: () => handleSpawnLocalShell(shell),
+      });
+    }
+
+    // Connections — quick connect + SFTP launchers (the fleet launcher)
+    for (const conn of connections) {
+      cmds.push({
+        id: `conn-${conn.id}`, category: 'Connect', title: conn.name, hint: conn.hostname,
+        keywords: `${conn.hostname} ${conn.connectionType}`, run: () => handleConnect(conn),
+      });
+      cmds.push({
+        id: `sftp-${conn.id}`, category: 'SFTP', title: conn.name, hint: conn.hostname,
+        keywords: `${conn.hostname} files transfer`, run: () => handleOpenSFTP(conn),
+      });
+    }
+
+    return cmds;
+  };
+
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -1860,6 +1971,7 @@ export default function App() {
                 setTabContextMenu({ x: e.clientX, y: e.clientY, sessionId: session.id });
               }}
             >
+              <span className={`status-dot ${sessionStatuses.get(session.id) === 'error' ? 'error' : 'connected'}`} title={sessionStatuses.get(session.id) === 'error' ? 'Error' : 'Connected'} />
               <span className={`session-type-badge ${session.type}`}>
                 {session.type === 'ssh' ? 'SSH' :
                  session.type === 'sftp' ? 'SFTP' :
@@ -2107,6 +2219,7 @@ export default function App() {
               <PanelContainer
                 layout={panelLayout}
                 sessions={sessions}
+                sessionStatuses={sessionStatuses}
                 onLayoutChange={setPanelLayout}
                 onActivePanelChange={(panelId) => {
                   setPanelLayout(prev => prev ? { ...prev, activePanelId: panelId } : prev);
@@ -2299,6 +2412,14 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Command Palette */}
+      {showCommandPalette && (
+        <CommandPalette
+          commands={buildPaletteCommands()}
+          onClose={() => setShowCommandPalette(false)}
+        />
       )}
 
       {/* Connection Modal */}

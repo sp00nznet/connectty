@@ -30,6 +30,7 @@ interface AnySession {
 interface PanelContainerProps {
   layout: PanelLayout;
   sessions: AnySession[];
+  sessionStatuses?: Map<string, 'connected' | 'error'>;
   onLayoutChange: (layout: PanelLayout) => void;
   onActivePanelChange: (panelId: string) => void;
   onSessionSelect: (panelId: string) => void;
@@ -40,6 +41,7 @@ interface PanelContainerProps {
 export function PanelContainer({
   layout,
   sessions,
+  sessionStatuses,
   onLayoutChange,
   onActivePanelChange,
   onSessionSelect,
@@ -179,6 +181,7 @@ export function PanelContainer({
         fitAddon={session.fitAddon}
         sessionId={session.id}
         sessionType={session.type as 'ssh' | 'serial' | 'localShell'}
+        status={sessionStatuses?.get(session.id)}
         isActive={isActive}
         onActivate={() => onActivePanelChange(node.id)}
         onResize={onResize}
@@ -187,7 +190,7 @@ export function PanelContainer({
         onContextMenu={onContextMenu}
       />
     );
-  }, [sessions, activePanelId, root, handleRatioChange, handleSplit, handleClose, onActivePanelChange, onSessionSelect, onResize, onContextMenu]);
+  }, [sessions, sessionStatuses, activePanelId, root, handleRatioChange, handleSplit, handleClose, onActivePanelChange, onSessionSelect, onResize, onContextMenu]);
 
   return (
     <div className="panel-container">

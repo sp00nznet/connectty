@@ -9,6 +9,7 @@ interface TerminalPaneProps {
   fitAddon: FitAddon;
   sessionId: string;
   sessionType: 'ssh' | 'serial' | 'localShell';
+  status?: 'connected' | 'error';
   isActive: boolean;
   onActivate: () => void;
   onResize?: (sessionId: string, cols: number, rows: number, sessionType: string) => void;
@@ -23,6 +24,7 @@ export function TerminalPane({
   fitAddon,
   sessionId,
   sessionType,
+  status,
   isActive,
   onActivate,
   onResize,
@@ -103,6 +105,7 @@ export function TerminalPane({
       onContextMenu={onContextMenu}
     >
       <div className="terminal-pane-header">
+        <span className={`status-dot ${status === 'error' ? 'error' : 'connected'}`} title={status === 'error' ? 'Error' : 'Connected'} />
         <span className="terminal-pane-label">{sessionType.toUpperCase()}</span>
         <div className="terminal-pane-actions">
           {onSplit && (
