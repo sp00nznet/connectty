@@ -33,7 +33,8 @@ import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, App
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
-import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves } from './panels';
+import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves, clearSessions, assignSessionsInOrder } from './panels';
+import type { PanelNode } from '@connectty/shared';
 import { CommandPalette, type PaletteCommand } from './CommandPalette';
 
 declare global {
@@ -186,6 +187,31 @@ export default function App() {
       return next;
     });
   }, []);
+
+  // Undo-close: a stack of recently (user-)closed tabs that can be reopened.
+  interface ClosedTab {
+    kind: 'connection' | 'shell';
+    sessionKind?: 'ssh' | 'serial' | 'rdp' | 'sftp';
+    connectionId?: string;
+    shellId?: string;
+    name: string;
+  }
+  const [closedTabsStack, setClosedTabsStack] = useState<ClosedTab[]>([]);
+  const undoCloseRef = useRef<() => void>(() => {});
+
+  // Named layouts: saved pane topologies (splits + ratios, sessions stripped).
+  const [savedLayouts, setSavedLayouts] = useState<Record<string, PanelNode>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('connectty-saved-layouts') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [savingLayoutName, setSavingLayoutName] = useState<string | null>(null);
+  const persistLayouts = (next: Record<string, PanelNode>) => {
+    setSavedLayouts(next);
+    localStorage.setItem('connectty-saved-layouts', JSON.stringify(next));
+  };
 
   // Collapsible sidebar
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -428,6 +454,14 @@ export default function App() {
       if (e.ctrlKey && e.shiftKey && (e.key === 'K' || e.key === 'k') && !e.altKey) {
         e.preventDefault();
         setShowCommandPalette(prev => !prev);
+        return;
+      }
+
+      // Ctrl+Shift+Z reopens the most recently closed tab. (Ctrl+Shift+T, the
+      // usual "reopen tab" binding, is already taken by the panel-mode toggle.)
+      if (e.ctrlKey && e.shiftKey && (e.key === 'Z' || e.key === 'z') && !e.altKey) {
+        e.preventDefault();
+        undoCloseRef.current();
         return;
       }
 
@@ -1118,6 +1152,15 @@ export default function App() {
       return;
     }
 
+    // Capture for undo-close (reopenable session types only)
+    if (session.type === 'localShell') {
+      const closed: ClosedTab = { kind: 'shell', shellId: session.shellId, name: session.shellName };
+      setClosedTabsStack(prev => [closed, ...prev].slice(0, 10));
+    } else if (session.type === 'ssh' || session.type === 'serial' || session.type === 'rdp' || session.type === 'sftp') {
+      const closed: ClosedTab = { kind: 'connection', sessionKind: session.type, connectionId: session.connectionId, name: session.connectionName };
+      setClosedTabsStack(prev => [closed, ...prev].slice(0, 10));
+    }
+
     if (session.type === 'ssh') {
       await window.connectty.ssh.disconnect(sessionId);
     } else if (session.type === 'sftp') {
@@ -1144,6 +1187,62 @@ export default function App() {
       newMap.delete(sessionId);
       return newMap;
     });
+  };
+
+  // Reopen the most recently closed tab (Ctrl+Shift+Z).
+  const handleUndoClose = async () => {
+    const item = closedTabsStack[0];
+    if (!item) {
+      showNotification('error', 'No recently closed tabs');
+      return;
+    }
+    setClosedTabsStack(prev => prev.slice(1));
+    if (item.kind === 'shell') {
+      const shell = availableShells.find(s => s.id === item.shellId);
+      if (shell) await handleSpawnLocalShell(shell);
+      else showNotification('error', `Shell "${item.name}" is no longer available`);
+    } else {
+      const conn = connections.find(c => c.id === item.connectionId);
+      if (!conn) {
+        showNotification('error', `Connection "${item.name}" no longer exists`);
+        return;
+      }
+      if (item.sessionKind === 'sftp') await handleOpenSFTP(conn);
+      else await handleConnect(conn);
+    }
+  };
+  // Keep a stable ref so the global keydown handler can call the latest version
+  // without re-subscribing on every render.
+  undoCloseRef.current = handleUndoClose;
+
+  // Save the current pane topology under a name (sessions stripped).
+  const handleSaveLayout = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || !panelLayout) {
+      setSavingLayoutName(null);
+      return;
+    }
+    persistLayouts({ ...savedLayouts, [trimmed]: clearSessions(panelLayout.root) });
+    setSavingLayoutName(null);
+    showNotification('success', `Saved layout "${trimmed}"`);
+  };
+
+  // Apply a saved topology, filling its panes with the open sessions in order.
+  const handleLoadLayout = (name: string) => {
+    const saved = savedLayouts[name];
+    if (!saved) return;
+    const sessionIds = sessions.map(s => s.id);
+    const root = assignSessionsInOrder(saved, sessionIds);
+    const firstLeaf = getLeaves(root)[0];
+    setPanelLayout({ root, activePanelId: firstLeaf.id });
+    setLayoutMode('panels');
+    showNotification('success', `Loaded layout "${name}"`);
+  };
+
+  const handleDeleteLayout = (name: string) => {
+    const next = { ...savedLayouts };
+    delete next[name];
+    persistLayouts(next);
   };
 
   // Duplicate an existing tab
@@ -1645,6 +1744,32 @@ export default function App() {
         },
       },
     );
+
+    // Saved layouts
+    if (panelLayout) {
+      cmds.push({
+        id: 'act-save-layout', category: 'Layout', title: 'Save Current Layout…',
+        keywords: 'pane tiling preset', run: () => setSavingLayoutName(''),
+      });
+    }
+    for (const name of Object.keys(savedLayouts)) {
+      cmds.push({
+        id: `layout-load-${name}`, category: 'Layout', title: `Load Layout: ${name}`,
+        keywords: 'pane tiling apply', run: () => handleLoadLayout(name),
+      });
+      cmds.push({
+        id: `layout-del-${name}`, category: 'Layout', title: `Delete Layout: ${name}`,
+        keywords: 'remove', run: () => handleDeleteLayout(name),
+      });
+    }
+
+    // Reopen recently closed tab
+    if (closedTabsStack.length > 0) {
+      cmds.push({
+        id: 'act-undo-close', category: 'Tab', title: `Reopen Closed Tab (${closedTabsStack[0].name})`,
+        hint: 'Ctrl+Shift+Z', keywords: 'undo restore reopen', run: () => undoCloseRef.current(),
+      });
+    }
 
     // Current-tab actions
     if (activeSessionId) {
@@ -2645,6 +2770,48 @@ export default function App() {
                 }}
               >
                 Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Layout modal */}
+      {savingLayoutName !== null && (
+        <div className="modal-overlay">
+          <div className="modal rename-tab-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Save Layout</h2>
+              <button className="close-btn" onClick={() => setSavingLayoutName(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Layout name"
+                defaultValue={savingLayoutName}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveLayout((e.target as HTMLInputElement).value);
+                  } else if (e.key === 'Escape') {
+                    setSavingLayoutName(null);
+                  }
+                }}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setSavingLayoutName(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={(e) => {
+                  const input = (e.target as HTMLElement).closest('.modal')?.querySelector('input');
+                  if (input) handleSaveLayout(input.value);
+                }}
+              >
+                Save
               </button>
             </div>
           </div>

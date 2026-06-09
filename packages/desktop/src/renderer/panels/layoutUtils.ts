@@ -228,6 +228,29 @@ export function createLayout(preset: PresetLayout, sessionIds: (string | null)[]
   };
 }
 
+/**
+ * Clone a layout tree, regenerating all panel IDs and clearing every session.
+ * Used to save a layout's topology (splits + ratios) without its live sessions.
+ */
+export function clearSessions(root: PanelNode): PanelNode {
+  if (root.type === 'leaf') return { type: 'leaf', id: panelId(), sessionId: null };
+  return { ...root, id: panelId(), first: clearSessions(root.first), second: clearSessions(root.second) };
+}
+
+/**
+ * Clone a layout tree, regenerating all panel IDs and assigning the given
+ * session IDs to leaves in left-to-right order (extras left null). Used to
+ * apply a saved topology to the currently open sessions.
+ */
+export function assignSessionsInOrder(root: PanelNode, sessionIds: (string | null)[]): PanelNode {
+  let i = 0;
+  const walk = (node: PanelNode): PanelNode => {
+    if (node.type === 'leaf') return { type: 'leaf', id: panelId(), sessionId: sessionIds[i++] ?? null };
+    return { ...node, id: panelId(), first: walk(node.first), second: walk(node.second) };
+  };
+  return walk(root);
+}
+
 // ---- Internal helpers ----
 
 function makeSplit(direction: SplitDirection, ratio: number, first: PanelNode, second: PanelNode): PanelSplit {
