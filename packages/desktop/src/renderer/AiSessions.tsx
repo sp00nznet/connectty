@@ -22,6 +22,17 @@ export interface AiTranscriptEntry {
   timestamp?: string | null;
 }
 
+export interface AiPromptMatch {
+  sessionId: string;
+  title: string;
+  project: string;
+  cwd: string;
+  agent: string;
+  filePath: string;
+  snippet: string;
+  timestamp?: string | null;
+}
+
 function relativeTime(ms: number): string {
   if (!ms) return '';
   const diff = Date.now() - ms;
@@ -115,6 +126,76 @@ export function AiSessionsPanel({ sessions, onResume, onOpenTranscript, onClose 
             </div>
           ))
         )}
+      </div>
+    </div>
+  );
+}
+
+interface PromptSearchProps {
+  onSearch: (query: string) => Promise<AiPromptMatch[]>;
+  onResume: (m: AiPromptMatch) => void;
+  onClose: () => void;
+}
+
+/** Cross-session prompt search (Ctrl+Shift+Y). Searches prompt text across
+ *  every session log; clicking a result resumes that session. */
+export function AiPromptSearchModal({ onSearch, onResume, onClose }: PromptSearchProps) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<AiPromptMatch[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const run = async () => {
+    const q = query.trim();
+    if (!q) return;
+    setSearching(true);
+    try {
+      setResults(await onSearch(q));
+    } catch {
+      setResults([]);
+    } finally {
+      setSearching(false);
+      setSearched(true);
+    }
+  };
+
+  return (
+    <div className="modal-overlay command-palette-overlay" onClick={onClose}>
+      <div className="command-palette ai-prompt-search" onClick={e => e.stopPropagation()}>
+        <input
+          className="command-palette-input"
+          placeholder="Search prompts across all sessions (Enter to search; supports multiple terms)…"
+          value={query}
+          autoFocus
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') run();
+            else if (e.key === 'Escape') onClose();
+          }}
+        />
+        <div className="command-palette-list">
+          {searching ? (
+            <div className="command-palette-empty">Searching…</div>
+          ) : results.length === 0 ? (
+            <div className="command-palette-empty">{searched ? 'No matches' : 'Type a query and press Enter'}</div>
+          ) : (
+            results.map((m, i) => (
+              <div
+                key={m.filePath + i}
+                className="ai-prompt-result"
+                onMouseDown={e => { e.preventDefault(); onClose(); onResume(m); }}
+                title="Resume this session"
+              >
+                <div className="ai-prompt-snippet">{m.snippet}</div>
+                <div className="ai-prompt-meta">
+                  <span className="ai-session-project">{m.project}</span>
+                  <span>{m.title}</span>
+                  {m.timestamp && <span>{new Date(m.timestamp).toLocaleString()}</span>}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

@@ -136,6 +136,7 @@ fn main() {
             // AI session monitoring
             ai_sessions::ai_sessions_list,
             ai_sessions::ai_session_transcript,
+            ai_sessions::ai_search_prompts,
             ai_sessions::ai_sessions_watch_start,
         ])
         .run(tauri::generate_context!())

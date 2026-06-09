@@ -7036,3 +7036,23 @@ body {
 }
 .ai-transcript-entry.user .ai-transcript-text { background: var(--bg-tertiary); }
 
+/* AI cross-session prompt search */
+.ai-prompt-search { width: 680px; }
+.ai-prompt-result { padding: 9px 16px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.ai-prompt-result:hover { background: var(--accent); color: #fff; }
+.ai-prompt-snippet {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-prompt-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.ai-prompt-result:hover .ai-prompt-meta { color: rgba(255, 255, 255, 0.85); }
+.ai-prompt-result:hover .ai-session-project { color: rgba(255, 255, 255, 0.85); }
+

@@ -39,6 +39,19 @@ pub struct AiSession {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AiPromptMatch {
+    pub session_id: String,
+    pub title: String,
+    pub project: String,
+    pub cwd: String,
+    pub agent: String,
+    pub file_path: String,
+    pub snippet: String,
+    pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AiTranscriptEntry {
     pub role: String, // "user" | "assistant"
     pub text: String,
@@ -240,6 +253,131 @@ fn scan_all() -> Vec<AiSession> {
 #[tauri::command]
 pub async fn ai_sessions_list() -> Result<Vec<AiSession>, String> {
     Ok(scan_all())
+}
+
+/// Search user prompts across every session, returning matches (AND over
+/// whitespace-separated terms) with session context and a snippet.
+#[tauri::command]
+pub async fn ai_search_prompts(query: String) -> Result<Vec<AiPromptMatch>, String> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return Ok(vec![]);
+    }
+    let terms: Vec<String> = q.split_whitespace().map(|s| s.to_string()).collect();
+    let mut out = Vec::new();
+
+    let dir = match claude_projects_dir() {
+        Some(d) => d,
+        None => return Ok(out),
+    };
+    let projects = match std::fs::read_dir(&dir) {
+        Ok(p) => p,
+        Err(_) => return Ok(out),
+    };
+    for proj in projects.flatten() {
+        let p = proj.path();
+        if !p.is_dir() {
+            continue;
+        }
+        let files = match std::fs::read_dir(&p) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        for f in files.flatten() {
+            let fp = f.path();
+            if fp.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let content = match std::fs::read_to_string(&fp) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let mut session_id = fp
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let mut cwd = String::new();
+            let mut title: Option<String> = None;
+            let mut first: Option<String> = None;
+            let mut hits: Vec<(String, Option<String>)> = Vec::new();
+
+            for line in content.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let v: serde_json::Value = match serde_json::from_str(line) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                if let Some(s) = v.get("sessionId").and_then(|x| x.as_str()) {
+                    session_id = s.to_string();
+                }
+                if let Some(c) = v.get("cwd").and_then(|x| x.as_str()) {
+                    if !c.is_empty() {
+                        cwd = c.to_string();
+                    }
+                }
+                match v.get("type").and_then(|x| x.as_str()).unwrap_or("") {
+                    "ai-title" => {
+                        if let Some(s) = v.get("aiTitle").and_then(|x| x.as_str()) {
+                            title = Some(s.to_string());
+                        }
+                    }
+                    "user" => {
+                        let txt = v
+                            .pointer("/message/content")
+                            .map(extract_text)
+                            .unwrap_or_default();
+                        let trimmed = txt.trim();
+                        if first.is_none() && !trimmed.is_empty() {
+                            first = Some(trimmed.chars().take(60).collect());
+                        }
+                        let low = txt.to_lowercase();
+                        if terms.iter().all(|t| low.contains(t.as_str())) && !trimmed.is_empty() {
+                            let snippet: String = trimmed.chars().take(200).collect();
+                            let ts = v
+                                .get("timestamp")
+                                .and_then(|x| x.as_str())
+                                .map(|s| s.to_string());
+                            hits.push((snippet, ts));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if hits.is_empty() {
+                continue;
+            }
+            let project = if !cwd.is_empty() {
+                Path::new(&cwd)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| cwd.clone())
+            } else {
+                p.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            };
+            let title = title
+                .or(first)
+                .unwrap_or_else(|| "Untitled session".to_string());
+            for (snippet, timestamp) in hits {
+                out.push(AiPromptMatch {
+                    session_id: session_id.clone(),
+                    title: title.clone(),
+                    project: project.clone(),
+                    cwd: cwd.clone(),
+                    agent: "claude".to_string(),
+                    file_path: fp.to_string_lossy().to_string(),
+                    snippet,
+                    timestamp,
+                });
+            }
+        }
+    }
+    out.truncate(300);
+    Ok(out)
 }
 
 /// Return the readable transcript (user prompts + assistant replies) for a

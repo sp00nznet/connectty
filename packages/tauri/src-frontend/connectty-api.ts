@@ -137,6 +137,7 @@ interface ConnecttyAPI {
   aiSessions: {
     list: () => Promise<any[]>;
     transcript: (filePath: string) => Promise<any[]>;
+    searchPrompts: (query: string) => Promise<any[]>;
     watchStart: () => Promise<void>;
     onUpdate: (callback: (sessions: any[]) => void) => () => void;
   };
@@ -334,6 +335,7 @@ export const connecttyApi: ConnecttyAPI = {
   aiSessions: {
     list: () => invoke('ai_sessions_list'),
     transcript: (filePath: string) => invoke('ai_session_transcript', { filePath }),
+    searchPrompts: (query: string) => invoke('ai_search_prompts', { query }),
     watchStart: () => invoke('ai_sessions_watch_start'),
     onUpdate: (callback: (sessions: any[]) => void) => {
       let unlisten: UnlistenFn | null = null;

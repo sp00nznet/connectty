@@ -36,7 +36,7 @@ import 'xterm/css/xterm.css';
 import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves, clearSessions, assignSessionsInOrder } from './panels';
 import type { PanelNode } from '@connectty/shared';
 import { CommandPalette, type PaletteCommand } from './CommandPalette';
-import { AiSessionsPanel, AiTranscriptModal, type AiSession, type AiTranscriptEntry } from './AiSessions';
+import { AiSessionsPanel, AiTranscriptModal, AiPromptSearchModal, type AiSession, type AiTranscriptEntry, type AiPromptMatch } from './AiSessions';
 
 declare global {
   interface Window {
@@ -281,6 +281,7 @@ export default function App() {
   // AI session monitoring (Ctrl+Shift+A)
   const [aiSessions, setAiSessions] = useState<AiSession[]>([]);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [showAiSearch, setShowAiSearch] = useState(false);
   const [aiTranscript, setAiTranscript] = useState<{ session: AiSession; entries: AiTranscriptEntry[]; loading: boolean } | null>(null);
 
   // Collapsible sidebar groups
@@ -524,6 +525,13 @@ export default function App() {
       if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a') && !e.altKey) {
         e.preventDefault();
         setShowAiPanel(prev => !prev);
+        return;
+      }
+
+      // Ctrl+Shift+Y: cross-session prompt search.
+      if (e.ctrlKey && e.shiftKey && (e.key === 'Y' || e.key === 'y') && !e.altKey) {
+        e.preventDefault();
+        setShowAiSearch(prev => !prev);
         return;
       }
 
@@ -1317,9 +1325,9 @@ export default function App() {
     persistLayouts(next);
   };
 
-  // Resume an AI session: open a local shell and run the agent's --resume in
-  // the session's working directory.
-  const handleResumeAiSession = async (session: AiSession) => {
+  // Resume an AI agent session: open a local shell and run the agent's
+  // --resume in the session's working directory.
+  const resumeAgentSession = async (agent: string, cwd: string, id: string) => {
     setShowAiPanel(false);
     const shell = availableShells.find(s => s.id === 'bash')
       || availableShells.find(s => s.id === 'zsh')
@@ -1330,12 +1338,13 @@ export default function App() {
     }
     const sid = await handleSpawnLocalShell(shell);
     if (!sid) return;
-    const bin = session.agent === 'copilot' ? 'copilot' : 'claude';
-    const cwd = session.cwd ? session.cwd.replace(/'/g, `'\\''`) : '';
-    const cmd = `${cwd ? `cd '${cwd}' && ` : ''}${bin} --resume ${session.id}\n`;
+    const bin = agent === 'copilot' ? 'copilot' : 'claude';
+    const safeCwd = cwd ? cwd.replace(/'/g, `'\\''`) : '';
+    const cmd = `${safeCwd ? `cd '${safeCwd}' && ` : ''}${bin} --resume ${id}\n`;
     // Give the shell a moment to print its prompt before sending the command.
     setTimeout(() => { window.connectty.localShell.write(sid, cmd); }, 350);
   };
+  const handleResumeAiSession = (session: AiSession) => resumeAgentSession(session.agent, session.cwd, session.id);
 
   const handleOpenAiTranscript = async (session: AiSession) => {
     setAiTranscript({ session, entries: [], loading: true });
@@ -1824,6 +1833,7 @@ export default function App() {
       { id: 'act-settings', category: 'App', title: 'Open Settings…', hint: '', keywords: 'preferences theme', run: () => setShowSettingsModal(true) },
       { id: 'act-toggle-sidebar', category: 'View', title: 'Toggle Sidebar', hint: 'Ctrl+B', run: () => setSidebarCollapsed(p => !p) },
       { id: 'act-ai-sessions', category: 'AI', title: 'AI Sessions Panel', hint: 'Ctrl+Shift+A', keywords: 'claude copilot monitor resume transcript', run: () => setShowAiPanel(p => !p) },
+      { id: 'act-ai-search', category: 'AI', title: 'Search AI Prompts…', hint: 'Ctrl+Shift+Y', keywords: 'claude copilot find across sessions', run: () => setShowAiSearch(true) },
       {
         id: 'act-toggle-panels', category: 'View', title: 'Toggle Panel Mode', hint: 'Ctrl+Shift+T',
         keywords: 'split tile tmux',
@@ -2721,6 +2731,13 @@ export default function App() {
           entries={aiTranscript.entries}
           loading={aiTranscript.loading}
           onClose={() => setAiTranscript(null)}
+        />
+      )}
+      {showAiSearch && (
+        <AiPromptSearchModal
+          onSearch={(q) => (window.connectty as any).aiSessions.searchPrompts(q)}
+          onResume={(m: AiPromptMatch) => resumeAgentSession(m.agent, m.cwd, m.sessionId)}
+          onClose={() => setShowAiSearch(false)}
         />
       )}
 
