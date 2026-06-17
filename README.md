@@ -97,6 +97,8 @@ Toggle between classic tab mode and panel mode with `Ctrl+Shift+T`. Reopen an ac
 
 A VS Code-style fuzzy launcher, opened with `Ctrl+Shift+K`.
 
+![Command Palette](screen/CommandPalette.png)
+
 - **One shortcut for everything** - New connection/credential/group/provider, bulk commands, settings, layouts, AI panels
 - **Quick connect** - Jump straight to any saved connection or open an SFTP session to it
 - **Shell picker** - Launch any detected local shell (bash, zsh, fish, PowerShell, cmd, WSL distros)
@@ -108,6 +110,8 @@ A VS Code-style fuzzy launcher, opened with `Ctrl+Shift+K`.
 
 Organize busy sessions into named, colored groups.
 
+![Tab Groups](screen/TabGroups.png)
+
 - **Colored grouping** - Auto-assigned color palette, created from the tab right-click menu
 - **Collapsible** - Click a group header to fold its tabs away and reclaim tab-bar space
 - **Member counts** - Each group header shows how many sessions it holds
@@ -117,6 +121,8 @@ Organize busy sessions into named, colored groups.
 ### AI Session Monitoring
 
 Track your local AI coding sessions alongside your terminals. Toggle the panel with `Ctrl+Shift+A`.
+
+![AI Session Monitoring](screen/AiSessions.png)
 
 - **Claude Code & Copilot** - Auto-detects sessions from `~/.claude` and `~/.copilot` logs, with an All/Claude/Copilot filter
 - **Grouped by project** - Sessions are organized by project, showing title, git branch, message/tool counts, and last prompt
