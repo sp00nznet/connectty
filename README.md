@@ -26,6 +26,8 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 - **Cloud-native discovery** - Auto-import servers from VMware, Proxmox, AWS, Azure, GCP, BigFix
 - **Bulk command execution** - Run commands across hundreds of servers simultaneously
 - **Unified interface** - SSH, RDP, Serial, SFTP, and local shells in tabbed or paneled sessions
+- **AI session monitoring** - Track local Claude Code & Copilot CLI sessions, grouped by project, with cross-session prompt search
+- **Command palette** - VS Code-style `Ctrl+Shift+K` launcher for every action
 - **Free & open source** - No subscriptions, no seat licenses, no feature gates
 
 > **Note:** The web client provides SSH terminal access for teams. Full features (RDP, Serial, SFTP, Providers, Bulk Commands) require the desktop app.
@@ -38,6 +40,9 @@ Managing dozens (or hundreds) of servers shouldn't mean juggling SSH configs, RD
 - **Terminal paneling** - Tmux-style split panes with draggable dividers, 9 preset layouts (single through 4x4), keyboard shortcuts for splitting/navigating/closing panes.
 - **Collapsible sidebar** - `Ctrl+B` toggles the connection list between full and icon-only mode for maximum terminal space.
 - **Cross-platform native** - Windows (WebView2), macOS (WKWebView), Linux (WebKitGTK). Each platform uses its OS-native web renderer.
+- **Command palette** - `Ctrl+Shift+K` opens a fuzzy launcher for connections, shells, layouts, and every app action.
+- **AI session monitoring** - A side panel (`Ctrl+Shift+A`) that tracks running Claude Code and Copilot CLI sessions, grouped by project, with one-click resume/spawn and cross-session prompt search (`Ctrl+Shift+Y`).
+- **Tab groups & undo-close** - Colored, collapsible tab groups, plus `Ctrl+Shift+Z` to reopen a closed session and saved named pane layouts.
 
 ---
 
@@ -78,12 +83,46 @@ Connect to anything: SSH, RDP, Serial/COM, SFTP, and local shells—all in one t
 
 Split your terminal into flexible layouts with tmux-style paneling.
 
-- **9 preset layouts** - Single, side-by-side, 2x2, 1+2, 2+1, 3-column, 3x3, 4x4
+- **9 preset layouts** - Single, side-by-side, 2x2, 1+2, 2+1, 3-column, 3x3, 4x4 (`Ctrl+Shift+P` to pick)
 - **Custom splits** - Split any pane horizontally or vertically
 - **Draggable dividers** - Resize panes by dragging
+- **Named layouts** - Save the current split topology and reload it later, repopulating panes with open sessions
 - **Keyboard driven** - `Ctrl+Shift+|` split vertical, `Ctrl+Shift+-` split horizontal, `Ctrl+Shift+Arrow` navigate
 
-Toggle between classic tab mode and panel mode with `Ctrl+Shift+T`.
+Toggle between classic tab mode and panel mode with `Ctrl+Shift+T`. Reopen an accidentally closed session with `Ctrl+Shift+Z` (last 10 closes are remembered). Every tab and pane shows a live **status dot** — green when connected, red on a transport error.
+
+---
+
+### Command Palette
+
+A VS Code-style fuzzy launcher, opened with `Ctrl+Shift+K`.
+
+- **One shortcut for everything** - New connection/credential/group/provider, bulk commands, settings, layouts, AI panels
+- **Quick connect** - Jump straight to any saved connection or open an SFTP session to it
+- **Shell picker** - Launch any detected local shell (bash, zsh, fish, PowerShell, cmd, WSL distros)
+- **Full keyboard nav** - Arrow keys to move, Enter to run, Esc to dismiss
+
+---
+
+### Tab Groups
+
+Organize busy sessions into named, colored groups.
+
+- **Colored grouping** - Auto-assigned color palette, created from the tab right-click menu
+- **Collapsible** - Click a group header to fold its tabs away and reclaim tab-bar space
+- **Member counts** - Each group header shows how many sessions it holds
+
+---
+
+### AI Session Monitoring
+
+Track your local AI coding sessions alongside your terminals. Toggle the panel with `Ctrl+Shift+A`.
+
+- **Claude Code & Copilot** - Auto-detects sessions from `~/.claude` and `~/.copilot` logs, with an All/Claude/Copilot filter
+- **Grouped by project** - Sessions are organized by project, showing title, git branch, message/tool counts, and last prompt
+- **Live status** - A filesystem watcher marks sessions active or idle in real time
+- **Spawn & resume** - Start a fresh agent in a project's directory, or resume any past session in a local shell
+- **Cross-session prompt search** - `Ctrl+Shift+Y` searches your prompt history across every session; click a result to resume it
 
 ---
 
@@ -160,6 +199,23 @@ Migrate from other tools or backup your data.
 ![Themes](screen/Themes.png)
 
 Choose from over 100 themes including Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, Synthwave, and many more.
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|:---------|:-------|
+| `Ctrl+Shift+K` | Open command palette |
+| `Ctrl+B` | Toggle sidebar (full / icon-only) |
+| `Ctrl+Shift+T` | Toggle panel (paneling) mode |
+| `Ctrl+Shift+P` | Choose pane layout |
+| `Ctrl+Shift+\|` | Split pane vertically |
+| `Ctrl+Shift+-` | Split pane horizontally |
+| `Ctrl+Shift+Arrow` | Navigate between panes |
+| `Ctrl+Shift+Z` | Reopen last closed session |
+| `Ctrl+Shift+A` | Toggle AI sessions panel |
+| `Ctrl+Shift+Y` | Search AI prompts across sessions |
 
 ---
 
