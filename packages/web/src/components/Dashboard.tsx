@@ -3,7 +3,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import 'xterm/css/xterm.css';
-import type { ServerConnection, Credential, ConnectionGroup, User, SSHSessionEvent, PanelLayout, LayoutMode } from '@connectty/shared';
+import type { ServerConnection, Credential, ConnectionGroup, User, SSHSessionEvent, PanelLayout, LayoutMode, PresetLayout } from '@connectty/shared';
 import { api } from '../services/api';
 import { wsService } from '../services/websocket';
 import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves } from './panels';
@@ -61,6 +61,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   });
   const [panelLayout, setPanelLayout] = useState<PanelLayout | null>(null);
   const [showLayoutPicker, setShowLayoutPicker] = useState(false);
+  const [currentPreset, setCurrentPreset] = useState<PresetLayout | null>(null);
   const [sessionPickerPanelId, setSessionPickerPanelId] = useState<string | null>(null);
 
   // Collapsible sidebar groups
@@ -890,9 +891,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       {/* Layout Picker */}
       {showLayoutPicker && (
         <LayoutPicker
+          current={currentPreset}
           onSelect={(preset) => {
             const sessionIds = sessions.map(s => s.id);
             setPanelLayout(createLayout(preset, sessionIds));
+            setCurrentPreset(preset);
           }}
           onClose={() => setShowLayoutPicker(false)}
         />

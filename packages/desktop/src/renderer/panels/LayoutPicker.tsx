@@ -4,6 +4,7 @@ import { PresetLayout } from '@connectty/shared';
 interface LayoutPickerProps {
   onSelect: (preset: PresetLayout) => void;
   onClose: () => void;
+  current?: PresetLayout | null;
 }
 
 const presets: { id: PresetLayout; label: string; icon: React.ReactNode }[] = [
@@ -45,7 +46,7 @@ const presets: { id: PresetLayout; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export function LayoutPicker({ onSelect, onClose }: LayoutPickerProps) {
+export function LayoutPicker({ onSelect, onClose, current }: LayoutPickerProps) {
   return (
     <div className="layout-picker-overlay" onClick={onClose}>
       <div className="layout-picker" onClick={e => e.stopPropagation()}>
@@ -61,7 +62,7 @@ export function LayoutPicker({ onSelect, onClose }: LayoutPickerProps) {
           {presets.map(preset => (
             <button
               key={preset.id}
-              className="layout-preset-btn"
+              className={`layout-preset-btn ${current === preset.id ? 'active' : ''}`}
               onClick={() => { onSelect(preset.id); onClose(); }}
               title={preset.label}
             >

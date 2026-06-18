@@ -4142,6 +4142,65 @@ input[type="radio"] {
   color: #56d364;
 }
 
+/* Keyboard shortcuts reference panel */
+.shortcuts-modal {
+  max-width: 640px;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 32px;
+}
+
+.shortcut-group {
+  min-width: 0;
+}
+
+.shortcut-group .settings-eyebrow {
+  margin-bottom: 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.shortcut-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.shortcut-keys {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.shortcut-tip {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.shortcuts-modal kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: var(--mono-font);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
 .credential-info {
   flex: 1;
   min-width: 0;
@@ -7040,6 +7099,12 @@ input[type="radio"] {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--bg-hover);
+}
+
+.layout-preset-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-tint);
 }
 
 .layout-preset-icon {

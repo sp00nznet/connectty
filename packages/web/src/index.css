@@ -641,6 +641,39 @@ input[type="radio"] {
 .credential-type-chip.domain     { background-color: color-mix(in srgb, #9b87fb 14%, transparent); color: #9b87fb; }
 .credential-type-chip.agent      { background-color: color-mix(in srgb, #56d364 14%, transparent); color: #56d364; }
 
+/* Layout picker active preset */
+.layout-preset-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-tint);
+}
+
+/* Keyboard shortcuts (in Settings) */
+.shortcut-list { display: flex; flex-direction: column; gap: 2px; }
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.shortcut-desc { color: var(--text-secondary); font-size: 13px; }
+.shortcut-keys { display: inline-flex; gap: 4px; flex-shrink: 0; }
+.shortcut-keys kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: var(--mono-font);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
 .btn-sm {
   padding: 8px 16px;
   font-size: 0.75rem;

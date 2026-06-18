@@ -126,6 +126,74 @@ function LinkMark({ size = 28, glyph = 17 }: { size?: number; glyph?: number }) 
   );
 }
 
+// Keyboard shortcut reference, grouped for the help panel (design #17).
+const SHORTCUT_GROUPS: { title: string; items: { keys: string[]; desc: string }[] }[] = [
+  {
+    title: 'Navigation',
+    items: [
+      { keys: ['Ctrl', 'B'], desc: 'Toggle sidebar' },
+      { keys: ['Ctrl', 'Shift', 'K'], desc: 'Command palette' },
+      { keys: ['Ctrl', ','], desc: 'Settings' },
+      { keys: ['Ctrl', 'Shift', 'Z'], desc: 'Reopen closed tab' },
+    ],
+  },
+  {
+    title: 'Paneling',
+    items: [
+      { keys: ['Ctrl', 'Shift', 'T'], desc: 'Toggle panel mode' },
+      { keys: ['Ctrl', 'Shift', 'P'], desc: 'Pane layout picker' },
+      { keys: ['Ctrl', 'Shift', '\\'], desc: 'Split vertical' },
+      { keys: ['Ctrl', 'Shift', '-'], desc: 'Split horizontal' },
+      { keys: ['Ctrl', 'Shift', 'X'], desc: 'Close pane' },
+      { keys: ['Ctrl', 'Shift', '←↑↓→'], desc: 'Move focus between panes' },
+    ],
+  },
+  {
+    title: 'AI',
+    items: [
+      { keys: ['Ctrl', 'Shift', 'A'], desc: 'AI Sessions panel' },
+      { keys: ['Ctrl', 'Shift', 'Y'], desc: 'AI prompt search' },
+    ],
+  },
+];
+
+function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal shortcuts-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Keyboard Shortcuts</h3>
+          <button className="btn btn-icon" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="modal-body">
+          <div className="shortcuts-grid">
+            {SHORTCUT_GROUPS.map(group => (
+              <div className="shortcut-group" key={group.title}>
+                <div className="settings-eyebrow">{group.title}</div>
+                {group.items.map((it, i) => (
+                  <div className="shortcut-row" key={i}>
+                    <span className="shortcut-desc">{it.desc}</span>
+                    <span className="shortcut-keys">
+                      {it.keys.map((k, j) => <kbd key={j}>{k}</kbd>)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <div className="shortcut-group">
+              <div className="settings-eyebrow">Tip</div>
+              <p className="shortcut-tip">
+                Almost every action is also in the command palette — press{' '}
+                <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Short uppercase chip labels for credential types (KEY/PWD/DOM/AGT).
 const CREDENTIAL_TYPE_LABEL: Record<CredentialType, string> = {
   privateKey: 'KEY',
@@ -375,6 +443,9 @@ export default function App() {
   });
   const [panelLayout, setPanelLayout] = useState<PanelLayout | null>(null);
   const [showLayoutPicker, setShowLayoutPicker] = useState(false);
+  // Last-applied pane preset, so the layout picker can highlight the active one.
+  const [currentPreset, setCurrentPreset] = useState<PresetLayout | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [sessionPickerPanelId, setSessionPickerPanelId] = useState<string | null>(null);
 
   // Command palette (Ctrl+Shift+K)
@@ -641,6 +712,13 @@ export default function App() {
       if (e.ctrlKey && e.key === ',' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setShowSettingsModal(true);
+        return;
+      }
+
+      // Ctrl+/ (or Ctrl+Shift+/ = ?) opens the keyboard-shortcuts reference.
+      if (e.ctrlKey && (e.key === '/' || e.key === '?') && !e.altKey) {
+        e.preventDefault();
+        setShowShortcuts(prev => !prev);
         return;
       }
 
@@ -1970,6 +2048,7 @@ export default function App() {
       { id: 'act-new-provider', category: 'New', title: 'Add Cloud Provider…', keywords: 'aws azure gcp vmware proxmox bigfix discover', run: () => setShowProviderModal(true) },
       { id: 'act-bulk', category: 'Run', title: 'Run Bulk Command…', keywords: 'repeated actions execute many hosts', run: () => setShowRepeatedActionsModal(true) },
       { id: 'act-settings', category: 'App', title: 'Open Settings…', hint: '', keywords: 'preferences theme', run: () => setShowSettingsModal(true) },
+      { id: 'act-shortcuts', category: 'App', title: 'Keyboard Shortcuts', hint: 'Ctrl+/', keywords: 'keybindings hotkeys help reference', run: () => setShowShortcuts(true) },
       { id: 'act-toggle-sidebar', category: 'View', title: 'Toggle Sidebar', hint: 'Ctrl+B', run: () => setSidebarCollapsed(p => !p) },
       { id: 'act-ai-sessions', category: 'AI', title: 'AI Sessions Panel', hint: 'Ctrl+Shift+A', keywords: 'claude copilot monitor resume transcript', run: () => setShowAiPanel(p => !p) },
       { id: 'act-ai-search', category: 'AI', title: 'Search AI Prompts…', hint: 'Ctrl+Shift+Y', keywords: 'claude copilot find across sessions', run: () => setShowAiSearch(true) },
@@ -2810,13 +2889,18 @@ export default function App() {
       {/* Layout Picker */}
       {showLayoutPicker && (
         <LayoutPicker
+          current={currentPreset}
           onSelect={(preset) => {
             const sessionIds = sessions.map(s => s.id);
             setPanelLayout(createLayout(preset, sessionIds));
+            setCurrentPreset(preset);
           }}
           onClose={() => setShowLayoutPicker(false)}
         />
       )}
+
+      {/* Keyboard Shortcuts */}
+      {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
 
       {/* Session Picker for empty panels */}
       {sessionPickerPanelId && (

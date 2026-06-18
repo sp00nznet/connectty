@@ -302,12 +302,24 @@ const shots = {
 
   async LayoutPicker(win) {
     await palette(win, 'connect web-01');
+    await wait(900);
+    await key(win, 't', { ctrl: true, shift: true }); // enter panel mode
     await wait(700);
-    await key(win, 't', { ctrl: true, shift: true });
-    await wait(400);
-    await key(win, 'p', { ctrl: true, shift: true });
-    await wait(450);
+    // Apply a preset via the command palette so one reads as the active layout.
+    await palette(win, 'choose pane layout');
+    await wait(500);
+    await clickButtonByText(win, '2x2 Grid');
+    await wait(600);
+    await key(win, 'p', { ctrl: true, shift: true }); // reopen picker — 2x2 now active
+    await wait(600);
     await capture(win, 'LayoutPicker');
+  },
+
+  async Shortcuts(win) {
+    await wait(300);
+    await key(win, '/', { ctrl: true });
+    await wait(450);
+    await capture(win, 'Shortcuts');
   },
 
   async CollapsedRail(win) {

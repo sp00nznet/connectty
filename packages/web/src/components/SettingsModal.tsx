@@ -5,6 +5,12 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+const WEB_SHORTCUTS: { keys: string[]; desc: string }[] = [
+  { keys: ['Ctrl', 'B'], desc: 'Toggle sidebar' },
+  { keys: ['Ctrl', 'Shift', 'T'], desc: 'Toggle panel mode' },
+  { keys: ['Ctrl', 'Shift', 'P'], desc: 'Pane layout picker' },
+];
+
 /**
  * Lightweight settings panel for the web client. Currently hosts the UI Accent
  * picker (brand/primary color), mirroring the desktop Settings → Themes → UI Accent.
@@ -37,6 +43,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 title={a.name}
                 aria-label={`${a.name} accent`}
               />
+            ))}
+          </div>
+
+          <label className="settings-eyebrow" style={{ marginTop: 24 }}>Keyboard Shortcuts</label>
+          <div className="shortcut-list">
+            {WEB_SHORTCUTS.map((s, i) => (
+              <div className="shortcut-row" key={i}>
+                <span className="shortcut-desc">{s.desc}</span>
+                <span className="shortcut-keys">{s.keys.map((k, j) => <kbd key={j}>{k}</kbd>)}</span>
+              </div>
             ))}
           </div>
         </div>
