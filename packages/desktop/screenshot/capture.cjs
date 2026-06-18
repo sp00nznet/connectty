@@ -324,8 +324,12 @@ const shots = {
 
   async CollapsedRail(win) {
     await wait(300);
-    await key(win, 'b', { ctrl: true });
-    await wait(500);
+    // Ensure the sidebar ends collapsed regardless of persisted state.
+    await run(win, `(() => {
+      const sb = document.querySelector('.sidebar');
+      if (sb && !sb.classList.contains('collapsed')) document.querySelector('.sidebar-toggle-btn')?.click();
+    })()`);
+    await wait(600);
     await capture(win, 'CollapsedRail');
   },
 };

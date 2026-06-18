@@ -2368,6 +2368,19 @@ input[type="radio"] {
   justify-content: center;
 }
 
+/* Collapsed rail: stack the brand mark above the expand toggle so they
+   don't overlap in the narrow rail. */
+.sidebar.collapsed .sidebar-header-row {
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  justify-content: center;
+}
+
 /* Brand: Link mark + wordmark */
 .sidebar-brand {
   display: flex;
