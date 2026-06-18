@@ -41,6 +41,7 @@ import { AiSessionsPanel, AiTranscriptModal, AiPromptSearchModal, type AiSession
 declare global {
   interface Window {
     connectty: ConnecttyAPI;
+    __TAURI_INTERNALS__?: unknown;
   }
 }
 
@@ -109,6 +110,53 @@ function OverflowMenu({ items }: { items: OverflowItem[] }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// In the Electron build the native min/max/close buttons are painted into the
+// tab-bar row via titleBarOverlay. The Tauri build runs frameless, so we render
+// our own caption buttons inline at the right of the tab bar to keep them on the
+// same level as the tabs and the "+" new-tab button.
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+function WindowControls() {
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    const off = window.connectty.window?.onMaximizeChange?.(setMaximized);
+    return () => off?.();
+  }, []);
+  return (
+    <div className="window-controls">
+      <button
+        className="window-control-btn"
+        title="Minimize"
+        onClick={() => window.connectty.window?.minimize?.()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4.5" width="10" height="1" fill="currentColor" /></svg>
+      </button>
+      <button
+        className="window-control-btn"
+        title={maximized ? 'Restore' : 'Maximize'}
+        onClick={() => window.connectty.window?.toggleMaximize?.()}
+      >
+        {maximized ? (
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+            <rect x="0.5" y="2.5" width="6" height="6" /><polyline points="2.5,2.5 2.5,0.5 9.5,0.5 9.5,7.5 7.5,7.5" />
+          </svg>
+        ) : (
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+            <rect x="0.5" y="0.5" width="9" height="9" />
+          </svg>
+        )}
+      </button>
+      <button
+        className="window-control-btn window-control-close"
+        title="Close"
+        onClick={() => window.connectty.window?.close?.()}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1"><line x1="0.5" y1="0.5" x2="9.5" y2="9.5" /><line x1="9.5" y1="0.5" x2="0.5" y2="9.5" /></svg>
+      </button>
     </div>
   );
 }
@@ -2459,7 +2507,7 @@ export default function App() {
       {/* Main Content */}
       <main className="main-content">
         {/* Session Tabs - always visible for consistent title bar alignment */}
-        <div className="session-tabs">
+        <div className="session-tabs" data-tauri-drag-region>
           {/* Grouped tabs: one collapsible section per non-empty group */}
           {tabGroups.map(group => {
             const members = sessions.filter(s => tabGroupMembership.get(s.id) === group.id);
@@ -2552,6 +2600,9 @@ export default function App() {
               </button>
             )}
           </div>
+
+          {/* Frameless-window caption buttons (Tauri only) */}
+          {isTauri && <WindowControls />}
         </div>
 
         {/* Shell Context Menu (right-click on + button) */}

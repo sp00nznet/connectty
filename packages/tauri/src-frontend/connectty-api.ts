@@ -10,6 +10,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 // Types matching the Electron preload API
 type SSHEventCallback = (sessionId: string, event: any) => void;
@@ -132,7 +133,12 @@ interface ConnecttyAPI {
     cloudRestore: (accountId: string) => Promise<void>;
   };
   window: {
+    setTitleBarOverlay?: (opts?: any) => Promise<any>;
     minimize: () => Promise<void>;
+    toggleMaximize?: () => Promise<void>;
+    close?: () => Promise<void>;
+    isMaximized?: () => Promise<boolean>;
+    onMaximizeChange?: (cb: (maximized: boolean) => void) => () => void;
   };
   aiSessions: {
     list: () => Promise<any[]>;
@@ -328,8 +334,25 @@ export const connecttyApi: ConnecttyAPI = {
     delete: (id: string) => invoke('session_states_delete', { id }),
   },
   window: {
+    // Electron drew native min/max/close as a title-bar overlay; Tauri runs
+    // frameless (decorations: false) and we render our own controls, so this
+    // is a no-op kept only for API compatibility with the Electron renderer.
     setTitleBarOverlay: () => Promise.resolve(true),
-    minimize: () => Promise.resolve(),
+    minimize: () => getCurrentWindow().minimize(),
+    toggleMaximize: () => getCurrentWindow().toggleMaximize(),
+    close: () => getCurrentWindow().close(),
+    isMaximized: () => getCurrentWindow().isMaximized(),
+    onMaximizeChange: (cb: (maximized: boolean) => void) => {
+      let unlisten: UnlistenFn | null = null;
+      const w = getCurrentWindow();
+      // Fire once with the current state, then on every resize (covers
+      // maximize/restore/snap) report whether the window is maximized.
+      w.isMaximized().then(cb);
+      w.onResized(async () => cb(await w.isMaximized())).then((fn) => {
+        unlisten = fn;
+      });
+      return () => unlisten?.();
+    },
   },
   // AI session monitoring (Claude Code / Copilot)
   aiSessions: {
