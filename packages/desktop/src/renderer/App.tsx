@@ -1831,7 +1831,10 @@ export default function App() {
         showNotification('success', 'Provider created');
       }
       await loadData();
-      setShowProviderModal(false);
+      // Keep the Providers modal open and return to the list so the newly
+      // added/edited provider is visible (the form's handleSubmit flips
+      // showForm back to the list view). Previously this closed the whole
+      // modal, which read as "dropped back to an empty screen".
       setEditingProvider(null);
     } catch (err) {
       showNotification('error', (err as Error).message);

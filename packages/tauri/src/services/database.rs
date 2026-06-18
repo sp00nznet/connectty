@@ -238,7 +238,7 @@ impl DatabaseService {
 
     pub fn get_credentials(&self) -> SqliteResult<Vec<Credential>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_group
+            "SELECT id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_os_types
              FROM credentials ORDER BY name"
         )?;
         let master_key = self.master_key.clone();
@@ -278,7 +278,7 @@ impl DatabaseService {
 
     pub fn get_credential(&self, id: &str) -> SqliteResult<Credential> {
         self.conn.query_row(
-            "SELECT id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_group
+            "SELECT id, name, type, username, domain, encrypted_data, auto_assign_patterns, auto_assign_os_types
              FROM credentials WHERE id = ?1",
             params![id],
             |row| {
@@ -321,7 +321,7 @@ impl DatabaseService {
 
         self.conn.execute(
             "INSERT INTO credentials (id, name, type, username, domain, encrypted_data,
-             auto_assign_patterns, auto_assign_group, created_at, updated_at)
+             auto_assign_patterns, auto_assign_os_types, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 id, cred.name, cred.credential_type, cred.username, cred.domain,
