@@ -172,7 +172,6 @@ async fn discover_proxmox(provider: &Provider) -> Result<Vec<DiscoveredHost>, St
     let username = config.get("username").and_then(|v| v.as_str()).ok_or("Missing username")?;
     let password = config.get("password").and_then(|v| v.as_str()).ok_or("Missing password")?;
     let realm = config.get("realm").and_then(|v| v.as_str()).unwrap_or("pam");
-    let node = config.get("node").and_then(|v| v.as_str());
 
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
@@ -188,18 +187,19 @@ async fn discover_proxmox(provider: &Provider) -> Result<Vec<DiscoveredHost>, St
     let ticket = auth_resp["data"]["ticket"].as_str().ok_or("No ticket")?;
     let _csrf = auth_resp["data"]["CSRFPreventionToken"].as_str().unwrap_or("");
 
-    // Get nodes
-    let nodes_to_scan: Vec<String> = if let Some(n) = node {
-        vec![n.to_string()]
-    } else {
-        let nodes_url = format!("https://{}:{}/api2/json/nodes", host, port);
-        let nodes_resp: Value = client.get(&nodes_url)
-            .header("Cookie", format!("PVEAuthCookie={}", ticket))
-            .send().await.map_err(|e| e.to_string())?
-            .json().await.map_err(|e| e.to_string())?;
-        nodes_resp["data"].as_array().unwrap_or(&vec![])
-            .iter().filter_map(|n| n["node"].as_str().map(|s| s.to_string())).collect()
-    };
+    // Always enumerate every node in the cluster so discovery returns all
+    // VMs/LXCs across the cluster, not just the guests on a single node.
+    let nodes_url = format!("https://{}:{}/api2/json/nodes", host, port);
+    let nodes_resp: Value = client.get(&nodes_url)
+        .header("Cookie", format!("PVEAuthCookie={}", ticket))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| e.to_string())?;
+    let nodes_to_scan: Vec<String> = nodes_resp["data"].as_array().unwrap_or(&vec![])
+        .iter()
+        // Skip offline nodes — their per-node endpoints aren't reachable.
+        .filter(|n| n["status"].as_str() != Some("offline"))
+        .filter_map(|n| n["node"].as_str().map(|s| s.to_string()))
+        .collect();
 
     let mut hosts = Vec::new();
     for node_name in &nodes_to_scan {
