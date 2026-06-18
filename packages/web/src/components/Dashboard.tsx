@@ -400,9 +400,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       {/* Header */}
       <header className="app-header">
         <div className="logo">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e94560" strokeWidth="2">
-            <polyline points="4 17 10 11 4 5" />
-            <line x1="12" y1="19" x2="20" y2="19" />
+          <svg width="28" height="28" viewBox="0 0 100 100" fill="none" stroke="var(--accent)" strokeWidth="11" strokeLinecap="round">
+            <path d="M70 31 A28 28 0 1 0 70 69" />
           </svg>
           <h1>Connectty</h1>
         </div>
