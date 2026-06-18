@@ -113,6 +113,27 @@ function OverflowMenu({ items }: { items: OverflowItem[] }) {
   );
 }
 
+// "Link" brand mark — open C-ring glyph (reads as a "C" and a connector),
+// stroked in the accent on a dark chip. Dark-mode lockup used throughout.
+function LinkMark({ size = 28, glyph = 17 }: { size?: number; glyph?: number }) {
+  return (
+    <span className="link-mark" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={glyph} height={glyph} viewBox="0 0 100 100" fill="none"
+        stroke="var(--accent)" strokeWidth="11" strokeLinecap="round">
+        <path d="M70 31 A28 28 0 1 0 70 69" />
+      </svg>
+    </span>
+  );
+}
+
+// Short uppercase chip labels for credential types (KEY/PWD/DOM/AGT).
+const CREDENTIAL_TYPE_LABEL: Record<CredentialType, string> = {
+  privateKey: 'KEY',
+  password: 'PWD',
+  domain: 'DOM',
+  agent: 'AGT',
+};
+
 // UI Accent palette — brand/primary color, independent of the terminal theme.
 // Each drives --accent, --accent-hover, and --accent-ink (text/icon color on the accent).
 export const UI_ACCENTS: { id: string; name: string; accent: string; hover: string; ink: string }[] = [
@@ -2069,7 +2090,10 @@ export default function App() {
       <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-header-row">
-            {!sidebarCollapsed && <h1>Connectty</h1>}
+            <div className="sidebar-brand">
+              <LinkMark />
+              {!sidebarCollapsed && <h1>Connectty</h1>}
+            </div>
             <button
               className="sidebar-toggle-btn"
               onClick={() => setSidebarCollapsed(prev => !prev)}
@@ -2201,7 +2225,7 @@ export default function App() {
           </div>
         ) : (
           <div className="sidebar-actions-collapsed">
-            <button className="sidebar-icon-btn" onClick={() => setShowConnectionModal(true)} title="New Connection">
+            <button className="sidebar-icon-btn sidebar-icon-new" onClick={() => setShowConnectionModal(true)} title="New Connection">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -3715,10 +3739,11 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
               <ul className="credential-list">
                 {credentials.map((cred) => (
                   <li key={cred.id} className="credential-item">
+                    <span className={`credential-type-chip ${cred.type}`}>{CREDENTIAL_TYPE_LABEL[cred.type]}</span>
                     <div className="credential-info">
                       <div className="credential-name">{cred.name}</div>
                       <div className="credential-details">
-                        {cred.domain ? `${cred.domain}\\` : ''}{cred.username} ({cred.type})
+                        {cred.domain ? `${cred.domain}\\` : ''}{cred.username}
                       </div>
                       {cred.autoAssignGroup && (
                         <div className="credential-os-tags">
@@ -5372,10 +5397,12 @@ function RepeatedActionsModal({ connections, groups, terminalCommands, onClose, 
                 )}
 
                 <div className="host-preview">
-                  <strong>{filteredConnections.length}</strong> hosts selected
+                  <span className="blast-radius-chip">
+                    <strong>{filteredConnections.length}</strong> hosts selected
+                  </span>
                   {filteredConnections.length > 0 && filteredConnections.length <= 10 && (
                     <span className="preview-list">
-                      : {filteredConnections.map(c => c.name).join(', ')}
+                      {filteredConnections.map(c => c.name).join(', ')}
                     </span>
                   )}
                 </div>

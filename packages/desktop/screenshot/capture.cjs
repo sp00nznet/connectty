@@ -286,6 +286,36 @@ const shots = {
     await wait(400);
     await capture(win, 'TabGroups');
   },
+
+  async PanelMode(win) {
+    await palette(win, 'connect web-01');
+    await wait(900);
+    await palette(win, 'connect web-02');
+    await wait(900);
+    // Toggle panel mode, then split so two panes show (active pane is ringed).
+    await key(win, 't', { ctrl: true, shift: true });
+    await wait(500);
+    await key(win, '\\', { ctrl: true, shift: true });
+    await wait(900);
+    await capture(win, 'PanelMode');
+  },
+
+  async LayoutPicker(win) {
+    await palette(win, 'connect web-01');
+    await wait(700);
+    await key(win, 't', { ctrl: true, shift: true });
+    await wait(400);
+    await key(win, 'p', { ctrl: true, shift: true });
+    await wait(450);
+    await capture(win, 'LayoutPicker');
+  },
+
+  async CollapsedRail(win) {
+    await wait(300);
+    await key(win, 'b', { ctrl: true });
+    await wait(500);
+    await capture(win, 'CollapsedRail');
+  },
 };
 
 // --------------------------------------------------------------------------

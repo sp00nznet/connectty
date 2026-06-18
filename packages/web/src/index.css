@@ -621,6 +621,26 @@ input[type="radio"] {
   box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--accent);
 }
 
+/* Credential type chip (KEY / PWD / DOM / AGT) */
+.credential-type-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  padding: 3px 7px;
+  margin-right: 12px;
+  border-radius: 5px;
+  font-family: var(--mono-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.credential-type-chip.privateKey { background-color: color-mix(in srgb, #6cb6ff 14%, transparent); color: #6cb6ff; }
+.credential-type-chip.password   { background-color: color-mix(in srgb, #f0a93f 14%, transparent); color: #f0a93f; }
+.credential-type-chip.domain     { background-color: color-mix(in srgb, #9b87fb 14%, transparent); color: #9b87fb; }
+.credential-type-chip.agent      { background-color: color-mix(in srgb, #56d364 14%, transparent); color: #56d364; }
+
 .btn-sm {
   padding: 8px 16px;
   font-size: 0.75rem;
@@ -2407,7 +2427,11 @@ tr.duplicate-host {
   transition: border-color 0.15s;
 }
 
-.terminal-pane.active { border-color: var(--accent); }
+.terminal-pane.active {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.terminal-pane.active .terminal-pane-label { color: var(--accent); }
 
 .terminal-pane-header {
   display: flex;
@@ -2575,7 +2599,7 @@ tr.duplicate-host {
 }
 
 .panel-mode-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.panel-mode-btn.active { background: var(--accent); color: white; }
+.panel-mode-btn.active { background: var(--accent); color: var(--accent-ink); }
 
 .session-picker-list {
   display: flex;

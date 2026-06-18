@@ -3,6 +3,14 @@ import { api } from '../services/api';
 import type { Credential, CredentialType } from '@connectty/shared';
 import OverflowMenu from '../ui/OverflowMenu';
 
+// Short uppercase chip labels for credential types (KEY/PWD/DOM/AGT).
+const CREDENTIAL_TYPE_LABEL: Record<CredentialType, string> = {
+  privateKey: 'KEY',
+  password: 'PWD',
+  domain: 'DOM',
+  agent: 'AGT',
+};
+
 interface CredentialModalProps {
   onClose: () => void;
   onNotification: (type: 'success' | 'error', message: string) => void;
@@ -149,14 +157,12 @@ export default function CredentialModal({ onClose, onNotification }: CredentialM
                 <div className="credential-list">
                   {credentials.map((cred) => (
                     <div key={cred.id} className="credential-item">
-                      <div className="credential-icon">
-                        {cred.type === 'password' ? '🔑' : '🔐'}
-                      </div>
+                      <span className={`credential-type-chip ${cred.type}`}>{CREDENTIAL_TYPE_LABEL[cred.type]}</span>
                       <div className="credential-info">
                         <div className="credential-name">{cred.name}</div>
                         <div className="credential-meta">
-                          {cred.type} {cred.username && `• ${cred.username}`}
-                          {cred.domain && ` (${cred.domain})`}
+                          {cred.username && `${cred.username}`}
+                          {cred.domain && ` • ${cred.domain}`}
                         </div>
                       </div>
                       <div className="credential-item-actions">
