@@ -3217,6 +3217,36 @@ body {
   -webkit-app-region: drag; /* Allow dragging window from tab bar */
 }
 
+/* Frameless window caption buttons (Tauri build). Pinned to the far right of
+   the tab bar so min/max/close sit on the same row as the tabs and "+" button. */
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  /* .panel-mode-toggle's margin-left:auto already absorbs the free space, so
+     these buttons land flush in the top-right corner with no trailing margin. */
+  -webkit-app-region: no-drag;
+}
+.window-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+  -webkit-app-region: no-drag;
+}
+.window-control-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.window-control-close:hover {
+  background-color: #e81123;
+  color: #ffffff;
+}
+
 .session-tab {
   display: flex;
   align-items: center;
