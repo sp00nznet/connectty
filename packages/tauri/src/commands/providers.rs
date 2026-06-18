@@ -187,22 +187,64 @@ async fn discover_proxmox(provider: &Provider) -> Result<Vec<DiscoveredHost>, St
     let ticket = auth_resp["data"]["ticket"].as_str().ok_or("No ticket")?;
     let _csrf = auth_resp["data"]["CSRFPreventionToken"].as_str().unwrap_or("");
 
-    // Always enumerate every node in the cluster so discovery returns all
-    // VMs/LXCs across the cluster, not just the guests on a single node.
-    let nodes_url = format!("https://{}:{}/api2/json/nodes", host, port);
-    let nodes_resp: Value = client.get(&nodes_url)
-        .header("Cookie", format!("PVEAuthCookie={}", ticket))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| e.to_string())?;
-    let nodes_to_scan: Vec<String> = nodes_resp["data"].as_array().unwrap_or(&vec![])
-        .iter()
-        // Skip offline nodes — their per-node endpoints aren't reachable.
-        .filter(|n| n["status"].as_str() != Some("offline"))
-        .filter_map(|n| n["node"].as_str().map(|s| s.to_string()))
-        .collect();
+    // Enumerate cluster nodes WITH their IPs via /cluster/status, so we can
+    // both surface the Proxmox nodes themselves as importable SSH hosts and
+    // scan each node for guests.
+    let cookie = format!("PVEAuthCookie={}", ticket);
+    let mut nodes: Vec<(String, Option<String>, bool)> = Vec::new(); // (name, ip, online)
+    let status_url = format!("https://{}:{}/api2/json/cluster/status", host, port);
+    if let Ok(resp) = client.get(&status_url).header("Cookie", &cookie).send().await {
+        if let Ok(data) = resp.json::<Value>().await {
+            for entry in data["data"].as_array().unwrap_or(&vec![]) {
+                if entry["type"].as_str() != Some("node") { continue; }
+                if let Some(name) = entry["name"].as_str() {
+                    let ip = entry["ip"].as_str().map(|s| s.to_string());
+                    let online = entry["online"].as_u64().unwrap_or(0) == 1;
+                    nodes.push((name.to_string(), ip, online));
+                }
+            }
+        }
+    }
+    // Fallback to /nodes (no per-node IPs) if cluster/status is unavailable.
+    if nodes.is_empty() {
+        let nodes_url = format!("https://{}:{}/api2/json/nodes", host, port);
+        if let Ok(resp) = client.get(&nodes_url).header("Cookie", &cookie).send().await {
+            if let Ok(data) = resp.json::<Value>().await {
+                for n in data["data"].as_array().unwrap_or(&vec![]) {
+                    if let Some(name) = n["node"].as_str() {
+                        let online = n["status"].as_str() != Some("offline");
+                        nodes.push((name.to_string(), None, online));
+                    }
+                }
+            }
+        }
+    }
 
     let mut hosts = Vec::new();
-    for node_name in &nodes_to_scan {
+
+    // Surface the Proxmox nodes themselves as importable hosts (SSH to the node).
+    for (name, ip, online) in &nodes {
+        hosts.push(DiscoveredHost {
+            id: String::new(),
+            provider_id: provider.id.clone(),
+            provider_host_id: format!("node-{}", name),
+            name: name.clone(),
+            hostname: ip.clone(),
+            private_ip: ip.clone(),
+            public_ip: None,
+            os_type: "linux".to_string(),
+            os_name: Some("Proxmox VE".to_string()),
+            state: if *online { "running".to_string() } else { "stopped".to_string() },
+            metadata: serde_json::json!({"node": name, "type": "node"}),
+            tags: Value::Object(Default::default()),
+            imported: false,
+            connection_id: None,
+        });
+    }
+
+    // Scan each online node for guests.
+    for (node_name, _ip, online) in &nodes {
+        if !*online { continue; }
         // Get VMs (QEMU)
         let vms_url = format!("https://{}:{}/api2/json/nodes/{}/qemu", host, port, node_name);
         if let Ok(resp) = client.get(&vms_url)
