@@ -91,10 +91,13 @@ pub async fn list_available_shells() -> Result<Vec<LocalShellInfo>, String> {
         }
 
         // WSL distributions
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let wsl_path = format!("{}\\System32\\wsl.exe", system_root);
         if std::path::Path::new(&wsl_path).exists() {
             if let Ok(output) = std::process::Command::new(&wsl_path)
                 .args(["--list", "--quiet"])
+                .creation_flags(CREATE_NO_WINDOW) // don't flash a console window
                 .output()
             {
                 // WSL outputs UTF-16LE on Windows
