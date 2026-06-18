@@ -214,14 +214,15 @@ async fn discover_proxmox(provider: &Provider) -> Result<Vec<DiscoveredHost>, St
                     let vmid = vm["vmid"].as_u64().unwrap_or(0).to_string();
                     let name = vm["name"].as_str().unwrap_or(&vmid).to_string();
                     let status = vm["status"].as_str().unwrap_or("unknown");
+                    let ip = proxmox_qemu_ip(&client, host, port, ticket, node_name, &vmid, status == "running").await;
 
                     hosts.push(DiscoveredHost {
                         id: String::new(),
                         provider_id: provider.id.clone(),
                         provider_host_id: vmid.clone(),
                         name,
-                        hostname: None,
-                        private_ip: None,
+                        hostname: ip.clone(),
+                        private_ip: ip,
                         public_ip: None,
                         os_type: "linux".to_string(),
                         os_name: vm["os"].as_str().map(|s| s.to_string()),
@@ -246,14 +247,15 @@ async fn discover_proxmox(provider: &Provider) -> Result<Vec<DiscoveredHost>, St
                     let vmid = ct["vmid"].as_u64().unwrap_or(0).to_string();
                     let name = ct["name"].as_str().unwrap_or(&vmid).to_string();
                     let status = ct["status"].as_str().unwrap_or("unknown");
+                    let ip = proxmox_lxc_ip(&client, host, port, ticket, node_name, &vmid, status == "running").await;
 
                     hosts.push(DiscoveredHost {
                         id: String::new(),
                         provider_id: provider.id.clone(),
                         provider_host_id: format!("lxc-{}", vmid),
                         name,
-                        hostname: None,
-                        private_ip: None,
+                        hostname: ip.clone(),
+                        private_ip: ip,
                         public_ip: None,
                         os_type: "linux".to_string(),
                         os_name: None,
@@ -269,6 +271,89 @@ async fn discover_proxmox(provider: &Provider) -> Result<Vec<DiscoveredHost>, St
     }
 
     Ok(hosts)
+}
+
+/// Parse an IPv4 out of a Proxmox `ipconfig0`/`netN` string, e.g.
+/// "ip=192.168.1.10/24,gw=..." or "name=eth0,bridge=vmbr0,ip=10.0.0.5/24,...".
+fn parse_proxmox_ip(s: &str) -> Option<String> {
+    for part in s.split(',') {
+        if let Some(rest) = part.trim().strip_prefix("ip=") {
+            let ip = rest.split('/').next().unwrap_or("").trim();
+            if !ip.is_empty() && ip != "dhcp" && ip != "manual" {
+                return Some(ip.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Resolve a QEMU VM's IP: guest agent while running, else cloud-init config.
+async fn proxmox_qemu_ip(client: &reqwest::Client, host: &str, port: u64, ticket: &str,
+                         node: &str, vmid: &str, running: bool) -> Option<String> {
+    let cookie = format!("PVEAuthCookie={}", ticket);
+    if running {
+        let url = format!("https://{}:{}/api2/json/nodes/{}/qemu/{}/agent/network-get-interfaces", host, port, node, vmid);
+        if let Ok(resp) = client.get(&url).header("Cookie", &cookie).send().await {
+            if let Ok(data) = resp.json::<Value>().await {
+                if let Some(ifaces) = data["data"]["result"].as_array() {
+                    for iface in ifaces {
+                        if iface["name"].as_str() == Some("lo") { continue; }
+                        if let Some(addrs) = iface["ip-addresses"].as_array() {
+                            for addr in addrs {
+                                if addr["ip-address-type"].as_str() == Some("ipv4") {
+                                    if let Some(ip) = addr["ip-address"].as_str() {
+                                        if ip != "127.0.0.1" { return Some(ip.to_string()); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Fallback: cloud-init ipconfig0 in the VM config.
+    let url = format!("https://{}:{}/api2/json/nodes/{}/qemu/{}/config", host, port, node, vmid);
+    if let Ok(resp) = client.get(&url).header("Cookie", &cookie).send().await {
+        if let Ok(data) = resp.json::<Value>().await {
+            if let Some(s) = data["data"]["ipconfig0"].as_str() {
+                return parse_proxmox_ip(s);
+            }
+        }
+    }
+    None
+}
+
+/// Resolve an LXC container's IP: live interfaces while running, else net0 config.
+async fn proxmox_lxc_ip(client: &reqwest::Client, host: &str, port: u64, ticket: &str,
+                        node: &str, vmid: &str, running: bool) -> Option<String> {
+    let cookie = format!("PVEAuthCookie={}", ticket);
+    if running {
+        let url = format!("https://{}:{}/api2/json/nodes/{}/lxc/{}/interfaces", host, port, node, vmid);
+        if let Ok(resp) = client.get(&url).header("Cookie", &cookie).send().await {
+            if let Ok(data) = resp.json::<Value>().await {
+                if let Some(ifaces) = data["data"].as_array() {
+                    for iface in ifaces {
+                        if iface["name"].as_str() == Some("lo") { continue; }
+                        if let Some(inet) = iface["inet"].as_str() {
+                            let ip = inet.split('/').next().unwrap_or("").trim();
+                            if !ip.is_empty() && ip != "127.0.0.1" { return Some(ip.to_string()); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Fallback: static net0 in the container config.
+    let url = format!("https://{}:{}/api2/json/nodes/{}/lxc/{}/config", host, port, node, vmid);
+    if let Ok(resp) = client.get(&url).header("Cookie", &cookie).send().await {
+        if let Ok(data) = resp.json::<Value>().await {
+            if let Some(s) = data["data"]["net0"].as_str() {
+                return parse_proxmox_ip(s);
+            }
+        }
+    }
+    None
 }
 
 async fn discover_vmware(provider: &Provider) -> Result<Vec<DiscoveredHost>, String> {
