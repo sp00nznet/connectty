@@ -1,3 +1,10 @@
+/* IBM Plex typography (self-hosted via @fontsource) */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
 * {
   margin: 0;
   padding: 0;
@@ -6,24 +13,55 @@
 
 :root {
   --sidebar-width: 280px;
+
+  /* Type system (v2 visual pass) */
+  --ui-font: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono-font: 'IBM Plex Mono', 'Consolas', 'Monaco', 'Menlo', monospace;
+
+  /* Flat-surface overlay tokens (theme-independent; layer over --bg-*) */
+  --surface-row: rgba(255, 255, 255, 0.025);
+  --surface-row-hover: rgba(255, 255, 255, 0.04);
+  --surface-raised: rgba(255, 255, 255, 0.05);
+  --border-hairline: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --input-overlay: rgba(0, 0, 0, 0.25);
+
+  /* Accent ink: text/icon color placed ON the accent. Overridden per UI accent. */
+  --accent-ink: #042722;
+
+  /* Accent tint helpers */
+  --accent-tint: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 29%, transparent);
+
+  /* Status & semantic colors (independent of accent) */
+  --status-connected: #3fb950;
+  --status-connected-label: #56d364;
+  --status-idle: #66707e;
+  --status-error: #f85149;
+  --proto-ssh: #56d364;
+  --proto-rdp: #6cb6ff;
+  --proto-sftp: #6cb6ff;
+  --proto-shell: #c8a14a;
+  --proto-serial: #c8a14a;
 }
 
-/* Theme: Midnight (Default Dark) */
+/* Theme: Midnight (Default Dark) — v2 flat-surface palette */
 [data-theme="midnight"], :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --text-primary: #edf2f4;
-  --text-secondary: #8d99ae;
-  --text-muted: #6b7280;
-  --accent: #e94560;
-  --accent-hover: #ff6b6b;
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --error: #ef4444;
-  --border: #2d3748;
-  --input-bg: #1e293b;
-  --modal-bg: #1e293b;
+  --bg-primary: #0b0f16;   /* bg/terminal — app + modal background */
+  --bg-secondary: #10151e; /* bg/sidebar */
+  --bg-tertiary: #0e141d;  /* bg/chrome — tab bar, pane headers */
+  --bg-panel: #0d121b;     /* bg/panel — command palette, AI panels */
+  --text-primary: #e6edf3;
+  --text-secondary: #9aa5b4;
+  --text-muted: #66707e;
+  --accent: #22c3a6;       /* Teal default (UI Accent overrides at runtime) */
+  --accent-hover: #3ed8bc;
+  --success: #3fb950;
+  --warning: #f0a93f;
+  --error: #f85149;
+  --border: rgba(255, 255, 255, 0.07);
+  --input-bg: #0e141d;
+  --modal-bg: #0b0f16;
 }
 
 /* Theme: Light */
@@ -2263,11 +2301,25 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-family: var(--ui-font);
   background-color: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.5;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Form controls adopt the UI accent */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* Destructive SFTP action stays neutral, hints red only on hover */
+.sftp-delete-btn:not(:disabled):hover {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
 }
 
 #root {
@@ -2806,13 +2858,58 @@ body {
 .sidebar-actions {
   padding: 16px;
   display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+
+.sidebar-new-connection {
+  width: 100%;
 }
 
 .sidebar-actions-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+/* Pinned Settings footer */
+.sidebar-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.sidebar-settings-btn:hover {
+  background-color: var(--surface-row-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-settings-btn .settings-shortcut {
+  margin-left: auto;
+  font-family: var(--mono-font);
+  font-size: 11px;
+  color: var(--text-faint, #5b6675);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-hairline);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 .sidebar-content {
@@ -2997,31 +3094,143 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: var(--ui-font);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 
+/* Primary — one per surface. Accent fill + ink. */
 .btn-primary {
   background-color: var(--accent);
-  color: white;
+  color: var(--accent-ink);
+  font-weight: 600;
 }
 
 .btn-primary:hover {
   background-color: var(--accent-hover);
 }
 
-.btn-secondary {
-  background-color: var(--bg-tertiary);
+/* Neutral / secondary */
+.btn-secondary,
+.btn-neutral {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-strong);
+  color: #c9d3df;
+}
+
+.btn-secondary:hover,
+.btn-neutral:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Ghost — transparent, quiet */
+.btn-ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background-color: var(--surface-row-hover);
   color: var(--text-primary);
 }
 
-.btn-secondary:hover {
-  background-color: var(--border);
+/* Overflow trigger (⋯) — holds Edit/Remove/Delete and other secondary actions */
+.btn-overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.btn-overflow:hover {
+  background-color: var(--surface-row-hover);
+  color: var(--text-primary);
+}
+
+/* Overflow trigger wrapper (anchors the popover) */
+.overflow-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Overflow menu (popover) */
+.overflow-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 50;
+  min-width: 160px;
+  padding: 5px;
+  background: var(--bg-panel, var(--modal-bg));
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+}
+
+.overflow-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--ui-font);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.overflow-menu-item:hover {
+  background-color: var(--surface-row-hover);
+  color: var(--text-primary);
+}
+
+/* Destructive — no standing red buttons. Red only on the confirm step. */
+.overflow-menu-item.destructive:hover {
+  color: var(--error);
+}
+
+.overflow-menu-item.confirm-delete {
+  color: var(--error);
+  font-weight: 600;
+  background-color: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+.overflow-menu-item.confirm-delete:hover {
+  background-color: color-mix(in srgb, var(--error) 20%, transparent);
+}
+
+.btn-confirm-delete {
+  background-color: var(--error);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.btn-confirm-delete:hover {
+  background-color: #ff6258;
 }
 
 .btn-icon {
@@ -3056,31 +3265,42 @@ body {
 .form-input {
   width: 100%;
   padding: 10px 14px;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background-color: var(--input-overlay);
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: 13px;
+  font-family: var(--ui-font);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .form-input::placeholder {
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 .form-select {
   width: 100%;
   padding: 10px 14px;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background-color: var(--input-overlay);
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: 13px;
+  font-family: var(--ui-font);
   cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 /* Credential Mode Toggle */
@@ -3124,19 +3344,20 @@ body {
 }
 
 .modal {
-  background-color: var(--bg-secondary);
+  background-color: var(--modal-bg);
+  border: 1px solid var(--border-hairline);
   border-radius: 12px;
   width: 100%;
   max-width: 480px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
 }
 
 .modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border);
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border-hairline);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3144,7 +3365,7 @@ body {
 }
 
 .modal-header h3 {
-  font-size: 1.125rem;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -3156,11 +3377,11 @@ body {
 }
 
 .modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
+  padding: 14px 22px;
+  border-top: 1px solid var(--border-hairline);
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -3838,10 +4059,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
-  background-color: var(--bg-tertiary);
-  border-radius: 8px;
+  padding: 13px 15px;
+  background-color: var(--surface-row);
+  border: 1px solid var(--border-hairline);
+  border-radius: 9px;
   margin-bottom: 8px;
+  transition: background-color 0.15s;
+}
+
+.credential-item:hover {
+  background-color: var(--surface-row-hover);
+}
+
+.credential-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .credential-info {
@@ -3929,12 +4162,13 @@ body {
 
 .os-tag {
   display: inline-block;
-  padding: 2px 6px;
+  padding: 2px 7px;
   font-size: 0.625rem;
-  font-weight: 500;
-  border-radius: 3px;
-  background-color: var(--accent);
-  color: white;
+  font-weight: 600;
+  border-radius: 4px;
+  background-color: var(--accent-tint);
+  color: var(--accent);
+  font-family: var(--mono-font);
   text-transform: uppercase;
 }
 
@@ -3952,10 +4186,16 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  background-color: var(--bg-tertiary);
-  border-radius: 8px;
+  padding: 13px 15px;
+  background-color: var(--surface-row);
+  border: 1px solid var(--border-hairline);
+  border-radius: 9px;
   gap: 16px;
+  transition: background-color 0.15s;
+}
+
+.provider-item:hover {
+  background-color: var(--surface-row-hover);
 }
 
 .provider-info {
@@ -3978,32 +4218,33 @@ body {
   font-size: 0.625rem;
   font-weight: 600;
   border-radius: 4px;
+  font-family: var(--mono-font);
   text-transform: uppercase;
 }
 
 .provider-badge.esxi {
-  background-color: #6ba53f;
-  color: white;
+  background-color: color-mix(in srgb, #56d364 14%, transparent);
+  color: #56d364;
 }
 
 .provider-badge.proxmox {
-  background-color: #e57000;
-  color: white;
+  background-color: color-mix(in srgb, #e88c4a 14%, transparent);
+  color: #e88c4a;
 }
 
 .provider-badge.aws {
-  background-color: #ff9900;
-  color: #232f3e;
+  background-color: color-mix(in srgb, #e8b44a 14%, transparent);
+  color: #e8b44a;
 }
 
 .provider-badge.gcp {
-  background-color: #4285f4;
-  color: white;
+  background-color: color-mix(in srgb, #6cb6ff 14%, transparent);
+  color: #6cb6ff;
 }
 
 .provider-badge.azure {
-  background-color: #0078d4;
-  color: white;
+  background-color: color-mix(in srgb, #8aa0ff 14%, transparent);
+  color: #8aa0ff;
 }
 
 .provider-details {
@@ -5446,6 +5687,43 @@ body {
 }
 
 /* Theme Grid in Settings */
+/* Uppercase eyebrow label */
+.settings-eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* UI Accent swatch row */
+.ui-accent-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.ui-accent-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.ui-accent-swatch:hover {
+  transform: scale(1.08);
+}
+
+.ui-accent-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--accent);
+}
+
 .theme-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -6765,20 +7043,21 @@ body {
 .command-palette {
   width: 620px;
   max-width: 90vw;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 .command-palette-input {
   border: none;
-  border-bottom: 1px solid var(--border);
-  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-hairline);
+  background-color: transparent;
   color: var(--text-primary);
   font-size: 15px;
+  font-family: var(--ui-font);
   padding: 14px 16px;
   outline: none;
   width: 100%;
@@ -6787,19 +7066,23 @@ body {
 .command-palette-list {
   max-height: 50vh;
   overflow-y: auto;
+  padding: 6px;
 }
 .command-palette-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 16px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  border-left: 2px solid transparent;
   cursor: pointer;
   color: var(--text-primary);
 }
 .command-palette-item.selected {
-  background-color: var(--accent);
-  color: #fff;
+  background-color: var(--accent-tint);
+  border-left: 2px solid var(--accent);
+  color: var(--text-primary);
 }
 .command-palette-item-label {
   display: flex;
@@ -6815,23 +7098,16 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   padding: 1px 6px;
   flex-shrink: 0;
 }
-.command-palette-item.selected .command-palette-item-cat {
-  color: rgba(255, 255, 255, 0.85);
-  border-color: rgba(255, 255, 255, 0.4);
-}
 .command-palette-item-hint {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-faint, #5b6675);
   flex-shrink: 0;
-  font-family: monospace;
-}
-.command-palette-item.selected .command-palette-item-hint {
-  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--mono-font);
 }
 .command-palette-empty {
   padding: 16px;

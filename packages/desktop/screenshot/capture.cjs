@@ -194,7 +194,7 @@ const shots = {
   },
 
   async RepeatedActions(win) {
-    await clickButtonByText(win, 'Repeated Actions');
+    await clickButtonByText(win, 'Bulk Run');
     await wait(700);
     // Fill the command box so the modal reads as mid-task.
     await run(win, `(() => {
@@ -209,7 +209,11 @@ const shots = {
   },
 
   async Themes(win) {
-    await clickButtonByText(win, 'Settings');
+    await run(win, `(() => {
+      const b = document.querySelector('.sidebar-settings-btn')
+        || [...document.querySelectorAll('button')].find(x => x.textContent.trim().startsWith('Settings'));
+      if (b) b.click();
+    })()`);
     await wait(600);
     // Switch to the Themes tab inside the settings modal (best-effort).
     await run(

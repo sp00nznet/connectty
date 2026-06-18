@@ -44,6 +44,85 @@ declare global {
   }
 }
 
+// Reusable row overflow (⋯) menu. Holds secondary/destructive actions so rows
+// stay quiet. Destructive items reveal a red confirm step before firing.
+interface OverflowItem {
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+  confirmLabel?: string;
+}
+function OverflowMenu({ items }: { items: OverflowItem[] }) {
+  const [open, setOpen] = useState(false);
+  const [confirmIdx, setConfirmIdx] = useState<number | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setConfirmIdx(null);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  return (
+    <div className="overflow-wrap" ref={ref}>
+      <button
+        type="button"
+        className="btn-overflow"
+        onClick={() => { setOpen(o => !o); setConfirmIdx(null); }}
+        title="More actions"
+        aria-label="More actions"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="overflow-menu">
+          {items.map((it, i) => {
+            if (it.destructive && confirmIdx === i) {
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className="overflow-menu-item confirm-delete"
+                  onClick={() => { it.onClick(); setOpen(false); setConfirmIdx(null); }}
+                >
+                  {it.confirmLabel || `Confirm ${it.label.toLowerCase()}`}
+                </button>
+              );
+            }
+            return (
+              <button
+                key={i}
+                type="button"
+                className={`overflow-menu-item${it.destructive ? ' destructive' : ''}`}
+                onClick={() => {
+                  if (it.destructive) { setConfirmIdx(i); }
+                  else { it.onClick(); setOpen(false); }
+                }}
+              >
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// UI Accent palette — brand/primary color, independent of the terminal theme.
+// Each drives --accent, --accent-hover, and --accent-ink (text/icon color on the accent).
+export const UI_ACCENTS: { id: string; name: string; accent: string; hover: string; ink: string }[] = [
+  { id: 'teal',   name: 'Teal',   accent: '#22c3a6', hover: '#3ed8bc', ink: '#042722' },
+  { id: 'coral',  name: 'Coral',  accent: '#f15f7a', hover: '#ff7088', ink: '#1a0d10' },
+  { id: 'azure',  name: 'Azure',  accent: '#4f9dff', hover: '#6fb2ff', ink: '#06101e' },
+  { id: 'violet', name: 'Violet', accent: '#9b87fb', hover: '#b3a3ff', ink: '#160d2e' },
+  { id: 'amber',  name: 'Amber',  accent: '#f0a93f', hover: '#ffbd5e', ink: '#2a1c05' },
+];
+
 interface SSHSession {
   id: string;
   type: 'ssh';
@@ -137,6 +216,8 @@ export default function App() {
   const [newProfileName, setNewProfileName] = useState('');
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('connectty-theme') || 'midnight');
+  // UI Accent — brand/primary color, independent of the terminal theme (default Teal)
+  const [uiAccent, setUiAccent] = useState(() => localStorage.getItem('connectty-ui-accent') || 'teal');
   const [showRepeatedActionsModal, setShowRepeatedActionsModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<ConnectionGroup | null>(null);
@@ -535,6 +616,13 @@ export default function App() {
         return;
       }
 
+      // Ctrl+, opens Settings (matches the sidebar footer hint).
+      if (e.ctrlKey && e.key === ',' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setShowSettingsModal(true);
+        return;
+      }
+
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
@@ -588,7 +676,19 @@ export default function App() {
         session.terminal.options.theme = terminalTheme;
       }
     });
-  }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme]);
+  }, [theme, appSettings.terminalTheme, sessions, getTerminalTheme, uiAccent]);
+
+  // Apply UI Accent — overrides the terminal theme's accent so brand/primary
+  // is a single, independent setting. Re-asserts whenever the theme changes.
+  useEffect(() => {
+    const a = UI_ACCENTS.find(x => x.id === uiAccent) || UI_ACCENTS[0];
+    const root = document.documentElement;
+    root.style.setProperty('--accent', a.accent);
+    root.style.setProperty('--accent-hover', a.hover);
+    root.style.setProperty('--accent-ink', a.ink);
+    root.setAttribute('data-ui-accent', a.id);
+    localStorage.setItem('connectty-ui-accent', a.id);
+  }, [uiAccent, theme]);
 
   // Apply theme to document and update title bar
   useEffect(() => {
@@ -2080,25 +2180,24 @@ export default function App() {
         </div>}
 
         {!sidebarCollapsed ? (
-          <div className="sidebar-actions sidebar-actions-grid">
-            <button className="btn btn-primary btn-sm" onClick={() => setShowConnectionModal(true)}>
+          <div className="sidebar-actions">
+            <button className="btn btn-primary sidebar-new-connection" onClick={() => setShowConnectionModal(true)}>
               + New Connection
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowCredentialModal(true)}>
-              Credentials
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowGroupModal(true)}>
-              Groups
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }}>
-              Providers
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
-              Repeated Actions
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowSettingsModal(true)}>
-              Settings
-            </button>
+            <div className="sidebar-actions-grid">
+              <button className="btn btn-neutral btn-sm" onClick={() => setShowCredentialModal(true)}>
+                Credentials
+              </button>
+              <button className="btn btn-neutral btn-sm" onClick={() => setShowGroupModal(true)}>
+                Groups
+              </button>
+              <button className="btn btn-neutral btn-sm" onClick={() => { setEditingProvider(null); setShowProviderModal(true); }}>
+                Providers
+              </button>
+              <button className="btn btn-neutral btn-sm" onClick={() => setShowRepeatedActionsModal(true)}>
+                Bulk Run
+              </button>
+            </div>
           </div>
         ) : (
           <div className="sidebar-actions-collapsed">
@@ -2240,6 +2339,18 @@ export default function App() {
             )}
           </ul>
         </div>}
+
+        {!sidebarCollapsed && (
+          <div className="sidebar-footer">
+            <button className="sidebar-settings-btn" onClick={() => setShowSettingsModal(true)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+              </svg>
+              <span>Settings</span>
+              <kbd className="settings-shortcut">Ctrl ,</kbd>
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
@@ -2920,6 +3031,8 @@ export default function App() {
           themes={themes}
           currentTheme={theme}
           onThemeChange={setTheme}
+          currentUiAccent={uiAccent}
+          onUiAccentChange={setUiAccent}
           onClose={() => setShowSettingsModal(false)}
           onSave={handleSaveSettings}
           availableShells={availableShells}
@@ -3616,12 +3729,12 @@ function CredentialModal({ credential, credentials, groups, onClose, onSave, onE
                       )}
                     </div>
                     <div className="credential-actions">
-                      <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(cred); populateForm(cred); setShowForm(true); }}>
+                      <button className="btn btn-sm btn-neutral" onClick={() => { onEdit(cred); populateForm(cred); setShowForm(true); }}>
                         Edit
                       </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => onDelete(cred.id)}>
-                        Delete
-                      </button>
+                      <OverflowMenu items={[
+                        { label: 'Delete', destructive: true, confirmLabel: 'Confirm delete', onClick: () => onDelete(cred.id) },
+                      ]} />
                     </div>
                   </li>
                 ))}
@@ -4079,15 +4192,6 @@ function ProviderModal({ provider, providers, credentials, onClose, onSave, onEd
                     </div>
                     <div className="provider-actions">
                       <button
-                        className="btn btn-sm btn-info"
-                        onClick={() => onSync(prov)}
-                        disabled={isSyncing === prov.id || isDiscovering === prov.id}
-                        title="Incremental sync - detect new, removed, and changed hosts"
-                        style={{ minWidth: '80px' }}
-                      >
-                        {isSyncing === prov.id ? <AnimatedProgressText text="Syncing" /> : 'Sync'}
-                      </button>
-                      <button
                         className="btn btn-sm btn-primary"
                         onClick={() => onDiscover(prov)}
                         disabled={isDiscovering === prov.id || isSyncing === prov.id}
@@ -4096,22 +4200,20 @@ function ProviderModal({ provider, providers, credentials, onClose, onSave, onEd
                       >
                         {isDiscovering === prov.id ? <AnimatedProgressText text="Scanning" /> : 'Import Hosts'}
                       </button>
-                      <button className="btn btn-sm btn-secondary" onClick={() => { onEdit(prov); setShowForm(true); }}>
-                        Edit
-                      </button>
                       <button
-                        className="btn btn-sm btn-warning"
-                        onClick={() => {
-                          if (window.confirm('Delete all connections imported from this provider?')) {
-                            onDeleteConnections(prov.id);
-                          }
-                        }}
+                        className="btn btn-sm btn-neutral"
+                        onClick={() => onSync(prov)}
+                        disabled={isSyncing === prov.id || isDiscovering === prov.id}
+                        title="Incremental sync - detect new, removed, and changed hosts"
+                        style={{ minWidth: '80px' }}
                       >
-                        Remove Hosts
+                        {isSyncing === prov.id ? <AnimatedProgressText text="Syncing" /> : 'Sync'}
                       </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => onDelete(prov.id)}>
-                        Delete
-                      </button>
+                      <OverflowMenu items={[
+                        { label: 'Edit', onClick: () => { onEdit(prov); setShowForm(true); } },
+                        { label: 'Remove Hosts', destructive: true, confirmLabel: 'Confirm remove hosts', onClick: () => onDeleteConnections(prov.id) },
+                        { label: 'Delete Provider', destructive: true, confirmLabel: 'Confirm delete provider', onClick: () => onDelete(prov.id) },
+                      ]} />
                     </div>
                   </li>
                 ))}
@@ -6224,14 +6326,14 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
           Upload →
         </button>
         <button
-          className="btn btn-primary btn-sm"
+          className="btn btn-neutral btn-sm"
           onClick={handleDownload}
           disabled={selectedRemoteFiles.size === 0}
         >
           ← Download
         </button>
         <div className="sftp-actions-divider" />
-        <button className="btn btn-secondary btn-sm" onClick={handleRefresh}>
+        <button className="btn btn-ghost btn-sm" onClick={handleRefresh}>
           Refresh
         </button>
         {otherSftpSessions.length > 0 && (
@@ -6394,11 +6496,11 @@ function SFTPBrowser({ session, otherSftpSessions, onNotification, fxpSourceSess
           <div className="sftp-panel-header">
             <h4>Remote ({session.hostname})</h4>
             <div className="sftp-panel-actions">
-              <button className="btn btn-sm btn-secondary" onClick={handleCreateRemoteFolder}>
+              <button className="btn btn-sm btn-neutral" onClick={handleCreateRemoteFolder}>
                 New Folder
               </button>
               <button
-                className="btn btn-sm btn-danger"
+                className="btn btn-sm btn-neutral sftp-delete-btn"
                 onClick={handleDeleteRemote}
                 disabled={selectedRemoteFiles.size === 0}
               >
@@ -7006,6 +7108,8 @@ interface SettingsModalProps {
   themes: { id: string; name: string; description: string }[];
   currentTheme: string;
   onThemeChange: (theme: string) => void;
+  currentUiAccent: string;
+  onUiAccentChange: (accent: string) => void;
   onClose: () => void;
   onSave: (settings: Partial<AppSettings>) => Promise<void>;
   availableShells: LocalShellInfo[];
@@ -7022,7 +7126,7 @@ interface SettingsModalProps {
 
 type WindowsElevationMethod = 'gsudo' | 'uac' | 'runas';
 
-function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose, onSave, availableShells, currentSessions, connections, activeProfile, onLoadSessionState, onNotification, onImport, onExport }: SettingsModalProps) {
+function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentUiAccent, onUiAccentChange, onClose, onSave, availableShells, currentSessions, connections, activeProfile, onLoadSessionState, onNotification, onImport, onExport }: SettingsModalProps) {
   const [minimizeToTray, setMinimizeToTray] = useState(settings.minimizeToTray);
   const [closeToTray, setCloseToTray] = useState(settings.closeToTray);
   const [startMinimized, setStartMinimized] = useState(settings.startMinimized);
@@ -8176,6 +8280,23 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, onClose,
                     Customize the look and feel of the application.
                   </p>
                   <div className="form-group">
+                    <label className="settings-eyebrow">UI Accent</label>
+                    <div className="ui-accent-row">
+                      {UI_ACCENTS.map(a => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          className={`ui-accent-swatch ${currentUiAccent === a.id ? 'active' : ''}`}
+                          style={{ background: a.accent }}
+                          onClick={() => onUiAccentChange(a.id)}
+                          title={a.name}
+                          aria-label={`${a.name} accent`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="settings-eyebrow">Terminal Theme</label>
                     <div className="theme-grid">
                       {themes.map(t => (
                         <button
