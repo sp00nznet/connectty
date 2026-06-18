@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result as SqliteResult, params};
+use rusqlite::{Connection, Result as SqliteResult, params, OptionalExtension};
 use crate::commands::connections::ServerConnection;
 use crate::commands::credentials::Credential;
 use crate::commands::groups::ConnectionGroup;
@@ -164,6 +164,23 @@ impl DatabaseService {
                 updated_at TEXT NOT NULL
             );
         ")?;
+
+        // One-time heal: collapse duplicate discovered_hosts rows that an
+        // earlier non-deduping upsert created. Per (provider_id, provider_host_id)
+        // keep the imported copy if present, else the earliest row. Idempotent.
+        self.conn.execute_batch(
+            "DELETE FROM discovered_hosts
+             WHERE rowid NOT IN (
+                 SELECT (
+                     SELECT d2.rowid FROM discovered_hosts d2
+                     WHERE d2.provider_id = d.provider_id
+                       AND d2.provider_host_id = d.provider_host_id
+                     ORDER BY d2.imported DESC, d2.rowid ASC
+                     LIMIT 1
+                 )
+                 FROM discovered_hosts d
+             );"
+        )?;
         Ok(())
     }
 
@@ -631,17 +648,36 @@ impl DatabaseService {
 
     pub fn upsert_discovered_host(&self, host: &crate::commands::providers::DiscoveredHost) -> SqliteResult<()> {
         let now = chrono_now();
-        let id = if host.id.is_empty() { uuid::Uuid::new_v4().to_string() } else { host.id.clone() };
         let metadata_str = serde_json::to_string(&host.metadata).unwrap_or_default();
         let tags_str = serde_json::to_string(&host.tags).unwrap_or_default();
 
-        self.conn.execute(
-            "INSERT OR REPLACE INTO discovered_hosts (id, provider_id, provider_host_id, name, hostname, private_ip, public_ip, os_type, os_name, state, metadata, tags, discovered_at, last_seen_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-            params![id, host.provider_id, host.provider_host_id, host.name, host.hostname,
-                    host.private_ip, host.public_ip, host.os_type, host.os_name, host.state,
-                    metadata_str, tags_str, now, now],
-        )?;
+        // Dedup on (provider_id, provider_host_id): discovered hosts arrive with
+        // an empty id, so we must match on the provider's stable host id rather
+        // than the row uuid (otherwise every re-scan inserts a duplicate).
+        let existing_id: Option<String> = self.conn.query_row(
+            "SELECT id FROM discovered_hosts WHERE provider_id = ?1 AND provider_host_id = ?2",
+            params![host.provider_id, host.provider_host_id],
+            |row| row.get(0),
+        ).optional()?;
+
+        if let Some(id) = existing_id {
+            // Refresh the dynamic fields; leave imported/connection_id intact.
+            self.conn.execute(
+                "UPDATE discovered_hosts SET name=?2, hostname=?3, private_ip=?4, public_ip=?5,
+                 os_type=?6, os_name=?7, state=?8, metadata=?9, tags=?10, last_seen_at=?11 WHERE id=?1",
+                params![id, host.name, host.hostname, host.private_ip, host.public_ip,
+                        host.os_type, host.os_name, host.state, metadata_str, tags_str, now],
+            )?;
+        } else {
+            let id = if host.id.is_empty() { uuid::Uuid::new_v4().to_string() } else { host.id.clone() };
+            self.conn.execute(
+                "INSERT INTO discovered_hosts (id, provider_id, provider_host_id, name, hostname, private_ip, public_ip, os_type, os_name, state, metadata, tags, discovered_at, last_seen_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                params![id, host.provider_id, host.provider_host_id, host.name, host.hostname,
+                        host.private_ip, host.public_ip, host.os_type, host.os_name, host.state,
+                        metadata_str, tags_str, now, now],
+            )?;
+        }
         Ok(())
     }
 
