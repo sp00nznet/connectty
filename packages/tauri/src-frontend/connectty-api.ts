@@ -228,8 +228,20 @@ export const connecttyApi: ConnecttyAPI = {
     create: (provider: any) => invoke('providers_create', { provider }),
     update: (id: string, updates: any) => invoke('providers_update', { id, updates }),
     delete: (id: string) => invoke('providers_delete', { id }),
-    discover: (id: string) => invoke('providers_discover', { id }),
-    sync: (id: string) => invoke('providers_discover', { id }),
+    // The Rust command returns the discovered hosts array directly, but the
+    // shared frontend expects the Electron-style DiscoveryResult/SyncResult
+    // shapes. Wrap the array so `result.hosts` / `result.summary` are defined.
+    discover: (id: string) => invoke('providers_discover', { id }).then((hosts: any) => ({
+      hosts: Array.isArray(hosts) ? hosts : [],
+      success: true,
+      error: null,
+    })),
+    sync: (id: string) => invoke('providers_discover', { id }).then((hosts: any) => ({
+      // Tauri re-discovers rather than diffing, so report no delta; the UI
+      // counts importable hosts from discovered.list() separately.
+      summary: { new: 0, removed: 0, changed: 0 },
+      hosts: Array.isArray(hosts) ? hosts : [],
+    })),
     getDiscoveredHosts: (providerId: string) => invoke('discovered_list', { providerId }),
   },
   profiles: {
