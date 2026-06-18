@@ -1,21 +1,11 @@
 import React, { useCallback, useEffect } from 'react';
-import { PanelNode, PanelLayout, SplitDirection, PresetLayout } from '@connectty/shared';
+import { PanelNode, PanelLayout, SplitDirection } from '@connectty/shared';
 import { SplitPane } from './SplitPane';
 import { TerminalPane } from './TerminalPane';
 import { EmptyPane } from './EmptyPane';
 import { splitPane, removePane, updateRatio, getAdjacentPane, countLeaves } from './layoutUtils';
 import type { Terminal } from 'xterm';
 import type { FitAddon } from 'xterm-addon-fit';
-
-// A session with terminal capabilities (SSH, Serial, LocalShell)
-interface TerminalSession {
-  id: string;
-  type: 'ssh' | 'serial' | 'localShell';
-  terminal: Terminal;
-  fitAddon: FitAddon;
-  connectionName?: string;
-  shellName?: string;
-}
 
 // Any session type
 interface AnySession {

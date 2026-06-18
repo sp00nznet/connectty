@@ -4,10 +4,16 @@ import { api } from './services/api';
 import { wsService } from './services/websocket';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import { applyUiAccent, getUiAccent } from './ui/uiAccent';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Apply the saved UI accent (brand/primary color) on load.
+  useEffect(() => {
+    applyUiAccent(getUiAccent());
+  }, []);
 
   useEffect(() => {
     // Check for existing session

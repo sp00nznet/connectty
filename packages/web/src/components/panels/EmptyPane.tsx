@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface EmptyPaneProps {
   panelId: string;
   isActive: boolean;
@@ -8,7 +6,7 @@ interface EmptyPaneProps {
   onClose?: () => void;
 }
 
-export function EmptyPane({ panelId, isActive, onActivate, onSelectSession, onClose }: EmptyPaneProps) {
+export function EmptyPane({ isActive, onActivate, onSelectSession, onClose }: EmptyPaneProps) {
   return (
     <div
       className={`terminal-pane empty-pane ${isActive ? 'active' : ''}`}

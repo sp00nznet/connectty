@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import type { Credential, CredentialType } from '@connectty/shared';
+import OverflowMenu from '../ui/OverflowMenu';
 
 interface CredentialModalProps {
   onClose: () => void;
@@ -160,17 +161,14 @@ export default function CredentialModal({ onClose, onNotification }: CredentialM
                       </div>
                       <div className="credential-item-actions">
                         <button
-                          className="btn btn-sm"
+                          className="btn btn-sm btn-neutral"
                           onClick={() => handleEdit(cred)}
                         >
                           Edit
                         </button>
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={() => handleDelete(cred.id)}
-                        >
-                          Delete
-                        </button>
+                        <OverflowMenu items={[
+                          { label: 'Delete', destructive: true, confirmLabel: 'Confirm delete', onClick: () => handleDelete(cred.id) },
+                        ]} />
                       </div>
                     </div>
                   ))}

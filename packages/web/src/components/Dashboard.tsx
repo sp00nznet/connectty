@@ -3,7 +3,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import 'xterm/css/xterm.css';
-import type { ServerConnection, Credential, ConnectionGroup, User, SSHSessionEvent, PanelLayout, LayoutMode, PresetLayout } from '@connectty/shared';
+import type { ServerConnection, Credential, ConnectionGroup, User, SSHSessionEvent, PanelLayout, LayoutMode } from '@connectty/shared';
 import { api } from '../services/api';
 import { wsService } from '../services/websocket';
 import { PanelContainer, LayoutPicker, createLayout, createLeaf, assignSession, getLeaves } from './panels';
@@ -13,6 +13,7 @@ import GroupModal from './GroupModal';
 import ProviderPanel from './ProviderPanel';
 import BulkCommandPanel from './BulkCommandPanel';
 import ImportExportModal from './ImportExportModal';
+import SettingsModal from './SettingsModal';
 import SFTPPanel from './SFTPPanel';
 import RDPPanel from './RDPPanel';
 import ProfileSelector from './ProfileSelector';
@@ -47,6 +48,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [showImportExport, setShowImportExport] = useState(false);
   const [showCredentialModal, setShowCredentialModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Collapsible sidebar
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -463,7 +465,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
         <div className="user-info">
           <span className="user-name">{user.displayName}</span>
-          <button className="btn btn-secondary btn-sm" onClick={onLogout}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+          </button>
+          <button className="btn btn-neutral btn-sm" onClick={onLogout}>
             Sign Out
           </button>
         </div>
@@ -964,6 +977,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           onNotification={showNotification}
         />
       )}
+
+      {/* Settings Modal */}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* Notification */}
       {notification && <div className={`notification ${notification.type}`}>{notification.message}</div>}

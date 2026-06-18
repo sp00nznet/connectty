@@ -508,6 +508,119 @@ input[type="radio"] {
   color: var(--text-primary);
 }
 
+/* Overflow (⋯) row-action menu */
+.overflow-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.btn-overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.btn-overflow:hover {
+  background-color: var(--surface-row-hover);
+  color: var(--text-primary);
+}
+
+.overflow-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 50;
+  min-width: 160px;
+  padding: 5px;
+  background: var(--bg-panel, var(--modal-bg));
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+}
+
+.overflow-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--ui-font);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.overflow-menu-item:hover {
+  background-color: var(--surface-row-hover);
+  color: var(--text-primary);
+}
+
+.overflow-menu-item.destructive:hover {
+  color: var(--error);
+}
+
+.overflow-menu-item.confirm-delete {
+  color: var(--error);
+  font-weight: 600;
+  background-color: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+.overflow-menu-item.confirm-delete:hover {
+  background-color: color-mix(in srgb, var(--error) 20%, transparent);
+}
+
+/* UI Accent picker (Settings) */
+.settings-eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.ui-accent-row {
+  display: flex;
+  gap: 12px;
+}
+
+.ui-accent-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.ui-accent-swatch:hover {
+  transform: scale(1.08);
+}
+
+.ui-accent-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--accent);
+}
+
 .btn-sm {
   padding: 8px 16px;
   font-size: 0.75rem;

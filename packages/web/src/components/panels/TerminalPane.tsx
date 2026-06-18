@@ -18,7 +18,6 @@ interface TerminalPaneProps {
 }
 
 export function TerminalPane({
-  panelId,
   terminal,
   fitAddon,
   sessionId,
