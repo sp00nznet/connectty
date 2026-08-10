@@ -78,45 +78,16 @@ $npmVersion = "$($versionData.major).$($versionData.minor).$($versionData.patch)
 
 Write-Host "New version: $newVersion" -ForegroundColor Green
 
-# Save version.json
-$versionData | ConvertTo-Json | Set-Content $versionFile -Encoding UTF8
+# Save version.json. WriteAllText rather than Set-Content -Encoding UTF8: on
+# Windows PowerShell 5.1 that switch emits a BOM, which node refuses to parse.
+$json = $versionData | ConvertTo-Json
+[System.IO.File]::WriteAllText($versionFile, $json + "`n")
 Write-Host "  Updated version.json" -ForegroundColor Gray
 
-# Update all package.json files
-$packageFiles = @(
-    "package.json",
-    "packages\shared\package.json",
-    "packages\desktop\package.json",
-    "packages\server\package.json",
-    "packages\web\package.json"
-)
-
-foreach ($file in $packageFiles) {
-    $filePath = Join-Path $ProjectRoot $file
-    if (Test-Path $filePath) {
-        $content = Get-Content $filePath -Raw | ConvertFrom-Json
-        $content.version = $npmVersion
-        $content | ConvertTo-Json -Depth 10 | Set-Content $filePath -Encoding UTF8
-        Write-Host "  Updated $file" -ForegroundColor Gray
-    }
-}
-
-# Update internal dependency versions in package.json files
-$dependencyPackages = @(
-    "packages\desktop\package.json",
-    "packages\server\package.json",
-    "packages\web\package.json"
-)
-
-foreach ($file in $dependencyPackages) {
-    $filePath = Join-Path $ProjectRoot $file
-    if (Test-Path $filePath) {
-        $content = Get-Content $filePath -Raw
-        # Update @connectty/shared dependency version
-        $content = $content -replace '"@connectty/shared":\s*"[^"]*"', "`"@connectty/shared`": `"$npmVersion`""
-        Set-Content $filePath -Value $content -Encoding UTF8
-    }
-}
+# sync-version.js owns propagation to the manifests - it covers packages/tauri and
+# Cargo.toml too, and rewrites package.json without reformatting the whole file.
+node (Join-Path $ProjectRoot "scripts\sync-version.js")
+if ($LASTEXITCODE -ne 0) { throw "sync-version.js failed" }
 
 Write-Host "`n=== VERSION UPDATED ===" -ForegroundColor Green
 Write-Host "Full version:  $newVersion" -ForegroundColor White

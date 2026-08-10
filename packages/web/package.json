@@ -1,6 +1,6 @@
 {
   "name": "@connectty/web",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Connectty HTML5 Web Client",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@connectty/shared": "2.0.0",
+    "@connectty/shared": "2.1.0",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "react": "^18.2.0",
