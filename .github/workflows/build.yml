@@ -108,11 +108,13 @@ jobs:
           workspaces: packages/tauri
 
       # webkit2gtk is the Linux webview; the rest is what the bundler shells out to.
+      # libudev-dev is for the serial-port support - libudev-sys builds via pkg-config
+      # and fails the whole crate graph without it.
       - if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libssl-dev build-essential
+            librsvg2-dev patchelf libssl-dev libudev-dev build-essential
 
       - run: npm ci
       # vite aliases @connectty/shared straight at its sources, so no prebuild needed.
