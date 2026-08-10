@@ -87,6 +87,45 @@ jobs:
           path: ${{ matrix.artifacts }}
           retention-days: 30
 
+  # Where active development actually is. Not wired into `release` yet - this has
+  # never been bundle-built anywhere, so it proves itself on dispatch runs before it
+  # gets to publish anything.
+  tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/tauri
+
+      # webkit2gtk is the Linux webview; the rest is what the bundler shells out to.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev build-essential
+
+      - run: npm ci
+      # vite aliases @connectty/shared straight at its sources, so no prebuild needed.
+      # beforeBuildCommand in tauri.conf.json runs the frontend build.
+      - run: npm exec tauri build
+        working-directory: packages/tauri
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.os }}
+          path: packages/tauri/target/release/bundle/**
+          retention-days: 30
+
   docker:
     runs-on: ubuntu-latest
     strategy:
