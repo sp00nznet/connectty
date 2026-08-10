@@ -288,13 +288,30 @@ first launch.
 ```bash
 # Tauri (native)
 cd packages/tauri
-cargo tauri build
+npx tauri build
 
 # Electron (legacy)
 npm run dist:win -w @connectty/desktop    # Windows
 npm run dist:linux -w @connectty/desktop  # Linux
 npm run dist:mac -w @connectty/desktop    # macOS
 ```
+
+### Migrating to Tauri
+
+Connectty exists because an SSH client should open instantly, and Electron was
+taking 1-3 seconds to become usable once a real host list was loaded. The Tauri 2
+rewrite in `packages/tauri` replaces the Electron shell with the system webview.
+
+Current state: v2.0.0 shipped Electron installers, because that is all CI built.
+Tauri now builds in CI on macOS and Linux, with Windows being verified. Once all
+three are green the release pipeline switches over and Tauri becomes what ships.
+
+Note that both apps share a renderer - `packages/tauri/src-frontend/main.tsx`
+imports `packages/desktop/src/renderer/App.tsx` - so only the Electron main process
+is genuinely legacy. That also means the startup work which scales with host count
+lives in shared code and is inherited by Tauri unchanged: the migration removes the
+runtime's fixed startup cost, not the per-host cost. Worth measuring both before
+assuming the load-time problem is solved.
 
 ---
 
