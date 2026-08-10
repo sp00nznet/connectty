@@ -32,7 +32,9 @@ jobs:
             artifacts: |
               packages/desktop/release/*.deb
               packages/desktop/release/*.AppImage
-          - os: macos-13        # intel
+          # Last x86_64 image GitHub offers; macos-13 retired 2025-12-04 and this one
+          # goes away in August 2027, after which Actions is arm64-only.
+          - os: macos-15-intel
             build: npm run dist:mac -w @connectty/desktop
             artifacts: |
               packages/desktop/release/*.dmg
