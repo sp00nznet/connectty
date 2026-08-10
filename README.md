@@ -4,8 +4,8 @@
 
 **The Modern Connection Manager for DevOps & SysAdmins**
 
-[![Desktop](https://img.shields.io/badge/desktop-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge)](https://sp00.nz/releases/connectty/)
-[![Web](https://img.shields.io/badge/web-SSH%20Terminal-4A90D9?style=for-the-badge)](https://sp00.nz/releases/connectty/)
+[![Desktop](https://img.shields.io/badge/desktop-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge)](https://github.com/sp00nznet/connectty/releases/latest)
+[![Web](https://img.shields.io/badge/web-SSH%20Terminal-4A90D9?style=for-the-badge)](https://github.com/sp00nznet/connectty/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-00C853?style=for-the-badge)](LICENSE)
 
 [Features](#features) • [Comparison](#comparison) • [Quick Start](#quick-start) • [Documentation](#documentation)
@@ -271,14 +271,17 @@ docker-compose up -d
 
 ### Pre-built Binaries
 
-Download from [Releases](https://sp00.nz/releases/connectty/):
+Download from [Releases](https://github.com/sp00nznet/connectty/releases/latest):
 
 | Platform | Package |
 |:---------|:--------|
-| **Windows** | `Connectty-Setup-x.x.x.exe` |
-| **Debian/Ubuntu** | `connectty_x.x.x_amd64.deb` |
-| **Other Linux** | `connectty-x.x.x.AppImage` |
-| **macOS** | `Connectty-x.x.x.dmg` |
+| **Windows** | `Connectty-Setup-x.x.x.exe` (installer) or `Connectty-x.x.x-win-x64.exe` (portable) |
+| **Debian/Ubuntu** | `Connectty-x.x.x-linux-amd64.deb` |
+| **Other Linux** | `Connectty-x.x.x-linux-x86_64.AppImage` |
+| **macOS** | `Connectty-x.x.x-mac-arm64.dmg` (Apple Silicon) or `-mac-x64.dmg` (Intel) |
+
+Builds are unsigned, so Windows SmartScreen and macOS Gatekeeper will both warn on
+first launch.
 
 ### Build from Source
 
