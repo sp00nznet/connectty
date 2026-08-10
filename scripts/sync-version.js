@@ -30,7 +30,8 @@ const packageFiles = [
   'packages/shared/package.json',
   'packages/desktop/package.json',
   'packages/server/package.json',
-  'packages/web/package.json'
+  'packages/web/package.json',
+  'packages/tauri/package.json'
 ];
 
 // Update each package.json
@@ -49,6 +50,16 @@ packageFiles.forEach(file => {
     console.log(`  Updated ${file}`);
   }
 });
+
+// Cargo.toml isn't JSON, and [package] is the first section, so the first
+// `version = ` line in the file is the crate's own.
+const cargoFile = path.join(rootDir, 'packages/tauri/Cargo.toml');
+if (fs.existsSync(cargoFile)) {
+  const cargo = fs.readFileSync(cargoFile, 'utf8')
+    .replace(/^version = ".*"$/m, `version = "${npmVersion}"`);
+  fs.writeFileSync(cargoFile, cargo, 'utf8');
+  console.log('  Updated packages/tauri/Cargo.toml');
+}
 
 // Output version for use in build scripts
 console.log(`\nVersion sync complete!`);

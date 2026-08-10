@@ -1,0 +1,113 @@
+name: build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create releases
+  packages: write   # push to ghcr
+
+defaults:
+  run:
+    shell: bash     # git-bash on windows, so one script works everywhere
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            build: npm run dist:win -w @connectty/desktop
+            artifacts: packages/desktop/release/*.exe
+          - os: ubuntu-22.04
+            # separate invocations: both targets at once exhausted memory on the old runners
+            build: |
+              npm run build -w @connectty/desktop
+              cd packages/desktop
+              npm exec electron-builder -- --linux AppImage
+              npm exec electron-builder -- --linux deb
+            artifacts: |
+              packages/desktop/release/*.deb
+              packages/desktop/release/*.AppImage
+          - os: macos-13        # intel
+            build: npm run dist:mac -w @connectty/desktop
+            artifacts: |
+              packages/desktop/release/*.dmg
+              packages/desktop/release/*.zip
+          - os: macos-latest    # apple silicon
+            build: npm run dist:mac -w @connectty/desktop
+            artifacts: |
+              packages/desktop/release/*.dmg
+              packages/desktop/release/*.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20      # node 24 needs C++20, breaks native module builds
+          cache: npm
+
+      # electron-builder stamps filenames from packages/desktop/package.json, so a tag
+      # that disagrees with it attaches installers that contradict the release they're
+      # on. Six manifests drift easily - fail here, not after a 20-minute build.
+      - name: Tag matches manifest version
+        if: github.ref_type == 'tag'
+        run: |
+          V=$(node -p "require('./packages/desktop/package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$V" ] || { echo "tag $GITHUB_REF_NAME != manifest v$V - run scripts/bump-version.ps1"; exit 1; }
+
+      # ponytail: electron-builder 24 downloads its own fpm/appimagetool; only fuse is missing
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2
+
+      - name: Write .env
+        run: |
+          cat > .env << EOF
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GH_OAUTH_CLIENT_ID=${{ secrets.GH_OAUTH_CLIENT_ID }}
+          GH_OAUTH_CLIENT_SECRET=${{ secrets.GH_OAUTH_CLIENT_SECRET }}
+          EOF
+
+      - run: npm ci
+      - run: npm run generate-icons
+      - run: npm run build -w @connectty/shared
+
+      - name: Build app
+        run: ${{ matrix.build }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: connectty-${{ matrix.os }}
+          path: ${{ matrix.artifacts }}
+          retention-days: 30
+
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pkg: [server, web]
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build and push
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}/${{ matrix.pkg }}
+          TAGS="-t $IMAGE:latest -t $IMAGE:${GITHUB_SHA::7}"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then TAGS="$TAGS -t $IMAGE:$GITHUB_REF_NAME"; fi
+          docker build -f packages/${{ matrix.pkg }}/Dockerfile $TAGS .
+          docker push --all-tags $IMAGE
+
+  release:
+    needs: desktop
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
