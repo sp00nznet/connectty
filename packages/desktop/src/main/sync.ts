@@ -6,7 +6,7 @@
 import { createSyncData, parseSSHConfig, parseCSV, exportToCSV } from '@connectty/shared';
 import type { ImportOptions, ExportOptions, SyncData, ServerConnection, Credential, ConnectionGroup, Provider, SavedCommand } from '@connectty/shared';
 import type { DatabaseService } from './database';
-import type { SyncAccount, SyncConfigInfo } from './preload';
+import type { SyncAccount, SyncConfigInfo, SyncCredentials } from './preload';
 import dns from 'dns/promises';
 import net from 'net';
 import os from 'os';
@@ -326,22 +326,14 @@ export class CloudSyncService {
   private deviceName: string;
   private currentOAuthServer: http.Server | null = null;
 
-  // OAuth configuration - credentials loaded from environment variables
-  // Set these in Codespaces secrets or local .env file:
-  // GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GH_OAUTH_CLIENT_ID, GH_OAUTH_CLIENT_SECRET
-  // Note: GitHub Codespaces reserves the GITHUB_ prefix, so we use GH_ instead
-  private readonly OAUTH_CONFIG = {
+  private readonly OAUTH_ENDPOINTS = {
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
       authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       scope: 'openid email profile https://www.googleapis.com/auth/drive.appdata',
       redirectUri: 'http://localhost:19283/callback',
     },
     github: {
-      clientId: process.env.GH_OAUTH_CLIENT_ID || '',
-      clientSecret: process.env.GH_OAUTH_CLIENT_SECRET || '',
       authUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
       scope: 'gist read:user user:email',
@@ -354,6 +346,45 @@ export class CloudSyncService {
     this.deviceId = this.getOrCreateDeviceId();
     this.deviceName = os.hostname();
     this.loadAccounts();
+  }
+
+  /**
+   * Endpoints plus whichever client credentials are configured. A released build has
+   * no OAuth app of its own, so credentials entered in Settings win over the ones the
+   * build was compiled with (.env / Codespaces secrets - GitHub reserves the GITHUB_
+   * prefix, hence GH_). Without either, cloud sync is simply unavailable.
+   */
+  private oauthConfig(provider: 'google' | 'github') {
+    const stored: Partial<SyncCredentials> = this.db.getOAuthCredentials?.() || {};
+    const credentials = provider === 'google'
+      ? {
+          clientId: stored.googleClientId || process.env.GOOGLE_CLIENT_ID || '',
+          clientSecret: stored.googleClientSecret || process.env.GOOGLE_CLIENT_SECRET || '',
+        }
+      : {
+          clientId: stored.githubClientId || process.env.GH_OAUTH_CLIENT_ID || '',
+          clientSecret: stored.githubClientSecret || process.env.GH_OAUTH_CLIENT_SECRET || '',
+        };
+    return { ...this.OAUTH_ENDPOINTS[provider], ...credentials };
+  }
+
+  /**
+   * What the credentials form shows - a compiled-in value shows up as the current
+   * value, so what is shown is what will be used.
+   */
+  getCredentials(): SyncCredentials {
+    const google = this.oauthConfig('google');
+    const github = this.oauthConfig('github');
+    return {
+      googleClientId: google.clientId,
+      googleClientSecret: google.clientSecret,
+      githubClientId: github.clientId,
+      githubClientSecret: github.clientSecret,
+    };
+  }
+
+  setCredentials(credentials: SyncCredentials): void {
+    this.db.setOAuthCredentials?.(credentials);
   }
 
   private getOrCreateDeviceId(): string {
@@ -390,7 +421,12 @@ export class CloudSyncService {
    * Start OAuth flow to connect a new cloud account
    */
   async connect(provider: 'google' | 'github'): Promise<SyncAccount | null> {
-    const config = this.OAUTH_CONFIG[provider];
+    const config = this.oauthConfig(provider);
+    if (!config.clientId || !config.clientSecret) {
+      throw new Error(
+        `No OAuth app is configured for ${provider}. Add a client ID and secret under Settings > Sync Accounts > Credentials.`
+      );
+    }
     const state = crypto.randomBytes(16).toString('hex');
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
@@ -549,7 +585,7 @@ export class CloudSyncService {
     code: string,
     codeVerifier: string
   ): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: number } | null> {
-    const config = this.OAUTH_CONFIG[provider];
+    const config = this.oauthConfig(provider);
 
     const params = new URLSearchParams({
       client_id: config.clientId,
@@ -903,12 +939,15 @@ export class CloudSyncService {
       throw new Error('Token expired and no refresh token available');
     }
 
-    const config = this.OAUTH_CONFIG[account.provider];
+    const config = this.oauthConfig(account.provider);
     const params = new URLSearchParams({
       client_id: config.clientId,
       refresh_token: account.refreshToken,
       grant_type: 'refresh_token',
     });
+    if (config.clientSecret) {
+      params.set('client_secret', config.clientSecret);
+    }
 
     const response = await fetch(config.tokenUrl, {
       method: 'POST',

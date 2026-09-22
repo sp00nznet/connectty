@@ -43,30 +43,62 @@ fn accounts() -> &'static AccountMap {
     INSTANCE.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
 }
 
+/// The OAuth apps to sign in against. A release ships none, so what the user entered
+/// under Settings > Sync Accounts > Credentials wins over the build's environment.
+fn credential(stored: &Value, key: &str, env: &str) -> String {
+    stored.get(key)
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var(env).ok())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub async fn sync_get_credentials(state: State<'_, AppState>) -> Result<Value, String> {
+    let stored = state.db.lock().await.get_oauth_credentials().unwrap_or_else(|| serde_json::json!({}));
+    Ok(serde_json::json!({
+        "googleClientId": credential(&stored, "googleClientId", "GOOGLE_CLIENT_ID"),
+        "googleClientSecret": credential(&stored, "googleClientSecret", "GOOGLE_CLIENT_SECRET"),
+        "githubClientId": credential(&stored, "githubClientId", "GH_OAUTH_CLIENT_ID"),
+        "githubClientSecret": credential(&stored, "githubClientSecret", "GH_OAUTH_CLIENT_SECRET"),
+    }))
+}
+
+#[tauri::command]
+pub async fn sync_set_credentials(
+    credentials: Value,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.db.lock().await.set_oauth_credentials(&credentials)
+}
+
 /// Connect to a sync provider (Google or GitHub) via OAuth
 #[tauri::command]
 pub async fn sync_connect(
     provider: String,
     app: tauri::AppHandle,
+    state: State<'_, AppState>,
 ) -> Result<Option<SyncAccount>, String> {
+    let stored = state.db.lock().await.get_oauth_credentials().unwrap_or_else(|| serde_json::json!({}));
     match provider.as_str() {
-        "github" => connect_github(app).await,
+        "github" => {
+            let client_id = credential(&stored, "githubClientId", "GH_OAUTH_CLIENT_ID");
+            if client_id.is_empty() {
+                return Err("No GitHub OAuth app is configured. Add a client ID under Settings > Sync Accounts > Credentials.".to_string());
+            }
+            connect_github(app, client_id).await
+        }
         "google" => {
-            Err("Google Drive sync requires OAuth client configuration. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.".to_string())
+            Err("Google Drive sync is not implemented in the native build yet.".to_string())
         }
         _ => Err(format!("Unknown sync provider: {}", provider)),
     }
 }
 
-/// Connect via GitHub - uses device flow (no redirect needed)
-async fn connect_github(_app: tauri::AppHandle) -> Result<Option<SyncAccount>, String> {
-    // GitHub Device Authorization Flow
-    // This doesn't require a client secret, just a client ID
+/// Connect via GitHub - uses device flow, which needs the client ID only, no secret
+async fn connect_github(_app: tauri::AppHandle, client_id: String) -> Result<Option<SyncAccount>, String> {
     // User gets a code to enter at github.com/login/device
-
-    let client_id = std::env::var("GITHUB_CLIENT_ID")
-        .unwrap_or_else(|_| "Iv1.0000000000000000".to_string()); // Placeholder
-
     let client = reqwest::Client::new();
 
     // Step 1: Request device code

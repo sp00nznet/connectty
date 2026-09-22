@@ -2,16 +2,16 @@
  * Electron main process entry point
  */
 
-// Load environment variables from .env file
-// For packaged apps: check resources folder first
-// For development: check project root
+// Load environment variables from .env file. Releases ship no .env of their own -
+// cloud sync signs in through the user's OAuth app, entered in Settings - but one
+// placed next to an install, or in the project root, is still honoured.
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 
 // Try multiple locations for .env file
 const envPaths = [
-  // Packaged app: resources folder (extraResources destination)
+  // Packaged app: resources folder, if someone put one there
   path.join(process.resourcesPath || '', '.env'),
   // Development: project root (4 levels up from dist/main/main.js)
   path.join(__dirname, '..', '..', '..', '..', '.env'),
@@ -73,6 +73,7 @@ import type {
   CommandExecution,
   HostFilter,
 } from '@connectty/shared';
+import type { SyncCredentials } from './preload';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -792,6 +793,14 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('sync:getAccounts', async () => {
     return cloudSyncService.getAccounts();
+  });
+
+  ipcMain.handle('sync:getCredentials', async () => {
+    return cloudSyncService.getCredentials();
+  });
+
+  ipcMain.handle('sync:setCredentials', async (_event, credentials: SyncCredentials) => {
+    return cloudSyncService.setCredentials(credentials);
   });
 
   // App info

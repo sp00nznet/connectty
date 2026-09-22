@@ -1855,6 +1855,34 @@ export class DatabaseService {
     this.db.prepare('DELETE FROM settings WHERE key = ?').run('datadog_credentials');
   }
 
+  // Cloud sync OAuth client credentials (encrypted storage). Client ids are public
+  // identifiers, but they live with the secrets so it stays one row.
+  getOAuthCredentials(): { googleClientId?: string; googleClientSecret?: string; githubClientId?: string; githubClientSecret?: string } | null {
+    try {
+      const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get('oauth_credentials') as { value: string } | undefined;
+      if (!row) return null;
+
+      const encryptedData = JSON.parse(row.value) as EncryptedData;
+      return JSON.parse(decrypt(encryptedData, this.masterKey));
+    } catch {
+      return null;
+    }
+  }
+
+  setOAuthCredentials(credentials: { googleClientId?: string; googleClientSecret?: string; githubClientId?: string; githubClientSecret?: string }): void {
+    // Drop blanks rather than storing empty strings, so "not set" stays one thing
+    const kept = Object.fromEntries(Object.entries(credentials).filter(([, v]) => v));
+    if (Object.keys(kept).length === 0) {
+      this.db.prepare('DELETE FROM settings WHERE key = ?').run('oauth_credentials');
+      return;
+    }
+
+    const encrypted = encrypt(JSON.stringify(kept), this.masterKey);
+    this.db.prepare(
+      'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)'
+    ).run('oauth_credentials', JSON.stringify(encrypted), new Date().toISOString());
+  }
+
   close(): void {
     this.db.close();
   }

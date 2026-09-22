@@ -1,6 +1,6 @@
 {
   "name": "@connectty/desktop",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Connectty Desktop SSH Client",
   "author": {
     "name": "Connectty",
@@ -41,13 +41,6 @@
         "filter": [
           "**/*"
         ]
-      },
-      {
-        "from": "../../.env",
-        "to": ".env",
-        "filter": [
-          ".env"
-        ]
       }
     ],
     "win": {
@@ -81,7 +74,7 @@
     }
   },
   "dependencies": {
-    "@connectty/shared": "2.1.0",
+    "@connectty/shared": "2.1.1",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "axios": "^1.6.5",

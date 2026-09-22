@@ -761,6 +761,30 @@ impl DatabaseService {
         self.conn.execute("DELETE FROM session_states WHERE id = ?1", params![id])?;
         Ok(())
     }
+
+    /// Cloud sync OAuth client credentials, encrypted with the master key - the same
+    /// shape the Electron build stores under its own `oauth_credentials` key.
+    pub fn get_oauth_credentials(&self) -> Option<serde_json::Value> {
+        let stored: String = self.conn.query_row(
+            "SELECT value FROM app_config WHERE key = ?1",
+            params!["oauth_credentials"],
+            |row| row.get(0),
+        ).ok()?;
+
+        let data: crate::services::crypto::EncryptedData = serde_json::from_str(&stored).ok()?;
+        let plain = crate::services::crypto::decrypt(&data, &self.master_key).ok()?;
+        serde_json::from_str(&plain).ok()
+    }
+
+    pub fn set_oauth_credentials(&self, credentials: &serde_json::Value) -> Result<(), String> {
+        let encrypted = crate::services::crypto::encrypt(&credentials.to_string(), &self.master_key)?;
+        let json = serde_json::to_string(&encrypted).map_err(|e| e.to_string())?;
+        self.conn.execute(
+            "INSERT OR REPLACE INTO app_config (key, value) VALUES (?1, ?2)",
+            params!["oauth_credentials", json],
+        ).map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 fn decrypt_sensitive_fields(encrypted_data_json: &str, master_key: &str) -> (Option<String>, Option<String>, Option<String>) {

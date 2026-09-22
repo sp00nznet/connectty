@@ -71,6 +71,15 @@ export interface SyncAccount {
   connectedAt: string;
 }
 
+/** OAuth client credentials for cloud sync. Client ids are public identifiers; the
+ *  secrets are encrypted at rest. Empty string means "not configured". */
+export interface SyncCredentials {
+  googleClientId: string;
+  googleClientSecret: string;
+  githubClientId: string;
+  githubClientSecret: string;
+}
+
 export interface SyncConfig {
   deviceId: string;
   deviceName: string;
@@ -320,6 +329,12 @@ const api = {
       error?: string;
     }> => ipcRenderer.invoke('sync:importConfig', accountId, configId, options),
     getAccounts: (): Promise<SyncAccount[]> => ipcRenderer.invoke('sync:getAccounts'),
+
+    // OAuth client credentials, so a released build can be pointed at the user's
+    // own OAuth apps instead of only the ones the build was compiled with
+    getCredentials: (): Promise<SyncCredentials> => ipcRenderer.invoke('sync:getCredentials'),
+    setCredentials: (credentials: SyncCredentials): Promise<void> =>
+      ipcRenderer.invoke('sync:setCredentials', credentials),
   },
 
   // Command operations (bulk actions)

@@ -540,6 +540,29 @@ Export Settings:
 └──────────────┘         └──────────────┘         └──────────────┘
 ```
 
+### Cloud Sync (GitHub Gists / Google Drive)
+
+Settings > Sync Accounts uploads your configuration to a private Gist or to Google
+Drive's app folder. Releases ship no API keys, so sync signs in through **your own**
+OAuth app rather than one of ours:
+
+1. Create an OAuth app - [github.com/settings/developers](https://github.com/settings/developers)
+   or [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) - with
+   the callback URL `http://localhost:19283/callback`.
+2. Settings > Sync Accounts > **Credentials...**, paste the client ID and secret, Save.
+3. **+ Add Account...** now offers that provider and opens its sign-in page.
+
+Client secrets are encrypted at rest with the same key as stored credentials. A build
+that finds `GOOGLE_CLIENT_ID` / `GH_OAUTH_CLIENT_ID` in a `.env` shows those as the
+current values, and anything entered here takes precedence.
+
+> **Releases before v2.1.1 shipped `resources/.env`**, which held the project's own OAuth
+> client secrets in cleartext - readable by anyone who installed the app. Those builds no
+> longer carry one, and the secrets they contained have been revoked. If you ran an earlier
+> release and signed in to cloud sync with it, revoke that authorization
+> ([GitHub](https://github.com/settings/applications) /
+> [Google](https://myaccount.google.com/permissions)) and sign in again.
+
 ---
 
 ## System Tray

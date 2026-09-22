@@ -127,6 +127,8 @@ fn main() {
             sync::sync_list_configs,
             sync::sync_import_config,
             sync::sync_get_accounts,
+            sync::sync_get_credentials,
+            sync::sync_set_credentials,
             // Settings
             settings::get_settings,
             settings::save_settings,

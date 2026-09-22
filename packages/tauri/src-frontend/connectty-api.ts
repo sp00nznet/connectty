@@ -316,6 +316,8 @@ export const connecttyApi: ConnecttyAPI = {
     download: (accountId: string) => invoke('sync_list_configs', { accountId }),
     importConfig: (accountId: string, configId: string, options?: any) => invoke('sync_import_config', { accountId, configId, options }),
     getAccounts: () => invoke('sync_get_accounts'),
+    getCredentials: () => invoke('sync_get_credentials'),
+    setCredentials: (credentials: any) => invoke('sync_set_credentials', { credentials }),
   },
   // Import/Export
   import: {

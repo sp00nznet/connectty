@@ -29,7 +29,7 @@ import type {
   LayoutMode,
   PresetLayout,
 } from '@connectty/shared';
-import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, RetroTermSettings, RetroTermPreset } from '../main/preload';
+import type { ConnecttyAPI, RemoteFileInfo, LocalFileInfo, TransferProgress, AppSettings, LocalShellInfo, LocalShellSessionEvent, SyncAccount, SyncConfigInfo, SyncCredentials, RetroTermSettings, RetroTermPreset } from '../main/preload';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -7396,11 +7396,25 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentU
   const [showAddAccountMenu, setShowAddAccountMenu] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
 
+  // OAuth apps to sign in against. A released build ships none, so these are the
+  // user's own - entered here rather than compiled in.
+  const [syncCredentials, setSyncCredentials] = useState<SyncCredentials>({
+    googleClientId: '', googleClientSecret: '', githubClientId: '', githubClientSecret: '',
+  });
+  const [showSyncCredentials, setShowSyncCredentials] = useState(false);
+  const [savingCredentials, setSavingCredentials] = useState(false);
+
+  // Client ID only: GitHub's device flow (native build) needs no secret, and the
+  // backend says so plainly for the flows that do.
+  const isProviderConfigured = (provider: 'google' | 'github') =>
+    Boolean(provider === 'google' ? syncCredentials.googleClientId : syncCredentials.githubClientId);
+
   // Load accounts from backend on mount
   useEffect(() => {
     window.connectty.sync.getAccounts().then((accounts) => {
       setSyncAccounts(accounts);
     }).catch(console.error);
+    window.connectty.sync.getCredentials().then(setSyncCredentials).catch(console.error);
   }, []);
 
   // Config sync state
@@ -7454,6 +7468,8 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentU
       }
     } catch (error) {
       console.error('Failed to connect account:', error);
+      setSyncMessage({ type: 'error', text: (error as Error).message || 'Failed to connect account' });
+      setTimeout(() => setSyncMessage(null), 8000);
       // Still try to refresh accounts in case it was saved
       try {
         const accounts = await window.connectty.sync.getAccounts();
@@ -7463,6 +7479,22 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentU
       }
     } finally {
       setConnectingProvider(null);
+    }
+  };
+
+  const handleSaveCredentials = async () => {
+    setSavingCredentials(true);
+    try {
+      await window.connectty.sync.setCredentials(syncCredentials);
+      // Read back, so what is shown is what will be used
+      setSyncCredentials(await window.connectty.sync.getCredentials());
+      setShowSyncCredentials(false);
+      setSyncMessage({ type: 'success', text: 'OAuth credentials saved' });
+    } catch (error) {
+      setSyncMessage({ type: 'error', text: 'Failed to save OAuth credentials' });
+    } finally {
+      setSavingCredentials(false);
+      setTimeout(() => setSyncMessage(null), 5000);
     }
   };
 
@@ -8270,6 +8302,80 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentU
                     </div>
                   )}
 
+                  {/* OAuth Credentials - the app ships none, so these are the user's own */}
+                  {showSyncCredentials && (
+                    <div className="sync-options-panel">
+                      <p className="settings-description">
+                        Cloud sync signs in through your own OAuth app, so no keys are shipped in the
+                        build. Create one at{' '}
+                        <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">github.com/settings/developers</a>
+                        {' '}or{' '}
+                        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">console.cloud.google.com</a>,
+                        with the callback URL <code>http://localhost:19283/callback</code>, then paste the
+                        client ID and secret here.
+                      </p>
+
+                      <div className="form-group">
+                        <label className="form-label">GitHub Client ID</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={syncCredentials.githubClientId}
+                          onChange={(e) => setSyncCredentials(prev => ({ ...prev, githubClientId: e.target.value }))}
+                          placeholder="Ov23li..."
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">GitHub Client Secret</label>
+                        <input
+                          type="password"
+                          className="form-input"
+                          value={syncCredentials.githubClientSecret}
+                          onChange={(e) => setSyncCredentials(prev => ({ ...prev, githubClientSecret: e.target.value }))}
+                          placeholder="Enter client secret"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Google Client ID</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={syncCredentials.googleClientId}
+                          onChange={(e) => setSyncCredentials(prev => ({ ...prev, googleClientId: e.target.value }))}
+                          placeholder="xxxxx.apps.googleusercontent.com"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Google Client Secret</label>
+                        <input
+                          type="password"
+                          className="form-input"
+                          value={syncCredentials.googleClientSecret}
+                          onChange={(e) => setSyncCredentials(prev => ({ ...prev, googleClientSecret: e.target.value }))}
+                          placeholder="Enter client secret"
+                        />
+                      </div>
+
+                      <div className="sync-options-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={handleSaveCredentials}
+                          disabled={savingCredentials}
+                        >
+                          {savingCredentials ? 'Saving...' : 'Save Credentials'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => setShowSyncCredentials(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Add Account Button/Menu */}
                   <div className="sync-add-account">
                     {connectingProvider ? (
@@ -8283,6 +8389,8 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentU
                           type="button"
                           className="sync-provider-option"
                           onClick={() => handleAddAccount('google')}
+                          disabled={!isProviderConfigured('google')}
+                          title={isProviderConfigured('google') ? undefined : 'Add a Google client ID under Credentials first'}
                         >
                           <span className="sync-provider-icon">
                             <svg viewBox="0 0 24 24" width="16" height="16">
@@ -8298,6 +8406,8 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentU
                           type="button"
                           className="sync-provider-option"
                           onClick={() => handleAddAccount('github')}
+                          disabled={!isProviderConfigured('github')}
+                          title={isProviderConfigured('github') ? undefined : 'Add a GitHub client ID under Credentials first'}
                         >
                           <span className="sync-provider-icon">
                             <svg viewBox="0 0 98 96" width="16" height="16">
@@ -8315,13 +8425,23 @@ function SettingsModal({ settings, themes, currentTheme, onThemeChange, currentU
                         </button>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        className="btn btn-secondary sync-add-btn"
-                        onClick={() => setShowAddAccountMenu(true)}
-                      >
-                        + Add Account...
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-secondary sync-add-btn"
+                          onClick={() => setShowAddAccountMenu(true)}
+                        >
+                          + Add Account...
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary sync-add-btn"
+                          style={{ marginTop: 8 }}
+                          onClick={() => setShowSyncCredentials(!showSyncCredentials)}
+                        >
+                          Credentials...
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
